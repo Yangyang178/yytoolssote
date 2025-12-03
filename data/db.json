@@ -1,0 +1,128 @@
+{
+  "files": [
+    {
+      "id": "b43285e63cc94cc3867b60f6d24e3d47",
+      "filename": "subscription_manager.html",
+      "stored_name": "b43285e63cc94cc3867b60f6d24e3d47__subscription_manager.html",
+      "path": "D:\\Trae\\接口文件\\uploads\\b43285e63cc94cc3867b60f6d24e3d47__subscription_manager.html",
+      "size": 59707,
+      "dkfile": {
+        "data": {
+          "created_at": "2025-12-01 21:30:28",
+          "file_name": "subscription_manager.html",
+          "file_size": 59707,
+          "is_update": false,
+          "project_name": "订阅服务管理器",
+          "updated_at": null,
+          "url": "http://dkfile.net/Yangyang/subscription_manager.html"
+        },
+        "message": "文件上传成功",
+        "success": true,
+        "warning": {
+          "message": "文件已上传但被标记为风险文件，需要管理员审核",
+          "reasons": [
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 6 个JavaScript代码块"
+          ],
+          "risk_level": "medium"
+        }
+      },
+      "project_name": "订阅服务管理器",
+      "project_desc": "地方"
+    },
+    {
+      "id": "627fe3ed24084d2eb8b4b3279bea4762",
+      "filename": "font_pairing_recommender.html",
+      "stored_name": "627fe3ed24084d2eb8b4b3279bea4762__font_pairing_recommender.html",
+      "path": "D:\\Trae\\接口文件\\uploads\\627fe3ed24084d2eb8b4b3279bea4762__font_pairing_recommender.html",
+      "size": 50014,
+      "dkfile": {
+        "data": {
+          "created_at": "2025-12-01 21:22:21",
+          "file_name": "font_pairing_recommender.html",
+          "file_size": 50014,
+          "is_update": false,
+          "project_name": "字体配对推荐器",
+          "updated_at": null,
+          "url": "http://dkfile.net/Yangyang/font_pairing_recommender.html"
+        },
+        "message": "文件上传成功",
+        "success": true,
+        "warning": {
+          "message": "文件已上传但被标记为风险文件，需要管理员审核",
+          "reasons": [
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 11 个JavaScript代码块"
+          ],
+          "risk_level": "medium"
+        }
+      },
+      "project_name": "字体配对推荐器",
+      "project_desc": "选择主字体后，系统将自动推荐合适的辅助字体"
+    },
+    {
+      "id": "6988752af1704fdab11e55b0288b3c47",
+      "filename": "color_mixing_game.html",
+      "stored_name": "6988752af1704fdab11e55b0288b3c47__color_mixing_game.html",
+      "path": "D:\\Trae\\接口文件\\uploads\\6988752af1704fdab11e55b0288b3c47__color_mixing_game.html",
+      "size": 19022,
+      "dkfile": {
+        "data": {
+          "created_at": "2025-12-01 21:21:00",
+          "file_name": "color_mixing_game.html",
+          "file_size": 19022,
+          "is_update": false,
+          "project_name": "色彩混合大师",
+          "updated_at": null,
+          "url": "http://dkfile.net/Yangyang/color_mixing_game.html"
+        },
+        "message": "文件上传成功",
+        "success": true,
+        "warning": {
+          "message": "文件已上传但被标记为风险文件，需要管理员审核",
+          "reasons": [
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 2 个JavaScript代码块"
+          ],
+          "risk_level": "medium"
+        }
+      },
+      "project_name": "色彩混合大师",
+      "project_desc": "根据目标颜色，进行颜色搭配，并努力接近目标颜色"
+    },
+    {
+      "id": "d696dff1a0c841a998a09bef97fcca6f",
+      "filename": "watermark-remover.html",
+      "stored_name": "d696dff1a0c841a998a09bef97fcca6f__watermark-remover.html",
+      "path": "D:\\Trae\\接口文件\\uploads\\d696dff1a0c841a998a09bef97fcca6f__watermark-remover.html",
+      "size": 19619,
+      "dkfile": {
+        "data": {
+          "created_at": "2025-11-30 09:21:35",
+          "file_name": "watermark-remover.html",
+          "file_size": 19619,
+          "is_update": true,
+          "project_name": "图片去水印工具",
+          "updated_at": "2025-11-30 09:49:22",
+          "url": "http://dkfile.net/Yangyang/watermark-remover.html"
+        },
+        "message": "文件更新成功",
+        "success": true,
+        "warning": {
+          "message": "文件已上传但被标记为风险文件，需要管理员审核",
+          "reasons": [
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 1 个JavaScript代码块",
+            "🔴 高风险：检测到 12 个JavaScript代码块"
+          ],
+          "risk_level": "medium"
+        }
+      },
+      "project_name": "图片去水印工具",
+      "project_desc": "上传水印图片，一键去除水印"
+    }
+  ]
+}

@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>色彩混合大师</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #333;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: white;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .game-info {
+            background-color: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .score, .level {
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 800px;
+        }
+
+        .color-display {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        .color-box {
+            width: 200px;
+            height: 200px;
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+            transition: transform 0.3s;
+        }
+
+        .color-box:hover {
+            transform: translateY(-5px);
+        }
+
+        .target-color {
+            background-color: #ffffff;
+        }
+
+        .mixed-color {
+            background-color: #ffffff;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .color-label {
+            color: white;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+            margin-bottom: 10px;
+        }
+
+        .color-value {
+            background-color: rgba(255,255,255,0.7);
+            padding: 5px 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            background-color: rgba(255,255,255,0.9);
+            border-radius: 15px;
+            padding: 25px;
+            width: 100%;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .color-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .slider-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .slider-label {
+            width: 30px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .slider {
+            flex-grow: 1;
+            height: 10px;
+            border-radius: 5px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: white;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        #redSlider {
+            background: linear-gradient(to right, #000000, #ff0000);
+        }
+
+        #greenSlider {
+            background: linear-gradient(to right, #000000, #00ff00);
+        }
+
+        #blueSlider {
+            background: linear-gradient(to right, #000000, #0000ff);
+        }
+
+        .slider-value {
+            width: 40px;
+            text-align: center;
+            margin-left: 10px;
+            font-weight: bold;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        button {
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 20px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        button:hover {
+            background-color: #5a67d8;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            font-weight: bold;
+            width: 100%;
+            max-width: 600px;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .message.show {
+            opacity: 1;
+        }
+
+        .success {
+            background-color: rgba(72, 187, 120, 0.8);
+            color: white;
+        }
+
+        .error {
+            background-color: rgba(245, 101, 101, 0.8);
+            color: white;
+        }
+
+        .hint {
+            background-color: rgba(237, 137, 54, 0.8);
+            color: white;
+        }
+
+        .color-presets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .preset-color {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.2s;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .preset-color:hover {
+            transform: scale(1.1);
+        }
+
+        .difficulty-selector {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .difficulty-btn {
+            padding: 8px 15px;
+            border-radius: 5px;
+            background-color: rgba(255,255,255,0.7);
+            color: #333;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .difficulty-btn.active {
+            background-color: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            .color-display {
+                flex-direction: column;
+                gap: 20px;
+            }
+            
+            .color-box {
+                width: 150px;
+                height: 150px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🎨 色彩混合大师</h1>
+    </header>
+
+    <div class="game-info">
+        <div class="score">得分: <span id="score">0</span></div>
+        <div class="level">关卡: <span id="level">1</span></div>
+    </div>
+
+    <div class="difficulty-selector">
+        <button class="difficulty-btn active" data-difficulty="easy">简单</button>
+        <button class="difficulty-btn" data-difficulty="medium">中等</button>
+        <button class="difficulty-btn" data-difficulty="hard">困难</button>
+    </div>
+
+    <main class="game-container">
+        <div class="color-display">
+            <div class="color-box target-color">
+                <div class="color-label">目标颜色</div>
+                <div class="color-value" id="targetValue">#FFFFFF</div>
+            </div>
+            <div class="color-box mixed-color">
+                <div class="color-label">你的颜色</div>
+                <div class="color-value" id="mixedValue">#FFFFFF</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="color-sliders">
+                <div class="slider-group">
+                    <div class="slider-label">红</div>
+                    <input type="range" id="redSlider" class="slider" min="0" max="255" value="255">
+                    <div class="slider-value" id="redValue">255</div>
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label">绿</div>
+                    <input type="range" id="greenSlider" class="slider" min="0" max="255" value="255">
+                    <div class="slider-value" id="greenValue">255</div>
+                </div>
+                <div class="slider-group">
+                    <div class="slider-label">蓝</div>
+                    <input type="range" id="blueSlider" class="slider" min="0" max="255" value="255">
+                    <div class="slider-value" id="blueValue">255</div>
+                </div>
+            </div>
+
+            <div class="buttons">
+                <button id="checkBtn">检查答案</button>
+                <button id="newTargetBtn">新目标</button>
+                <button id="hintBtn">提示</button>
+            </div>
+
+            <div class="color-presets">
+                <div class="preset-color" style="background-color: #FF0000;" data-r="255" data-g="0" data-b="0"></div>
+                <div class="preset-color" style="background-color: #00FF00;" data-r="0" data-g="255" data-b="0"></div>
+                <div class="preset-color" style="background-color: #0000FF;" data-r="0" data-g="0" data-b="255"></div>
+                <div class="preset-color" style="background-color: #FFFF00;" data-r="255" data-g="255" data-b="0"></div>
+                <div class="preset-color" style="background-color: #FF00FF;" data-r="255" data-g="0" data-b="255"></div>
+                <div class="preset-color" style="background-color: #00FFFF;" data-r="0" data-g="255" data-b="255"></div>
+                <div class="preset-color" style="background-color: #FFA500;" data-r="255" data-g="165" data-b="0"></div>
+                <div class="preset-color" style="background-color: #800080;" data-r="128" data-g="0" data-b="128"></div>
+                <div class="preset-color" style="background-color: #FFC0CB;" data-r="255" data-g="192" data-b="203"></div>
+                <div class="preset-color" style="background-color: #A52A2A;" data-r="165" data-g="42" data-b="42"></div>
+            </div>
+        </div>
+
+        <div class="message" id="message"></div>
+    </main>
+
+    <script>
+        // 游戏状态
+        let score = 0;
+        let level = 1;
+        let targetColor = { r: 255, g: 255, b: 255 };
+        let mixedColor = { r: 255, g: 255, b: 255 };
+        let difficulty = 'easy';
+        let tolerance = 30; // 容差值，简单模式
+
+        // DOM 元素
+        const redSlider = document.getElementById('redSlider');
+        const greenSlider = document.getElementById('greenSlider');
+        const blueSlider = document.getElementById('blueSlider');
+        const redValue = document.getElementById('redValue');
+        const greenValue = document.getElementById('greenValue');
+        const blueValue = document.getElementById('blueValue');
+        const mixedColorBox = document.querySelector('.mixed-color');
+        const targetColorBox = document.querySelector('.target-color');
+        const mixedValue = document.getElementById('mixedValue');
+        const targetValue = document.getElementById('targetValue');
+        const scoreElement = document.getElementById('score');
+        const levelElement = document.getElementById('level');
+        const checkBtn = document.getElementById('checkBtn');
+        const newTargetBtn = document.getElementById('newTargetBtn');
+        const hintBtn = document.getElementById('hintBtn');
+        const messageElement = document.getElementById('message');
+        const presetColors = document.querySelectorAll('.preset-color');
+        const difficultyBtns = document.querySelectorAll('.difficulty-btn');
+
+        // 初始化游戏
+        function initGame() {
+            generateNewTarget();
+            updateMixedColor();
+            setupEventListeners();
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 滑块事件
+            redSlider.addEventListener('input', updateMixedColor);
+            greenSlider.addEventListener('input', updateMixedColor);
+            blueSlider.addEventListener('input', updateMixedColor);
+
+            // 按钮事件
+            checkBtn.addEventListener('click', checkAnswer);
+            newTargetBtn.addEventListener('click', generateNewTarget);
+            hintBtn.addEventListener('click', showHint);
+
+            // 预设颜色事件
+            presetColors.forEach(preset => {
+                preset.addEventListener('click', function() {
+                    const r = parseInt(this.getAttribute('data-r'));
+                    const g = parseInt(this.getAttribute('data-g'));
+                    const b = parseInt(this.getAttribute('data-b'));
+                    
+                    redSlider.value = r;
+                    greenSlider.value = g;
+                    blueSlider.value = b;
+                    
+                    updateMixedColor();
+                });
+            });
+
+            // 难度选择事件
+            difficultyBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    difficultyBtns.forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    difficulty = this.getAttribute('data-difficulty');
+                    updateDifficulty();
+                    generateNewTarget();
+                });
+            });
+        }
+
+        // 更新难度设置
+        function updateDifficulty() {
+            switch(difficulty) {
+                case 'easy':
+                    tolerance = 30;
+                    break;
+                case 'medium':
+                    tolerance = 15;
+                    break;
+                case 'hard':
+                    tolerance = 5;
+                    break;
+            }
+        }
+
+        // 更新混合颜色
+        function updateMixedColor() {
+            mixedColor.r = parseInt(redSlider.value);
+            mixedColor.g = parseInt(greenSlider.value);
+            mixedColor.b = parseInt(blueSlider.value);
+            
+            redValue.textContent = mixedColor.r;
+            greenValue.textContent = mixedColor.g;
+            blueValue.textContent = mixedColor.b;
+            
+            const rgbColor = `rgb(${mixedColor.r}, ${mixedColor.g}, ${mixedColor.b})`;
+            mixedColorBox.style.backgroundColor = rgbColor;
+            mixedValue.textContent = rgbToHex(mixedColor.r, mixedColor.g, mixedColor.b);
+        }
+
+        // 生成新的目标颜色
+        function generateNewTarget() {
+            targetColor.r = Math.floor(Math.random() * 256);
+            targetColor.g = Math.floor(Math.random() * 256);
+            targetColor.b = Math.floor(Math.random() * 256);
+            
+            const rgbColor = `rgb(${targetColor.r}, ${targetColor.g}, ${targetColor.b})`;
+            targetColorBox.style.backgroundColor = rgbColor;
+            targetValue.textContent = rgbToHex(targetColor.r, targetColor.g, targetColor.b);
+            
+            // 重置混合颜色
+            redSlider.value = 255;
+            greenSlider.value = 255;
+            blueSlider.value = 255;
+            updateMixedColor();
+            
+            hideMessage();
+        }
+
+        // 检查答案
+        function checkAnswer() {
+            const diffR = Math.abs(targetColor.r - mixedColor.r);
+            const diffG = Math.abs(targetColor.g - mixedColor.g);
+            const diffB = Math.abs(targetColor.b - mixedColor.b);
+            const totalDiff = diffR + diffG + diffB;
+            
+            if (totalDiff <= tolerance) {
+                // 答案正确
+                score += 10 * level;
+                level++;
+                scoreElement.textContent = score;
+                levelElement.textContent = level;
+                
+                showMessage('太棒了！颜色匹配成功！', 'success');
+                
+                // 2秒后生成新目标
+                setTimeout(generateNewTarget, 2000);
+            } else {
+                // 答案错误
+                const percentage = Math.round((1 - totalDiff / (3 * 255)) * 100);
+                showMessage(`还不够接近！相似度: ${percentage}%`, 'error');
+            }
+        }
+
+        // 显示提示
+        function showHint() {
+            let hintMessage = '提示: ';
+            
+            const diffR = targetColor.r - mixedColor.r;
+            const diffG = targetColor.g - mixedColor.g;
+            const diffB = targetColor.b - mixedColor.b;
+            
+            if (diffR > 20) hintMessage += '增加红色 ';
+            else if (diffR < -20) hintMessage += '减少红色 ';
+            
+            if (diffG > 20) hintMessage += '增加绿色 ';
+            else if (diffG < -20) hintMessage += '减少绿色 ';
+            
+            if (diffB > 20) hintMessage += '增加蓝色 ';
+            else if (diffB < -20) hintMessage += '减少蓝色 ';
+            
+            if (hintMessage === '提示: ') {
+                hintMessage = '你已经很接近了！微调一下颜色值。';
+            }
+            
+            showMessage(hintMessage, 'hint');
+        }
+
+        // 显示消息
+        function showMessage(text, type) {
+            messageElement.textContent = text;
+            messageElement.className = `message ${type} show`;
+        }
+
+        // 隐藏消息
+        function hideMessage() {
+            messageElement.className = 'message';
+        }
+
+        // RGB转HEX
+        function rgbToHex(r, g, b) {
+            return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+        }
+
+        // 启动游戏
+        initGame();
+    </script>
+</body>
+</html>

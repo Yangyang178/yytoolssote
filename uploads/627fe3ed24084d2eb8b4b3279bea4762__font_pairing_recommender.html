@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>字体配对推荐器</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Open+Sans:wght@300;400;600;700&family=Lato:wght@300;400;700&family=Montserrat:wght@300;400;600;700&family=Playfair+Display:wght@400;700&family=Merriweather:wght@300;400;700&family=Oswald:wght@300;400;600&family=Raleway:wght@300;400;600;700&family=Ubuntu:wght@300;400;500;700&family=PT+Sans:wght@400;700&family=Source+Sans+Pro:wght@300;400;600;700&family=Poppins:wght@300;400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3a506b;
+            --secondary-color: #5bc0be;
+            --accent-color: #ff6b6b;
+            --light-color: #f8f9fa;
+            --dark-color: #212529;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans SC', 'Roboto', sans-serif;
+            line-height: 1.6;
+            color: var(--dark-color);
+            background-color: var(--light-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px 0;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 992px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 25px;
+            box-shadow: var(--box-shadow);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        select, input, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        select:focus, input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 2px rgba(91, 192, 190, 0.2);
+        }
+
+        .btn {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: #2c3e50;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background: #4a9d9b;
+        }
+
+        .preview-section {
+            grid-column: span 2;
+        }
+
+        @media (max-width: 992px) {
+            .preview-section {
+                grid-column: span 1;
+            }
+        }
+
+        .preview-container {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-shadow: var(--box-shadow);
+        }
+
+        .preview-header {
+            margin-bottom: 20px;
+        }
+
+        .preview-content {
+            border: 1px dashed #ddd;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            min-height: 200px;
+        }
+
+        .preview-heading {
+            margin-bottom: 15px;
+        }
+
+        .preview-body {
+            margin-bottom: 15px;
+        }
+
+        .preview-caption {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .recommendations {
+            margin-top: 30px;
+        }
+
+        .recommendation-card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: var(--box-shadow);
+            cursor: pointer;
+            transition: var(--transition);
+            border-left: 4px solid transparent;
+        }
+
+        .recommendation-card:hover {
+            transform: translateX(5px);
+            border-left-color: var(--secondary-color);
+        }
+
+        .recommendation-card.selected {
+            border-left-color: var(--primary-color);
+            background: #f8f9fa;
+        }
+
+        .recommendation-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .recommendation-description {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .compatibility-score {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        .score-high {
+            background: var(--success-color);
+        }
+
+        .score-medium {
+            background: var(--warning-color);
+        }
+
+        .score-low {
+            background: var(--danger-color);
+        }
+
+        .usage-scenarios {
+            margin-top: 20px;
+        }
+
+        .scenario-tag {
+            display: inline-block;
+            background: #e9ecef;
+            color: #495057;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        .accessibility-check {
+            margin-top: 30px;
+        }
+
+        .check-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: var(--border-radius);
+        }
+
+        .check-pass {
+            background: rgba(40, 167, 69, 0.1);
+            color: var(--success-color);
+        }
+
+        .check-fail {
+            background: rgba(220, 53, 69, 0.1);
+            color: var(--danger-color);
+        }
+
+        .check-warning {
+            background: rgba(255, 193, 7, 0.1);
+            color: var(--warning-color);
+        }
+
+        .check-icon {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .font-size-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .font-size-control {
+            flex: 1;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: var(--border-radius);
+            color: white;
+            box-shadow: var(--box-shadow);
+            transform: translateY(-100px);
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .notification.success {
+            background: var(--success-color);
+        }
+
+        .notification.error {
+            background: var(--danger-color);
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: var(--transition);
+        }
+
+        .tab:hover {
+            background: #f8f9fa;
+        }
+
+        .tab.active {
+            border-bottom-color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .export-section {
+            margin-top: 30px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .export-code {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            padding: 15px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+            margin-top: 10px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            color: #6c757d;
+            border-top: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>字体配对推荐器</h1>
+            <p class="subtitle">为设计项目推荐和谐的字体组合，提供实时预览、使用场景建议和可访问性检查</p>
+        </header>
+
+        <div class="main-content">
+            <div class="card">
+                <h2 class="card-title">字体选择</h2>
+                <div class="form-group">
+                    <label for="primary-font">主字体</label>
+                    <select id="primary-font">
+                        <option value="">选择主字体...</option>
+                        <option value="'Roboto', sans-serif">Roboto</option>
+                        <option value="'Open Sans', sans-serif">Open Sans</option>
+                        <option value="'Lato', sans-serif">Lato</option>
+                        <option value="'Montserrat', sans-serif">Montserrat</option>
+                        <option value="'Playfair Display', serif">Playfair Display</option>
+                        <option value="'Merriweather', serif">Merriweather</option>
+                        <option value="'Oswald', sans-serif">Oswald</option>
+                        <option value="'Raleway', sans-serif">Raleway</option>
+                        <option value="'Ubuntu', sans-serif">Ubuntu</option>
+                        <option value="'PT Sans', sans-serif">PT Sans</option>
+                        <option value="'Source Sans Pro', sans-serif">Source Sans Pro</option>
+                        <option value="'Poppins', sans-serif">Poppins</option>
+                        <option value="'Noto Sans SC', sans-serif">Noto Sans SC (中文)</option>
+                        <option value="'Noto Serif SC', serif">Noto Serif SC (中文)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="secondary-font">辅助字体</label>
+                    <select id="secondary-font">
+                        <option value="">选择辅助字体...</option>
+                        <option value="'Roboto', sans-serif">Roboto</option>
+                        <option value="'Open Sans', sans-serif">Open Sans</option>
+                        <option value="'Lato', sans-serif">Lato</option>
+                        <option value="'Montserrat', sans-serif">Montserrat</option>
+                        <option value="'Playfair Display', serif">Playfair Display</option>
+                        <option value="'Merriweather', serif">Merriweather</option>
+                        <option value="'Oswald', sans-serif">Oswald</option>
+                        <option value="'Raleway', sans-serif">Raleway</option>
+                        <option value="'Ubuntu', sans-serif">Ubuntu</option>
+                        <option value="'PT Sans', sans-serif">PT Sans</option>
+                        <option value="'Source Sans Pro', sans-serif">Source Sans Pro</option>
+                        <option value="'Poppins', sans-serif">Poppins</option>
+                        <option value="'Noto Sans SC', sans-serif">Noto Sans SC (中文)</option>
+                        <option value="'Noto Serif SC', serif">Noto Serif SC (中文)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button id="recommend-btn" class="btn">获取推荐</button>
+                    <button id="random-btn" class="btn btn-secondary">随机组合</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">字体配对推荐</h2>
+                <div id="recommendations-container">
+                    <p>选择主字体后，系统将自动推荐合适的辅助字体</p>
+                </div>
+            </div>
+
+            <div class="card preview-section">
+                <h2 class="card-title">实时预览</h2>
+                <div class="font-size-controls">
+                    <div class="font-size-control">
+                        <label for="heading-size">标题大小</label>
+                        <input type="range" id="heading-size" min="20" max="60" value="36">
+                        <span id="heading-size-value">36px</span>
+                    </div>
+                    <div class="font-size-control">
+                        <label for="body-size">正文字体大小</label>
+                        <input type="range" id="body-size" min="12" max="24" value="16">
+                        <span id="body-size-value">16px</span>
+                    </div>
+                </div>
+                
+                <div class="tabs">
+                    <div class="tab active" data-tab="web">网页</div>
+                    <div class="tab" data-tab="print">印刷</div>
+                    <div class="tab" data-tab="presentation">演示文稿</div>
+                </div>
+                
+                <div class="tab-content active" id="web-tab">
+                    <div class="preview-container">
+                        <div class="preview-header">
+                            <h3>网页预览</h3>
+                        </div>
+                        <div class="preview-content">
+                            <h4 class="preview-heading">探索字体设计的无限可能</h4>
+                            <p class="preview-body">字体是设计的基础元素，合适的字体搭配能够提升内容的可读性和美感。通过本工具，您可以轻松找到和谐的字体组合，为您的项目增添专业感。</p>
+                            <p class="preview-caption">小字文本示例：字体配对不仅关乎美观，更关乎用户体验和可访问性。良好的字体选择能够确保信息清晰传达，同时体现设计风格。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="print-tab">
+                    <div class="preview-container">
+                        <div class="preview-header">
+                            <h3>印刷品预览</h3>
+                        </div>
+                        <div class="preview-content">
+                            <h4 class="preview-heading">专业印刷品设计指南</h4>
+                            <p class="preview-body">印刷设计需要考虑纸张质感、墨水效果和阅读距离。选择适合印刷的字体组合能够确保在纸质媒介上呈现最佳效果。衬线字体在长篇阅读中表现优异，无衬线字体则在标题和短文本中更为醒目。</p>
+                            <p class="preview-caption">脚注示例：印刷设计中的字体大小通常比网页设计要小，因此需要确保字体在小尺寸下仍保持良好的可读性。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="tab-content" id="presentation-tab">
+                    <div class="preview-container">
+                        <div class="preview-header">
+                            <h3>演示文稿预览</h3>
+                        </div>
+                        <div class="preview-content">
+                            <h4 class="preview-heading">引人注目的演示文稿</h4>
+                            <p class="preview-body">演示文稿需要在大屏幕上清晰可见，因此字体选择应注重可读性和视觉冲击力。标题字体应醒目有力，正文字体应清晰易读。在投影环境中，对比度是确保内容可见的关键因素。</p>
+                            <p class="preview-caption">小字说明：演示文稿中的字体应避免过于花哨的设计，确保后排观众也能清晰阅读。</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="export-section">
+                    <button id="export-css" class="btn">导出 CSS</button>
+                    <button id="copy-css" class="btn btn-secondary">复制 CSS</button>
+                </div>
+                
+                <div id="css-export" class="export-code" style="display: none;">
+                    /* CSS 代码将在此处显示 */
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">使用场景建议</h2>
+                <div id="usage-scenarios">
+                    <p>选择字体组合后，这里将显示适合的使用场景</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">可访问性检查</h2>
+                <div id="accessibility-checks">
+                    <p>选择字体组合后，这里将显示可访问性检查结果</p>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>字体配对推荐器 © 2023 | 为设计师打造的字体搭配工具</p>
+        </footer>
+    </div>
+
+    <div id="notification" class="notification"></div>
+
+    <script>
+        // 字体配对数据库
+        const fontPairings = {
+            "'Roboto', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "现代无衬线与经典衬线的完美结合" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "两种现代无衬线字体的和谐搭配" },
+                { font: "'Lato', sans-serif", score: 8, description: "相似风格但不同特点的无衬线组合" },
+                { font: "'Merriweather', serif", score: 9, description: "现代与传统的平衡，适合阅读" },
+                { font: "'Source Sans Pro', sans-serif", score: 6, description: "两种开源无衬线字体的组合" }
+            ],
+            "'Open Sans', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "现代无衬线与优雅衬线的对比" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "两种友好无衬线字体的搭配" },
+                { font: "'Raleway', sans-serif", score: 8, description: "相似风格但不同细节的无衬线组合" },
+                { font: "'Merriweather', serif", score: 8, description: "现代与经典的平衡，适合长文本" },
+                { font: "'Lato', sans-serif", score: 6, description: "两种流行的无衬线字体组合" }
+            ],
+            "'Lato', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "现代无衬线与经典衬线的对比" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "现代与传统的平衡，适合阅读" },
+                { font: "'Roboto', sans-serif", score: 6, description: "两种流行的无衬线字体组合" },
+                { font: "'Oswald', sans-serif", score: 7, description: "常规与紧凑无衬线字体的对比" }
+            ],
+            "'Montserrat', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "几何无衬线与经典衬线的对比" },
+                { font: "'Lato', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "现代与传统的平衡，适合阅读" },
+                { font: "'Roboto', sans-serif", score: 6, description: "两种流行的无衬线字体组合" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "两种友好无衬线字体的搭配" }
+            ],
+            "'Playfair Display', serif": [
+                { font: "'Roboto', sans-serif", score: 9, description: "经典衬线与现代无衬线的完美结合" },
+                { font: "'Open Sans', sans-serif", score: 9, description: "优雅衬线与友好无衬线的对比" },
+                { font: "'Montserrat', sans-serif", score: 8, description: "经典衬线与现代几何无衬线的搭配" },
+                { font: "'Lato', sans-serif", score: 8, description: "经典与现代的平衡，适合多种场景" },
+                { font: "'Source Sans Pro', sans-serif", score: 7, description: "优雅衬线与清晰无衬线的组合" }
+            ],
+            "'Merriweather', serif": [
+                { font: "'Roboto', sans-serif", score: 9, description: "阅读友好衬线与现代无衬线的结合" },
+                { font: "'Open Sans', sans-serif", score: 8, description: "传统衬线与现代无衬线的平衡" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "传统衬线与现代几何无衬线的搭配" },
+                { font: "'Lato', sans-serif", score: 8, description: "传统与现代的平衡，适合长文本" },
+                { font: "'Poppins', sans-serif", score: 7, description: "传统衬线与现代圆润无衬线的组合" }
+            ],
+            "'Oswald', sans-serif": [
+                { font: "'Playfair Display', serif", score: 8, description: "紧凑无衬线与优雅衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种不同风格的无衬线字体组合" },
+                { font: "'Merriweather', serif", score: 8, description: "现代与传统衬线的搭配" },
+                { font: "'Lato', sans-serif", score: 7, description: "紧凑与常规无衬线字体的对比" },
+                { font: "'Raleway', sans-serif", score: 6, description: "两种现代无衬线字体的组合" }
+            ],
+            "'Raleway', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "优雅无衬线与经典衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "现代与传统衬线的平衡" },
+                { font: "'Open Sans', sans-serif", score: 8, description: "两种友好无衬线字体的组合" },
+                { font: "'Lato', sans-serif", score: 6, description: "两种流行的无衬线字体组合" }
+            ],
+            "'Ubuntu', sans-serif": [
+                { font: "'Playfair Display', serif", score: 8, description: "友好无衬线与优雅衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "友好与传统衬线的平衡" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "两种友好无衬线字体的组合" },
+                { font: "'Lato', sans-serif", score: 6, description: "两种流行的无衬线字体组合" }
+            ],
+            "'PT Sans', sans-serif": [
+                { font: "'Playfair Display', serif", score: 8, description: "清晰无衬线与优雅衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "清晰与传统衬线的平衡" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "两种友好无衬线字体的组合" },
+                { font: "'Lato', sans-serif", score: 6, description: "两种流行的无衬线字体组合" }
+            ],
+            "'Source Sans Pro', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "开源无衬线与经典衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种开源无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "开源与传统衬线的平衡" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "两种友好无衬线字体的组合" },
+                { font: "'Lato', sans-serif", score: 6, description: "两种流行的无衬线字体组合" }
+            ],
+            "'Poppins', sans-serif": [
+                { font: "'Playfair Display', serif", score: 9, description: "圆润无衬线与优雅衬线的对比" },
+                { font: "'Roboto', sans-serif", score: 7, description: "两种现代无衬线字体的搭配" },
+                { font: "'Merriweather', serif", score: 8, description: "圆润与传统衬线的平衡" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "两种友好无衬线字体的组合" },
+                { font: "'Montserrat', sans-serif", score: 8, description: "两种几何风格无衬线字体的搭配" }
+            ],
+            "'Noto Sans SC', sans-serif": [
+                { font: "'Noto Serif SC', serif", score: 9, description: "中文无衬线与衬线的完美结合" },
+                { font: "'Roboto', sans-serif", score: 7, description: "中文与英文无衬线字体的搭配" },
+                { font: "'Playfair Display', serif", score: 8, description: "中文无衬线与英文衬线的对比" },
+                { font: "'Open Sans', sans-serif", score: 7, description: "中文与英文友好无衬线字体的组合" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "中文与英文几何无衬线字体的搭配" }
+            ],
+            "'Noto Serif SC', serif": [
+                { font: "'Roboto', sans-serif", score: 8, description: "中文衬线与英文无衬线的对比" },
+                { font: "'Noto Sans SC', sans-serif", score: 9, description: "中文衬线与无衬线的完美结合" },
+                { font: "'Playfair Display', serif", score: 7, description: "中英文衬线字体的搭配" },
+                { font: "'Open Sans', sans-serif", score: 8, description: "中文衬线与英文友好无衬线的组合" },
+                { font: "'Montserrat', sans-serif", score: 7, description: "中文衬线与英文几何无衬线的搭配" }
+            ]
+        };
+
+        // 使用场景数据库
+        const usageScenarios = {
+            "'Roboto', sans-serif": {
+                primary: ["网站设计", "移动应用", "企业品牌", "技术文档"],
+                secondary: ["博客", "电子商务", "用户界面", "数据可视化"]
+            },
+            "'Open Sans', sans-serif": {
+                primary: ["企业网站", "教育平台", "健康医疗", "非营利组织"],
+                secondary: ["博客", "在线杂志", "用户界面", "信息图表"]
+            },
+            "'Lato', sans-serif": {
+                primary: ["企业品牌", "创意作品集", "时尚网站", "餐饮业"],
+                secondary: ["博客", "电子商务", "用户界面", "社交媒体"]
+            },
+            "'Montserrat', sans-serif": {
+                primary: ["创意机构", "初创公司", "艺术展览", "音乐活动"],
+                secondary: ["作品集", "活动海报", "用户界面", "品牌标识"]
+            },
+            "'Playfair Display', serif": {
+                primary: ["时尚杂志", "奢侈品牌", "餐饮菜单", "婚礼邀请"],
+                secondary: ["博客标题", "书籍封面", "品牌标识", "印刷广告"]
+            },
+            "'Merriweather', serif": {
+                primary: ["在线新闻", "数字出版物", "学术网站", "文学博客"],
+                secondary: ["长篇文章", "电子书", "研究报告", "印刷品"]
+            },
+            "'Oswald', sans-serif": {
+                primary: ["新闻标题", "体育网站", "政治宣传", "活动海报"],
+                secondary: ["报纸布局", "杂志标题", "广告横幅", "演示文稿"]
+            },
+            "'Raleway', sans-serif": {
+                primary: ["创意作品集", "设计工作室", "技术会议", "艺术展览"],
+                secondary: ["用户界面", "品牌标识", "活动邀请", "个人简历"]
+            },
+            "'Ubuntu', sans-serif": {
+                primary: ["科技博客", "开源项目", "社区论坛", "教育平台"],
+                secondary: ["用户界面", "技术文档", "演示文稿", "移动应用"]
+            },
+            "'PT Sans', sans-serif": {
+                primary: ["企业网站", "政府门户", "教育机构", "公共服务"],
+                secondary: ["用户界面", "印刷品", "演示文稿", "信息图表"]
+            },
+            "'Source Sans Pro', sans-serif": {
+                primary: ["用户界面", "技术文档", "代码编辑器", "学术网站"],
+                secondary: ["企业品牌", "电子商务", "数据可视化", "演示文稿"]
+            },
+            "'Poppins', sans-serif": {
+                primary: ["初创公司", "移动应用", "创意机构", "时尚品牌"],
+                secondary: ["用户界面", "社交媒体", "品牌标识", "电子商务"]
+            },
+            "'Noto Sans SC', sans-serif": {
+                primary: ["中文网站", "移动应用", "企业品牌", "用户界面"],
+                secondary: ["电子商务", "教育平台", "新闻门户", "社交媒体"]
+            },
+            "'Noto Serif SC', serif": {
+                primary: ["中文印刷", "书籍排版", "文学网站", "新闻文章"],
+                secondary: ["博客", "电子书", "学术文章", "品牌标识"]
+            }
+        };
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取DOM元素
+            const primaryFontSelect = document.getElementById('primary-font');
+            const secondaryFontSelect = document.getElementById('secondary-font');
+            const recommendBtn = document.getElementById('recommend-btn');
+            const randomBtn = document.getElementById('random-btn');
+            const recommendationsContainer = document.getElementById('recommendations-container');
+            const usageScenariosContainer = document.getElementById('usage-scenarios');
+            const accessibilityChecksContainer = document.getElementById('accessibility-checks');
+            const headingSizeSlider = document.getElementById('heading-size');
+            const bodySizeSlider = document.getElementById('body-size');
+            const headingSizeValue = document.getElementById('heading-size-value');
+            const bodySizeValue = document.getElementById('body-size-value');
+            const exportCssBtn = document.getElementById('export-css');
+            const copyCssBtn = document.getElementById('copy-css');
+            const cssExport = document.getElementById('css-export');
+            const notification = document.getElementById('notification');
+
+            // 标签页切换
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', function() {
+                    const tabId = this.getAttribute('data-tab');
+                    
+                    // 移除所有活动状态
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('active'));
+                    
+                    // 添加当前活动状态
+                    this.classList.add('active');
+                    document.getElementById(`${tabId}-tab`).classList.add('active');
+                });
+            });
+
+            // 字体大小滑块
+            headingSizeSlider.addEventListener('input', function() {
+                headingSizeValue.textContent = this.value + 'px';
+                updatePreview();
+            });
+
+            bodySizeSlider.addEventListener('input', function() {
+                bodySizeValue.textContent = this.value + 'px';
+                updatePreview();
+            });
+
+            // 主字体选择变化
+            primaryFontSelect.addEventListener('change', function() {
+                if (this.value) {
+                    getRecommendations(this.value);
+                    updatePreview();
+                    updateUsageScenarios();
+                    updateAccessibilityChecks();
+                }
+            });
+
+            // 辅助字体选择变化
+            secondaryFontSelect.addEventListener('change', function() {
+                updatePreview();
+                updateUsageScenarios();
+                updateAccessibilityChecks();
+            });
+
+            // 推荐按钮点击
+            recommendBtn.addEventListener('click', function() {
+                const primaryFont = primaryFontSelect.value;
+                if (primaryFont) {
+                    getRecommendations(primaryFont);
+                } else {
+                    showNotification('请先选择主字体', 'error');
+                }
+            });
+
+            // 随机组合按钮点击
+            randomBtn.addEventListener('click', function() {
+                const fonts = Array.from(primaryFontSelect.options)
+                    .filter(option => option.value)
+                    .map(option => option.value);
+                
+                const randomPrimary = fonts[Math.floor(Math.random() * fonts.length)];
+                const randomSecondary = fonts[Math.floor(Math.random() * fonts.length)];
+                
+                primaryFontSelect.value = randomPrimary;
+                secondaryFontSelect.value = randomSecondary;
+                
+                getRecommendations(randomPrimary);
+                updatePreview();
+                updateUsageScenarios();
+                updateAccessibilityChecks();
+                
+                showNotification('已生成随机字体组合', 'success');
+            });
+
+            // 导出CSS按钮点击
+            exportCssBtn.addEventListener('click', function() {
+                const primaryFont = primaryFontSelect.value;
+                const secondaryFont = secondaryFontSelect.value;
+                
+                if (primaryFont && secondaryFont) {
+                    const css = generateCSS(primaryFont, secondaryFont);
+                    cssExport.textContent = css;
+                    cssExport.style.display = 'block';
+                    
+                    // 滚动到CSS代码区域
+                    cssExport.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    showNotification('请先选择主字体和辅助字体', 'error');
+                }
+            });
+
+            // 复制CSS按钮点击
+            copyCssBtn.addEventListener('click', function() {
+                const primaryFont = primaryFontSelect.value;
+                const secondaryFont = secondaryFontSelect.value;
+                
+                if (primaryFont && secondaryFont) {
+                    const css = generateCSS(primaryFont, secondaryFont);
+                    
+                    navigator.clipboard.writeText(css).then(() => {
+                        showNotification('CSS代码已复制到剪贴板', 'success');
+                    }).catch(() => {
+                        showNotification('复制失败，请手动复制', 'error');
+                    });
+                } else {
+                    showNotification('请先选择主字体和辅助字体', 'error');
+                }
+            });
+
+            // 获取推荐字体
+            function getRecommendations(primaryFont) {
+                const recommendations = fontPairings[primaryFont] || [];
+                
+                if (recommendations.length === 0) {
+                    recommendationsContainer.innerHTML = '<p>没有找到该字体的推荐搭配</p>';
+                    return;
+                }
+                
+                let html = '';
+                recommendations.forEach(rec => {
+                    const scoreClass = rec.score >= 8 ? 'score-high' : rec.score >= 6 ? 'score-medium' : 'score-low';
+                    html += `
+                        <div class="recommendation-card" data-font="${rec.font}">
+                            <div class="recommendation-title">
+                                <span style="font-family: ${rec.font}">${rec.font.replace(/['"]/g, '')}</span>
+                                <span class="compatibility-score ${scoreClass}">${rec.score}/10</span>
+                            </div>
+                            <div class="recommendation-description">${rec.description}</div>
+                        </div>
+                    `;
+                });
+                
+                recommendationsContainer.innerHTML = html;
+                
+                // 添加点击事件
+                const recommendationCards = document.querySelectorAll('.recommendation-card');
+                recommendationCards.forEach(card => {
+                    card.addEventListener('click', function() {
+                        // 移除所有选中状态
+                        recommendationCards.forEach(c => c.classList.remove('selected'));
+                        
+                        // 添加当前选中状态
+                        this.classList.add('selected');
+                        
+                        // 设置辅助字体
+                        const font = this.getAttribute('data-font');
+                        secondaryFontSelect.value = font;
+                        
+                        // 更新预览和其他信息
+                        updatePreview();
+                        updateUsageScenarios();
+                        updateAccessibilityChecks();
+                        
+                        showNotification('已选择推荐字体', 'success');
+                    });
+                });
+            }
+
+            // 更新预览
+            function updatePreview() {
+                const primaryFont = primaryFontSelect.value || 'inherit';
+                const secondaryFont = secondaryFontSelect.value || 'inherit';
+                const headingSize = headingSizeSlider.value + 'px';
+                const bodySize = bodySizeSlider.value + 'px';
+                
+                // 更新所有预览元素的字体
+                const previewHeadings = document.querySelectorAll('.preview-heading');
+                const previewBodies = document.querySelectorAll('.preview-body');
+                const previewCaptions = document.querySelectorAll('.preview-caption');
+                
+                previewHeadings.forEach(heading => {
+                    heading.style.fontFamily = primaryFont;
+                    heading.style.fontSize = headingSize;
+                });
+                
+                previewBodies.forEach(body => {
+                    body.style.fontFamily = secondaryFont;
+                    body.style.fontSize = bodySize;
+                });
+                
+                previewCaptions.forEach(caption => {
+                    caption.style.fontFamily = secondaryFont;
+                    caption.style.fontSize = (parseInt(bodySize) - 2) + 'px';
+                });
+            }
+
+            // 更新使用场景
+            function updateUsageScenarios() {
+                const primaryFont = primaryFontSelect.value;
+                const secondaryFont = secondaryFontSelect.value;
+                
+                if (!primaryFont && !secondaryFont) {
+                    usageScenariosContainer.innerHTML = '<p>选择字体组合后，这里将显示适合的使用场景</p>';
+                    return;
+                }
+                
+                let primaryScenarios = [];
+                let secondaryScenarios = [];
+                
+                if (primaryFont && usageScenarios[primaryFont]) {
+                    primaryScenarios = usageScenarios[primaryFont].primary;
+                }
+                
+                if (secondaryFont && usageScenarios[secondaryFont]) {
+                    secondaryScenarios = usageScenarios[secondaryFont].secondary;
+                }
+                
+                // 合并并去重
+                const allScenarios = [...new Set([...primaryScenarios, ...secondaryScenarios])];
+                
+                if (allScenarios.length === 0) {
+                    usageScenariosContainer.innerHTML = '<p>没有找到适合的使用场景</p>';
+                    return;
+                }
+                
+                let html = '<h3>推荐使用场景</h3><div>';
+                allScenarios.forEach(scenario => {
+                    html += `<span class="scenario-tag">${scenario}</span>`;
+                });
+                html += '</div>';
+                
+                usageScenariosContainer.innerHTML = html;
+            }
+
+            // 更新可访问性检查
+            function updateAccessibilityChecks() {
+                const primaryFont = primaryFontSelect.value;
+                const secondaryFont = secondaryFontSelect.value;
+                
+                if (!primaryFont && !secondaryFont) {
+                    accessibilityChecksContainer.innerHTML = '<p>选择字体组合后，这里将显示可访问性检查结果</p>';
+                    return;
+                }
+                
+                const checks = [];
+                
+                // 检查字体对比度
+                if (primaryFont && secondaryFont) {
+                    // 检查是否是同一类型字体
+                    const primaryIsSerif = primaryFont.includes('serif');
+                    const secondaryIsSerif = secondaryFont.includes('serif');
+                    
+                    if (primaryIsSerif === secondaryIsSerif) {
+                        checks.push({
+                            status: 'warning',
+                            icon: '⚠️',
+                            text: '主字体和辅助字体属于同一类型（都是衬线或都是无衬线），可能缺乏对比度'
+                        });
+                    } else {
+                        checks.push({
+                            status: 'pass',
+                            icon: '✅',
+                            text: '主字体和辅助字体类型不同，具有良好的对比度'
+                        });
+                    }
+                }
+                
+                // 检查中文字体支持
+                if (primaryFont.includes('Noto Sans SC') || primaryFont.includes('Noto Serif SC') || 
+                    secondaryFont.includes('Noto Sans SC') || secondaryFont.includes('Noto Serif SC')) {
+                    checks.push({
+                        status: 'pass',
+                        icon: '✅',
+                        text: '包含中文字体支持，适合中文内容'
+                    });
+                } else {
+                    checks.push({
+                        status: 'warning',
+                        icon: '⚠️',
+                        text: '未包含专门的中文字体，可能影响中文内容的显示效果'
+                    });
+                }
+                
+                // 检查字体大小
+                const bodySize = parseInt(bodySizeSlider.value);
+                if (bodySize >= 16) {
+                    checks.push({
+                        status: 'pass',
+                        icon: '✅',
+                        text: '正文字体大小适合阅读（≥16px）'
+                    });
+                } else {
+                    checks.push({
+                        status: 'fail',
+                        icon: '❌',
+                        text: '正文字体大小过小（<16px），可能影响可读性'
+                    });
+                }
+                
+                // 检查标题与正文字体大小差异
+                const headingSize = parseInt(headingSizeSlider.value);
+                const sizeRatio = headingSize / bodySize;
+                if (sizeRatio >= 1.2 && sizeRatio <= 2) {
+                    checks.push({
+                        status: 'pass',
+                        icon: '✅',
+                        text: '标题与正文字体大小比例适中，层次清晰'
+                    });
+                } else if (sizeRatio < 1.2) {
+                    checks.push({
+                        status: 'warning',
+                        icon: '⚠️',
+                        text: '标题与正文字体大小差异过小，可能缺乏层次感'
+                    });
+                } else {
+                    checks.push({
+                        status: 'warning',
+                        icon: '⚠️',
+                        text: '标题与正文字体大小差异过大，可能影响视觉平衡'
+                    });
+                }
+                
+                // 生成检查结果HTML
+                let html = '<h3>可访问性检查结果</h3>';
+                checks.forEach(check => {
+                    html += `
+                        <div class="check-item check-${check.status}">
+                            <span class="check-icon">${check.icon}</span>
+                            <span>${check.text}</span>
+                        </div>
+                    `;
+                });
+                
+                accessibilityChecksContainer.innerHTML = html;
+            }
+
+            // 生成CSS代码
+            function generateCSS(primaryFont, secondaryFont) {
+                const headingSize = headingSizeSlider.value + 'px';
+                const bodySize = bodySizeSlider.value + 'px';
+                
+                return `/* 字体导入 */
+@import url('https://fonts.googleapis.com/css2?family=${primaryFont.replace(/['"]/g, '').replace(/ /g, '+')}&family=${secondaryFont.replace(/['"]/g, '').replace(/ /g, '+')}&display=swap');
+
+/* 基础字体设置 */
+body {
+  font-family: ${secondaryFont};
+  font-size: ${bodySize};
+  line-height: 1.6;
+  color: #333;
+}
+
+/* 标题字体 */
+h1, h2, h3, h4, h5, h6 {
+  font-family: ${primaryFont};
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+
+h1 { font-size: 2.5em; }
+h2 { font-size: 2em; }
+h3 { font-size: 1.5em; }
+h4 { font-size: 1.25em; }
+h5 { font-size: 1.1em; }
+h6 { font-size: 1em; }
+
+/* 段落和文本 */
+p {
+  margin-bottom: 1em;
+}
+
+/* 小字文本 */
+small, .caption {
+  font-size: 0.875em;
+  color: #666;
+}`;
+            }
+
+            // 显示通知
+            function showNotification(message, type) {
+                notification.textContent = message;
+                notification.className = `notification ${type}`;
+                notification.classList.add('show');
+                
+                setTimeout(() => {
+                    notification.classList.remove('show');
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>

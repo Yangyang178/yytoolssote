@@ -1,0 +1,1549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>订阅服务管理器</title>
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --primary-dark: #4f46e5;
+            --primary-light: #818cf8;
+            --secondary-color: #ec4899;
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --dark-color: #1f2937;
+            --light-color: #f9fafb;
+            --text-color: #111827;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.1), 0 6px 10px rgba(0, 0, 0, 0.05);
+            --radius: 12px;
+            --radius-lg: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow-lg);
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 5px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            animation: gradient 3s ease infinite;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        h1 {
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .dashboard-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .dashboard-card:hover::after {
+            transform: scaleX(1);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .card-title i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+
+        .card-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 5px;
+        }
+
+        .card-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .tabs {
+            display: flex;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 8px;
+            margin-bottom: 30px;
+            box-shadow: var(--shadow);
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            border-radius: calc(var(--radius) - 4px);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            white-space: nowrap;
+            position: relative;
+        }
+
+        .tab:hover {
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .tab.active {
+            background: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .tab-content {
+            display: none;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            box-shadow: var(--shadow);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius);
+            font-size: 1rem;
+            transition: var(--transition);
+            background: white;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--light-color);
+            color: var(--text-color);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border-color);
+        }
+
+        .btn-danger {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            padding: 0;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .subscriptions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 25px;
+        }
+
+        .subscription-card {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 25px;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            border: 2px solid transparent;
+        }
+
+        .subscription-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+        }
+
+        .subscription-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-light);
+        }
+
+        .subscription-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .subscription-name {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .subscription-category {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary-color);
+        }
+
+        .subscription-details {
+            margin-bottom: 20px;
+        }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .detail-row:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .detail-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .detail-value {
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .subscription-cost {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+        }
+
+        .subscription-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .reminder-item {
+            background: white;
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--warning-color);
+            transition: var(--transition);
+        }
+
+        .reminder-item:hover {
+            transform: translateX(5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .reminder-date {
+            font-weight: 600;
+            color: var(--warning-color);
+            margin-bottom: 5px;
+        }
+
+        .reminder-service {
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+        }
+
+        .reminder-amount {
+            color: var(--text-secondary);
+        }
+
+        .suggestion-item {
+            background: white;
+            border-radius: var(--radius);
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--success-color);
+            transition: var(--transition);
+        }
+
+        .suggestion-item:hover {
+            transform: translateX(5px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .suggestion-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: var(--radius-lg);
+            padding: 30px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: var(--shadow-lg);
+            animation: modalFadeIn 0.3s ease;
+        }
+
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-color);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: var(--transition);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: var(--light-color);
+            color: var(--danger-color);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .rating-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .rating-value {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 1.1rem;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--text-color);
+        }
+
+        .empty-state-text {
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .subscriptions-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .tabs {
+                flex-wrap: nowrap;
+                overflow-x: auto;
+            }
+
+            .tab {
+                flex: 1;
+                text-align: center;
+            }
+        }
+
+        /* 动画效果 */
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        .slide-in {
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* 加载动画 */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 图表样式 */
+        .chart-container {
+            height: 300px;
+            margin-top: 20px;
+            position: relative;
+        }
+
+        .chart {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 进度条样式 */
+        .progress-bar {
+            height: 8px;
+            background-color: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        /* 标签样式 */
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }
+
+        .tag-primary {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary-color);
+        }
+
+        .tag-success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success-color);
+        }
+
+        .tag-warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--warning-color);
+        }
+
+        .tag-danger {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>订阅服务管理器</h1>
+            <p class="subtitle">轻松管理您的所有订阅服务，控制开支，优化支出</p>
+        </header>
+
+        <div class="dashboard">
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <span>💰</span> 月度总支出
+                </div>
+                <div class="card-value" id="monthlyTotal">¥0</div>
+                <div class="card-subtitle">所有订阅的月度费用</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <span>📊</span> 订阅数量
+                </div>
+                <div class="card-value" id="subscriptionCount">0</div>
+                <div class="card-subtitle">活跃订阅服务总数</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <span>⏰</span> 即将扣款
+                </div>
+                <div class="card-value" id="upcomingCount">0</div>
+                <div class="card-subtitle">未来7天内扣款的订阅</div>
+            </div>
+            <div class="dashboard-card">
+                <div class="card-title">
+                    <span>💡</span> 优化建议
+                </div>
+                <div class="card-value" id="suggestionCount">0</div>
+                <div class="card-subtitle">可优化的订阅数量</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('add-subscription')">添加订阅</button>
+            <button class="tab" onclick="showTab('subscriptions')">我的订阅</button>
+            <button class="tab" onclick="showTab('reminders')">扣款提醒</button>
+            <button class="tab" onclick="showTab('suggestions')">优化建议</button>
+        </div>
+
+        <div id="add-subscription" class="tab-content active">
+            <h2>添加新订阅</h2>
+            <form id="subscriptionForm">
+                <div class="form-group">
+                    <label for="serviceName">服务名称</label>
+                    <input type="text" id="serviceName" required placeholder="例如：Netflix、Spotify">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="serviceCategory">服务类别</label>
+                        <select id="serviceCategory" required>
+                            <option value="">选择类别</option>
+                            <option value="streaming">流媒体</option>
+                            <option value="software">软件工具</option>
+                            <option value="gaming">游戏</option>
+                            <option value="news">新闻资讯</option>
+                            <option value="music">音乐</option>
+                            <option value="cloud">云存储</option>
+                            <option value="education">教育学习</option>
+                            <option value="fitness">健身健康</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="billingCycle">计费周期</label>
+                        <select id="billingCycle" required>
+                            <option value="">选择周期</option>
+                            <option value="monthly">每月</option>
+                            <option value="yearly">每年</option>
+                            <option value="quarterly">每季度</option>
+                            <option value="weekly">每周</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cost">费用 (¥)</label>
+                        <input type="number" id="cost" step="0.01" min="0" required placeholder="0.00">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="nextBillingDate">下次扣款日期</label>
+                        <input type="date" id="nextBillingDate" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="usageFrequency">使用频率</label>
+                        <select id="usageFrequency" required>
+                            <option value="">选择频率</option>
+                            <option value="daily">每天</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                            <option value="rarely">很少</option>
+                            <option value="never">从未</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="valueRating">价值评分 (1-10)</label>
+                        <div class="rating-container">
+                            <input type="range" id="valueRating" min="1" max="10" value="5" required>
+                            <span class="rating-value" id="ratingValue">5</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="notes">备注 (可选)</label>
+                    <textarea id="notes" rows="3" placeholder="添加关于此订阅的备注..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">
+                    <span>➕</span> 添加订阅
+                </button>
+            </form>
+        </div>
+
+        <div id="subscriptions" class="tab-content">
+            <h2>我的订阅</h2>
+            <div id="subscriptionsList" class="subscriptions-grid">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <div class="empty-state-title">暂无订阅</div>
+                    <div class="empty-state-text">添加您的第一个订阅服务开始管理</div>
+                    <button class="btn btn-primary" onclick="document.querySelector('.tab').click()">
+                        <span>➕</span> 添加订阅
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="reminders" class="tab-content">
+            <h2>扣款提醒</h2>
+            <div id="remindersList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">⏰</div>
+                    <div class="empty-state-title">暂无扣款提醒</div>
+                    <div class="empty-state-text">添加订阅后，系统将显示即将到来的扣款日期</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="suggestions" class="tab-content">
+            <h2>优化建议</h2>
+            <div id="suggestionsList">
+                <div class="empty-state">
+                    <div class="empty-state-icon">💡</div>
+                    <div class="empty-state-title">暂无建议</div>
+                    <div class="empty-state-text">添加更多订阅后，系统将为您提供个性化优化建议</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 编辑订阅模态框 -->
+    <div id="editModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">编辑订阅</h3>
+                <button class="close-btn" onclick="closeEditModal()">×</button>
+            </div>
+            <form id="editForm">
+                <input type="hidden" id="editId">
+                
+                <div class="form-group">
+                    <label for="editServiceName">服务名称</label>
+                    <input type="text" id="editServiceName" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editServiceCategory">服务类别</label>
+                        <select id="editServiceCategory" required>
+                            <option value="streaming">流媒体</option>
+                            <option value="software">软件工具</option>
+                            <option value="gaming">游戏</option>
+                            <option value="news">新闻资讯</option>
+                            <option value="music">音乐</option>
+                            <option value="cloud">云存储</option>
+                            <option value="education">教育学习</option>
+                            <option value="fitness">健身健康</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editBillingCycle">计费周期</label>
+                        <select id="editBillingCycle" required>
+                            <option value="monthly">每月</option>
+                            <option value="yearly">每年</option>
+                            <option value="quarterly">每季度</option>
+                            <option value="weekly">每周</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editCost">费用 (¥)</label>
+                        <input type="number" id="editCost" step="0.01" min="0" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editNextBillingDate">下次扣款日期</label>
+                        <input type="date" id="editNextBillingDate" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="editUsageFrequency">使用频率</label>
+                        <select id="editUsageFrequency" required>
+                            <option value="daily">每天</option>
+                            <option value="weekly">每周</option>
+                            <option value="monthly">每月</option>
+                            <option value="rarely">很少</option>
+                            <option value="never">从未</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editValueRating">价值评分 (1-10)</label>
+                        <div class="rating-container">
+                            <input type="range" id="editValueRating" min="1" max="10" value="5" required>
+                            <span class="rating-value" id="editRatingValue">5</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="editNotes">备注 (可选)</label>
+                    <textarea id="editNotes" rows="3"></textarea>
+                </div>
+                
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存更改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // 初始化数据
+        let subscriptions = JSON.parse(localStorage.getItem('subscriptions')) || [];
+        const editModal = document.getElementById('editModal');
+        
+        // 类别名称映射
+        const categoryNames = {
+            streaming: '流媒体',
+            software: '软件工具',
+            gaming: '游戏',
+            news: '新闻资讯',
+            music: '音乐',
+            cloud: '云存储',
+            education: '教育学习',
+            fitness: '健身健康',
+            other: '其他'
+        };
+        
+        // 计费周期名称映射
+        const billingCycleNames = {
+            monthly: '每月',
+            yearly: '每年',
+            quarterly: '每季度',
+            weekly: '每周'
+        };
+        
+        // 使用频率名称映射
+        const usageFrequencyNames = {
+            daily: '每天',
+            weekly: '每周',
+            monthly: '每月',
+            rarely: '很少',
+            never: '从未'
+        };
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            renderSubscriptions();
+            updateDashboard();
+            updateReminders();
+            generateSuggestions();
+            
+            // 设置今天日期为默认值
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('nextBillingDate').value = today;
+            
+            // 价值评分滑块事件
+            const valueRating = document.getElementById('valueRating');
+            const ratingValue = document.getElementById('ratingValue');
+            valueRating.addEventListener('input', function() {
+                ratingValue.textContent = this.value;
+            });
+            
+            // 编辑表单的价值评分滑块事件
+            const editValueRating = document.getElementById('editValueRating');
+            const editRatingValue = document.getElementById('editRatingValue');
+            editValueRating.addEventListener('input', function() {
+                editRatingValue.textContent = this.value;
+            });
+            
+            // 表单提交事件
+            document.getElementById('subscriptionForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                addSubscription();
+            });
+            
+            // 编辑表单提交事件
+            document.getElementById('editForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                updateSubscription();
+            });
+        });
+        
+        // 添加订阅
+        function addSubscription() {
+            const subscription = {
+                id: Date.now().toString(),
+                serviceName: document.getElementById('serviceName').value,
+                serviceCategory: document.getElementById('serviceCategory').value,
+                billingCycle: document.getElementById('billingCycle').value,
+                cost: parseFloat(document.getElementById('cost').value),
+                nextBillingDate: document.getElementById('nextBillingDate').value,
+                usageFrequency: document.getElementById('usageFrequency').value,
+                valueRating: parseInt(document.getElementById('valueRating').value),
+                notes: document.getElementById('notes').value,
+                createdAt: new Date().toISOString()
+            };
+            
+            subscriptions.push(subscription);
+            saveSubscriptions();
+            renderSubscriptions();
+            updateDashboard();
+            updateReminders();
+            generateSuggestions();
+            
+            // 重置表单
+            document.getElementById('subscriptionForm').reset();
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('nextBillingDate').value = today;
+            document.getElementById('ratingValue').textContent = '5';
+            
+            // 切换到订阅列表标签
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab')[1].classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+            document.getElementById('subscriptions').classList.add('active');
+            
+            // 显示成功提示
+            showNotification('订阅添加成功！');
+        }
+        
+        // 更新订阅
+        function updateSubscription() {
+            const id = document.getElementById('editId').value;
+            const index = subscriptions.findIndex(sub => sub.id === id);
+            
+            if (index !== -1) {
+                subscriptions[index] = {
+                    ...subscriptions[index],
+                    serviceName: document.getElementById('editServiceName').value,
+                    serviceCategory: document.getElementById('editServiceCategory').value,
+                    billingCycle: document.getElementById('editBillingCycle').value,
+                    cost: parseFloat(document.getElementById('editCost').value),
+                    nextBillingDate: document.getElementById('editNextBillingDate').value,
+                    usageFrequency: document.getElementById('editUsageFrequency').value,
+                    valueRating: parseInt(document.getElementById('editValueRating').value),
+                    notes: document.getElementById('editNotes').value
+                };
+                
+                saveSubscriptions();
+                renderSubscriptions();
+                updateDashboard();
+                updateReminders();
+                generateSuggestions();
+                closeEditModal();
+                
+                // 显示成功提示
+                showNotification('订阅更新成功！');
+            }
+        }
+        
+        // 更新仪表盘
+        function updateDashboard() {
+            // 计算月度总支出
+            let monthlyTotal = 0;
+            subscriptions.forEach(sub => {
+                if (sub.billingCycle === 'monthly') {
+                    monthlyTotal += sub.cost;
+                } else if (sub.billingCycle === 'yearly') {
+                    monthlyTotal += sub.cost / 12;
+                } else if (sub.billingCycle === 'quarterly') {
+                    monthlyTotal += sub.cost / 3;
+                } else if (sub.billingCycle === 'weekly') {
+                    monthlyTotal += sub.cost * 4.33; // 平均每月周数
+                }
+            });
+            
+            // 计算即将扣款的订阅数量
+            const today = new Date();
+            const sevenDaysFromNow = new Date(today);
+            sevenDaysFromNow.setDate(today.getDate() + 7);
+            
+            const upcomingCount = subscriptions.filter(sub => {
+                const billingDate = new Date(sub.nextBillingDate);
+                return billingDate >= today && billingDate <= sevenDaysFromNow;
+            }).length;
+            
+            // 计算优化建议数量
+            const suggestionCount = calculateSuggestionCount();
+            
+            // 更新DOM
+            document.getElementById('monthlyTotal').textContent = `¥${monthlyTotal.toFixed(2)}`;
+            document.getElementById('subscriptionCount').textContent = subscriptions.length;
+            document.getElementById('upcomingCount').textContent = upcomingCount;
+            document.getElementById('suggestionCount').textContent = suggestionCount;
+        }
+        
+        // 计算优化建议数量
+        function calculateSuggestionCount() {
+            let count = 0;
+            
+            // 低价值高费用的订阅
+            const lowValueHighCost = subscriptions.filter(sub => 
+                sub.valueRating <= 4 && sub.cost > 50
+            );
+            count += lowValueHighCost.length;
+            
+            // 使用频率低的订阅
+            const lowUsage = subscriptions.filter(sub => 
+                sub.usageFrequency === 'rarely' || sub.usageFrequency === 'never'
+            );
+            count += lowUsage.length;
+            
+            // 高费用但价值评分一般的订阅
+            const highCostLowValue = subscriptions.filter(sub => 
+                sub.cost > 100 && sub.valueRating <= 6
+            );
+            count += highCostLowValue.length;
+            
+            // 同类别的重复订阅
+            const categoryGroups = {};
+            subscriptions.forEach(sub => {
+                if (!categoryGroups[sub.serviceCategory]) {
+                    categoryGroups[sub.serviceCategory] = [];
+                }
+                categoryGroups[sub.serviceCategory].push(sub);
+            });
+            
+            const duplicateCategories = Object.keys(categoryGroups).filter(category => 
+                categoryGroups[category].length > 1
+            );
+            count += duplicateCategories.length;
+            
+            return count;
+        }
+        
+        // 渲染订阅列表
+        function renderSubscriptions() {
+            const subscriptionsList = document.getElementById('subscriptionsList');
+            
+            if (subscriptions.length === 0) {
+                subscriptionsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📋</div>
+                        <div class="empty-state-title">暂无订阅</div>
+                        <div class="empty-state-text">添加您的第一个订阅服务开始管理</div>
+                        <button class="btn btn-primary" onclick="document.querySelector('.tab').click()">
+                            <span>➕</span> 添加订阅
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            subscriptionsList.innerHTML = subscriptions.map(subscription => {
+                const billingCycleText = billingCycleNames[subscription.billingCycle];
+                const categoryText = categoryNames[subscription.serviceCategory];
+                const usageFrequencyText = usageFrequencyNames[subscription.usageFrequency];
+                
+                // 计算月度费用
+                let monthlyCost = subscription.cost;
+                if (subscription.billingCycle === 'yearly') monthlyCost = subscription.cost / 12;
+                else if (subscription.billingCycle === 'quarterly') monthlyCost = subscription.cost / 3;
+                else if (subscription.billingCycle === 'weekly') monthlyCost = subscription.cost * 4.33;
+                
+                // 确定价值评分颜色
+                let valueColor = 'success';
+                if (subscription.valueRating <= 4) valueColor = 'danger';
+                else if (subscription.valueRating <= 7) valueColor = 'warning';
+                
+                return `
+                    <div class="subscription-card fade-in">
+                        <div class="subscription-header">
+                            <div class="subscription-name">${subscription.serviceName}</div>
+                            <div class="subscription-category">${categoryText}</div>
+                        </div>
+                        <div class="subscription-details">
+                            <div class="detail-row">
+                                <div class="detail-label">计费周期</div>
+                                <div class="detail-value">${billingCycleText}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">下次扣款</div>
+                                <div class="detail-value">${formatDate(subscription.nextBillingDate)}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">使用频率</div>
+                                <div class="detail-value">${usageFrequencyText}</div>
+                            </div>
+                            <div class="detail-row">
+                                <div class="detail-label">价值评分</div>
+                                <div class="detail-value">
+                                    <span class="tag tag-${valueColor}">${subscription.valueRating}/10</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="subscription-cost">¥${monthlyCost.toFixed(2)}/月</div>
+                        <div class="subscription-actions">
+                            <button class="btn btn-secondary btn-icon" onclick="editSubscription('${subscription.id}')" title="编辑">
+                                ✏️
+                            </button>
+                            <button class="btn btn-danger btn-icon" onclick="deleteSubscription('${subscription.id}')" title="删除">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 更新扣款提醒
+        function updateReminders() {
+            const remindersList = document.getElementById('remindersList');
+            const today = new Date();
+            const thirtyDaysFromNow = new Date(today);
+            thirtyDaysFromNow.setDate(today.getDate() + 30);
+            
+            // 筛选未来30天内的扣款
+            const upcomingSubscriptions = subscriptions
+                .map(sub => {
+                    const billingDate = new Date(sub.nextBillingDate);
+                    return {
+                        ...sub,
+                        daysUntilBilling: Math.ceil((billingDate - today) / (1000 * 60 * 60 * 24))
+                    };
+                })
+                .filter(sub => sub.daysUntilBilling >= 0 && sub.daysUntilBilling <= 30)
+                .sort((a, b) => a.daysUntilBilling - b.daysUntilBilling);
+            
+            if (upcomingSubscriptions.length === 0) {
+                remindersList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⏰</div>
+                        <div class="empty-state-title">暂无扣款提醒</div>
+                        <div class="empty-state-text">添加订阅后，系统将显示即将到来的扣款日期</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            remindersList.innerHTML = upcomingSubscriptions.map(subscription => {
+                const urgencyClass = subscription.daysUntilBilling <= 3 ? 'danger' : 
+                                    subscription.daysUntilBilling <= 7 ? 'warning' : 'success';
+                
+                const urgencyText = subscription.daysUntilBilling === 0 ? '今天' :
+                                   subscription.daysUntilBilling === 1 ? '明天' :
+                                   `${subscription.daysUntilBilling}天后`;
+                
+                return `
+                    <div class="reminder-item">
+                        <div class="reminder-date tag tag-${urgencyClass}">${urgencyText}扣款</div>
+                        <div class="reminder-service">${subscription.serviceName}</div>
+                        <div class="reminder-amount">¥${subscription.cost.toFixed(2)} (${billingCycleNames[subscription.billingCycle]})</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 生成优化建议
+        function generateSuggestions() {
+            const suggestionsList = document.getElementById('suggestionsList');
+            const suggestions = [];
+            
+            // 找出低价值高费用的订阅
+            const lowValueHighCost = subscriptions.filter(sub => 
+                sub.valueRating <= 4 && sub.cost > 50
+            );
+            
+            if (lowValueHighCost.length > 0) {
+                const totalCost = lowValueHighCost.reduce((sum, sub) => {
+                    let monthlyCost = sub.cost;
+                    if (sub.billingCycle === 'yearly') monthlyCost = sub.cost / 12;
+                    else if (sub.billingCycle === 'quarterly') monthlyCost = sub.cost / 3;
+                    else if (sub.billingCycle === 'weekly') monthlyCost = sub.cost * 4.33;
+                    return sum + monthlyCost;
+                }, 0);
+                
+                suggestions.push({
+                    title: '取消低价值订阅',
+                    description: `您有 ${lowValueHighCost.length} 个订阅价值评分低但费用较高，取消这些订阅每月可节省 ¥${totalCost.toFixed(2)}`,
+                    subscriptions: lowValueHighCost,
+                    type: 'cancel'
+                });
+            }
+            
+            // 找出使用频率低的订阅
+            const lowUsage = subscriptions.filter(sub => 
+                sub.usageFrequency === 'rarely' || sub.usageFrequency === 'never'
+            );
+            
+            if (lowUsage.length > 0) {
+                const totalCost = lowUsage.reduce((sum, sub) => {
+                    let monthlyCost = sub.cost;
+                    if (sub.billingCycle === 'yearly') monthlyCost = sub.cost / 12;
+                    else if (sub.billingCycle === 'quarterly') monthlyCost = sub.cost / 3;
+                    else if (sub.billingCycle === 'weekly') monthlyCost = sub.cost * 4.33;
+                    return sum + monthlyCost;
+                }, 0);
+                
+                suggestions.push({
+                    title: '取消不常用订阅',
+                    description: `您有 ${lowUsage.length} 个订阅很少使用，取消这些订阅每月可节省 ¥${totalCost.toFixed(2)}`,
+                    subscriptions: lowUsage,
+                    type: 'cancel'
+                });
+            }
+            
+            // 找出高费用但价值评分一般的订阅
+            const highCostLowValue = subscriptions.filter(sub => 
+                sub.cost > 100 && sub.valueRating <= 6
+            );
+            
+            if (highCostLowValue.length > 0) {
+                const totalCost = highCostLowValue.reduce((sum, sub) => {
+                    let monthlyCost = sub.cost;
+                    if (sub.billingCycle === 'yearly') monthlyCost = sub.cost / 12;
+                    else if (sub.billingCycle === 'quarterly') monthlyCost = sub.cost / 3;
+                    else if (sub.billingCycle === 'weekly') monthlyCost = sub.cost * 4.33;
+                    return sum + monthlyCost;
+                }, 0);
+                
+                suggestions.push({
+                    title: '重新评估高费用订阅',
+                    description: `您有 ${highCostLowValue.length} 个订阅费用较高但价值评分一般，重新评估这些订阅每月可能节省 ¥${totalCost.toFixed(2)}`,
+                    subscriptions: highCostLowValue,
+                    type: 'review'
+                });
+            }
+            
+            // 找出同类别的重复订阅
+            const categoryGroups = {};
+            subscriptions.forEach(sub => {
+                if (!categoryGroups[sub.serviceCategory]) {
+                    categoryGroups[sub.serviceCategory] = [];
+                }
+                categoryGroups[sub.serviceCategory].push(sub);
+            });
+            
+            const duplicateCategories = Object.keys(categoryGroups).filter(category => 
+                categoryGroups[category].length > 1
+            );
+            
+            if (duplicateCategories.length > 0) {
+                const categoryNames = {
+                    streaming: '流媒体',
+                    software: '软件工具',
+                    gaming: '游戏',
+                    news: '新闻资讯',
+                    music: '音乐',
+                    cloud: '云存储',
+                    education: '教育学习',
+                    fitness: '健身健康',
+                    other: '其他'
+                };
+                
+                const categoryList = duplicateCategories.map(cat => 
+                    `${categoryNames[cat]}(${categoryGroups[cat].length}个)`
+                ).join('、');
+                
+                suggestions.push({
+                    title: '合并同类订阅',
+                    description: `您在 ${categoryList} 类别中有多个订阅，考虑合并或取消冗余订阅`,
+                    subscriptions: [],
+                    type: 'merge'
+                });
+            }
+            
+            // 计算年度节省潜力
+            const yearlySavings = suggestions.reduce((sum, suggestion) => {
+                if (suggestion.type === 'cancel' || suggestion.type === 'review') {
+                    return sum + suggestion.subscriptions.reduce((subSum, sub) => {
+                        let yearlyCost = sub.cost;
+                        if (sub.billingCycle === 'monthly') yearlyCost = sub.cost * 12;
+                        else if (sub.billingCycle === 'quarterly') yearlyCost = sub.cost * 4;
+                        else if (sub.billingCycle === 'weekly') yearlyCost = sub.cost * 52;
+                        return subSum + yearlyCost;
+                    }, 0);
+                }
+                return sum;
+            }, 0);
+            
+            if (yearlySavings > 0) {
+                suggestions.push({
+                    title: '年度节省潜力',
+                    description: `通过优化您的订阅，每年可能节省高达 ¥${yearlySavings.toFixed(2)}`,
+                    subscriptions: [],
+                    type: 'savings'
+                });
+            }
+            
+            if (suggestions.length === 0) {
+                suggestionsList.innerHTML = `
+                    <div class="suggestion-item">
+                        <div class="suggestion-title">👍 订阅状态良好</div>
+                        <p>您的订阅配置看起来很合理，没有明显的优化空间。继续保持良好的订阅管理习惯！</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            suggestionsList.innerHTML = suggestions.map(suggestion => {
+                let icon = suggestion.type === 'cancel' ? '🚫' : 
+                          suggestion.type === 'review' ? '🔍' : 
+                          suggestion.type === 'merge' ? '🔗' : '💰';
+                
+                let subscriptionList = '';
+                if (suggestion.subscriptions.length > 0) {
+                    subscriptionList = `
+                        <div style="margin-top: 10px;">
+                            <strong>相关订阅:</strong>
+                            <ul style="margin-top: 5px; padding-left: 20px;">
+                                ${suggestion.subscriptions.map(sub => 
+                                    `<li>${sub.serviceName} - ¥${sub.cost.toFixed(2)}/${sub.billingCycle === 'monthly' ? '月' : sub.billingCycle === 'yearly' ? '年' : sub.billingCycle === 'quarterly' ? '季度' : '周'}</li>`
+                                ).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                return `
+                    <div class="suggestion-item">
+                        <div class="suggestion-title">${icon} ${suggestion.title}</div>
+                        <p>${suggestion.description}</p>
+                        ${subscriptionList}
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 编辑订阅
+        function editSubscription(id) {
+            const subscription = subscriptions.find(sub => sub.id === id);
+            if (!subscription) return;
+            
+            document.getElementById('editId').value = subscription.id;
+            document.getElementById('editServiceName').value = subscription.serviceName;
+            document.getElementById('editServiceCategory').value = subscription.serviceCategory;
+            document.getElementById('editBillingCycle').value = subscription.billingCycle;
+            document.getElementById('editCost').value = subscription.cost;
+            document.getElementById('editNextBillingDate').value = subscription.nextBillingDate;
+            document.getElementById('editUsageFrequency').value = subscription.usageFrequency;
+            document.getElementById('editValueRating').value = subscription.valueRating;
+            document.getElementById('editRatingValue').textContent = subscription.valueRating;
+            document.getElementById('editNotes').value = subscription.notes || '';
+            
+            editModal.style.display = 'flex';
+        }
+        
+        // 删除订阅
+        function deleteSubscription(id) {
+            if (confirm('确定要删除这个订阅吗？')) {
+                subscriptions = subscriptions.filter(sub => sub.id !== id);
+                saveSubscriptions();
+                renderSubscriptions();
+                updateDashboard();
+                updateReminders();
+                generateSuggestions();
+                
+                showNotification('订阅已删除');
+            }
+        }
+        
+        // 关闭编辑模态框
+        function closeEditModal() {
+            editModal.style.display = 'none';
+        }
+        
+        // 保存订阅到本地存储
+        function saveSubscriptions() {
+            localStorage.setItem('subscriptions', JSON.stringify(subscriptions));
+        }
+        
+        // 标签切换
+        function showTab(tabName) {
+            // 隐藏所有标签内容
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // 移除所有标签的active类
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 显示选中的标签内容
+            document.getElementById(tabName).classList.add('active');
+            
+            // 为选中的标签添加active类
+            event.target.classList.add('active');
+        }
+        
+        // 格式化日期
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+        
+        // 显示通知
+        function showNotification(message) {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            notification.style.cssText = `
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+                color: white;
+                padding: 15px 20px;
+                border-radius: var(--radius);
+                box-shadow: var(--shadow-lg);
+                z-index: 1000;
+                animation: slideIn 0.3s ease, slideOut 0.3s ease 2.7s;
+                animation-fill-mode: forwards;
+            `;
+            
+            // 添加动画样式
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slideOut {
+                    from { transform: translateX(0); opacity: 1; }
+                    to { transform: translateX(100%); opacity: 0; }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            // 添加到DOM
+            document.body.appendChild(notification);
+            
+            // 3秒后移除
+            setTimeout(() => {
+                document.body.removeChild(notification);
+                document.head.removeChild(style);
+            }, 3000);
+        }
+        
+        // 点击模态框外部关闭模态框
+        window.onclick = function(event) {
+            if (event.target === editModal) {
+                closeEditModal();
+            }
+        }
+    </script>
+</body>
+</html>

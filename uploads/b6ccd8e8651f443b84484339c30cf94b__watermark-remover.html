@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片去水印工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2d3748;
+            margin-bottom: 40px;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .upload-section,
+        .preview-section,
+        .result-section {
+            margin-bottom: 40px;
+            background: #f7fafc;
+            padding: 30px;
+            border-radius: 12px;
+            border: 2px dashed transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .upload-section:hover {
+            border-color: #667eea;
+        }
+        
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f7fafc;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
+        }
+        
+        .upload-content svg {
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-content p {
+            font-size: 1.1rem;
+            color: #4a5568;
+            margin-bottom: 10px;
+        }
+        
+        .upload-content .hint {
+            font-size: 0.9rem;
+            color: #718096;
+            margin: 0;
+        }
+        
+        .image-container {
+            text-align: center;
+            margin: 20px 0;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+        
+        .image-container img,
+        .image-container canvas {
+            max-width: 100%;
+            max-height: 500px;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 150px;
+        }
+        
+        #removeBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        #removeBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+        
+        #downloadBtn {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+        
+        #downloadBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(72, 187, 120, 0.4);
+        }
+        
+        #clearBtn {
+            background: linear-gradient(135deg, #f56565 0%, #e53e3e 100%);
+            color: white;
+        }
+        
+        #clearBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 101, 101, 0.4);
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .upload-area {
+                padding: 40px 20px;
+            }
+            
+            .controls {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            button {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>图片去水印工具</h1>
+        
+        <div class="upload-section">
+            <h2>上传图片</h2>
+            <div class="upload-area" id="uploadArea">
+                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                <div class="upload-content">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <p>点击或拖拽图片到此处上传</p>
+                    <p class="hint">支持 JPG、PNG、WEBP 等格式</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="preview-section" id="previewSection" style="display: none;">
+            <h2>图片预览</h2>
+            <div class="image-container">
+                <img id="previewImage" alt="预览图片">
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="removeBtn" disabled>去除水印</button>
+            <button id="downloadBtn" disabled>下载结果</button>
+            <button id="clearBtn">清除图片</button>
+        </div>
+        
+        <div class="result-section" id="resultSection" style="display: none;">
+            <h2>处理结果</h2>
+            <div class="image-container">
+                <canvas id="resultCanvas"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 确保DOM加载完成后再执行所有代码
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM加载完成，初始化图片去水印工具...');
+            
+            // 获取所有DOM元素
+            const elements = {
+                uploadArea: document.getElementById('uploadArea'),
+                fileInput: document.getElementById('fileInput'),
+                previewSection: document.getElementById('previewSection'),
+                previewImage: document.getElementById('previewImage'),
+                removeBtn: document.getElementById('removeBtn'),
+                downloadBtn: document.getElementById('downloadBtn'),
+                clearBtn: document.getElementById('clearBtn'),
+                resultSection: document.getElementById('resultSection'),
+                resultCanvas: document.getElementById('resultCanvas')
+            };
+            
+            // 检查DOM元素是否获取成功
+            let allElementsFound = true;
+            for (const [name, element] of Object.entries(elements)) {
+                if (!element) {
+                    console.error(`DOM元素 ${name} 获取失败！`);
+                    allElementsFound = false;
+                } else {
+                    console.log(`DOM元素 ${name} 获取成功`);
+                }
+            }
+            
+            if (!allElementsFound) {
+                console.error('部分DOM元素获取失败，工具无法正常工作！');
+                return;
+            }
+            
+            // 获取Canvas上下文
+            const ctx = elements.resultCanvas.getContext('2d');
+            let uploadedImage = null;
+            
+            // ==================== 事件监听器 ====================
+            
+            // 1. 上传区域点击事件
+            elements.uploadArea.addEventListener('click', function() {
+                console.log('点击上传区域，打开文件选择对话框');
+                elements.fileInput.click();
+            });
+            
+            // 2. 拖拽上传事件
+            elements.uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                elements.uploadArea.style.borderColor = '#667eea';
+                elements.uploadArea.style.background = '#f7fafc';
+            });
+            
+            elements.uploadArea.addEventListener('dragleave', function() {
+                elements.uploadArea.style.borderColor = '#cbd5e0';
+                elements.uploadArea.style.background = 'white';
+            });
+            
+            elements.uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                elements.uploadArea.style.borderColor = '#cbd5e0';
+                elements.uploadArea.style.background = 'white';
+                
+                if (e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    console.log('拖拽上传文件:', file.name);
+                    handleFileUpload(file);
+                }
+            });
+            
+            // 3. 文件选择事件
+            elements.fileInput.addEventListener('change', function(e) {
+                if (e.target.files.length > 0) {
+                    const file = e.target.files[0];
+                    console.log('选择文件:', file.name);
+                    handleFileUpload(file);
+                }
+            });
+            
+            // 4. 去除水印按钮事件
+            elements.removeBtn.addEventListener('click', function() {
+                console.log('点击去除水印按钮');
+                removeWatermark();
+            });
+            
+            // 5. 下载按钮事件
+            elements.downloadBtn.addEventListener('click', function() {
+                console.log('点击下载按钮');
+                downloadResult();
+            });
+            
+            // 6. 清除按钮事件
+            elements.clearBtn.addEventListener('click', function() {
+                console.log('点击清除按钮');
+                clearImage();
+            });
+            
+            // ==================== 核心功能函数 ====================
+            
+            // 处理文件上传
+            function handleFileUpload(file) {
+                // 检查文件类型
+                if (!file.type.startsWith('image/')) {
+                    alert('请上传图片文件！支持 JPG、PNG、WEBP 等格式。');
+                    return;
+                }
+                
+                // 读取文件
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        uploadedImage = img;
+                        elements.previewImage.src = e.target.result;
+                        elements.previewSection.style.display = 'block';
+                        elements.removeBtn.disabled = false;
+                        elements.downloadBtn.disabled = true;
+                        elements.resultSection.style.display = 'none';
+                        console.log('图片加载完成，尺寸:', img.width, 'x', img.height);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            // 去除水印
+            function removeWatermark() {
+                if (!uploadedImage) {
+                    console.log('没有上传图片，无法去除水印');
+                    return;
+                }
+                
+                try {
+                    console.log('开始去除水印...');
+                    
+                    // 设置Canvas尺寸
+                    elements.resultCanvas.width = uploadedImage.width;
+                    elements.resultCanvas.height = uploadedImage.height;
+                    
+                    // 绘制原始图像
+                    ctx.drawImage(uploadedImage, 0, 0);
+                    
+                    // 获取图像数据
+                    const imageData = ctx.getImageData(0, 0, elements.resultCanvas.width, elements.resultCanvas.height);
+                    const data = imageData.data;
+                    
+                    console.log('图像数据获取成功，开始处理...');
+                    
+                    // 水印去除算法：检测并修复高亮度像素（白色文字水印）
+                    const watermarkPixels = detectWatermarkPixels(data, elements.resultCanvas.width, elements.resultCanvas.height);
+                    console.log('检测到水印像素数量:', watermarkPixels.length);
+                    
+                    // 修复水印像素
+                    if (watermarkPixels.length > 0) {
+                        repairWatermarkPixels(data, elements.resultCanvas.width, elements.resultCanvas.height, watermarkPixels);
+                        console.log('水印像素修复完成');
+                    }
+                    
+                    // 将处理后的数据放回Canvas
+                    ctx.putImageData(imageData, 0, 0);
+                    
+                    console.log('水印去除完成');
+                    
+                    // 显示结果
+                    elements.resultSection.style.display = 'block';
+                    elements.downloadBtn.disabled = false;
+                } catch (error) {
+                    console.error('去除水印失败:', error);
+                    alert('去除水印失败，请检查浏览器控制台获取详细信息。');
+                }
+            }
+            
+            // 检测水印像素（简单有效的算法）
+            function detectWatermarkPixels(data, width, height) {
+                const watermarkPixels = [];
+                
+                // 遍历每个像素
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const index = (y * width + x) * 4;
+                        const r = data[index];
+                        const g = data[index + 1];
+                        const b = data[index + 2];
+                        
+                        // 计算亮度
+                        const brightness = (r + g + b) / 3;
+                        
+                        // 检测高亮度像素（白色文字水印）
+                        if (brightness > 190) {
+                            watermarkPixels.push({ x, y });
+                        }
+                    }
+                }
+                
+                return watermarkPixels;
+            }
+            
+            // 修复水印像素
+            function repairWatermarkPixels(data, width, height, watermarkPixels) {
+                // 创建临时数据副本
+                const tempData = new Uint8ClampedArray(data);
+                
+                // 修复每个水印像素
+                for (const pixel of watermarkPixels) {
+                    const { x, y } = pixel;
+                    const index = (y * width + x) * 4;
+                    
+                    // 使用5x5邻域的平均值修复
+                    let rSum = 0, gSum = 0, bSum = 0, count = 0;
+                    
+                    for (let dy = -2; dy <= 2; dy++) {
+                        for (let dx = -2; dx <= 2; dx++) {
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                                const nIndex = (ny * width + nx) * 4;
+                                rSum += tempData[nIndex];
+                                gSum += tempData[nIndex + 1];
+                                bSum += tempData[nIndex + 2];
+                                count++;
+                            }
+                        }
+                    }
+                    
+                    // 计算平均值
+                    if (count > 0) {
+                        data[index] = rSum / count;
+                        data[index + 1] = gSum / count;
+                        data[index + 2] = bSum / count;
+                        data[index + 3] = 255;
+                    }
+                }
+            }
+            
+            // 下载结果
+            function downloadResult() {
+                console.log('开始下载图片...');
+                
+                elements.resultCanvas.toBlob(function(blob) {
+                    if (blob) {
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'watermark-removed.png';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        console.log('图片下载完成');
+                    } else {
+                        console.error('Canvas转Blob失败');
+                        alert('下载失败，请重试。');
+                    }
+                }, 'image/png');
+            }
+            
+            // 清除图片
+            function clearImage() {
+                console.log('清除图片...');
+                
+                // 重置状态
+                uploadedImage = null;
+                
+                // 隐藏预览和结果区域
+                elements.previewSection.style.display = 'none';
+                elements.resultSection.style.display = 'none';
+                
+                // 重置按钮状态
+                elements.removeBtn.disabled = true;
+                elements.downloadBtn.disabled = true;
+                
+                // 重置文件输入
+                elements.fileInput.value = '';
+                
+                // 清空预览图片
+                elements.previewImage.src = '';
+                
+                console.log('图片已清除，状态已重置');
+            }
+            
+            console.log('图片去水印工具初始化完成，所有功能已就绪！');
+        });
+    </script>
+</body>
+</html>

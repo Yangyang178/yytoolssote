@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>yytoolssite-aipro</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="hero">
+    <div class="container">
+      <div class="hero-inner">
+        <div class="hero-title">yytoolssite-aipro</div>
+        <div class="hero-sub">智能文件管理系统 · 轻松上传、存储与管理您的文件</div>
+      </div>
+    </div>
+  </header>
+  <main class="container">
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">{{ messages[0] }}</div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="site-footer">
+    <div class="container">Powered by Python + HTML · DKFile 集成</div>
+  </footer>
+</body>
+</html>
