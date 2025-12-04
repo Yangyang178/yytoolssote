@@ -8,8 +8,11 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .hero-sub{opacity:.9;margin-top:6px}
 .site-footer{padding:24px;color:var(--muted)}
 .grid-two{display:grid;grid-template-columns:1.25fr 1fr;gap:24px}
-.grid-three{display:flex;gap:24px}
-.grid-three>section{flex:1 1 0;min-width:0}
+.grid-three{display:grid;grid-template-columns:0.75fr 2fr 0.75fr;gap:24px;margin:0;padding:0 28px 28px}
+.grid-three>section{min-width:0}
+.grid-three.full-width{padding-left:0}
+main{padding:0}
+.container{padding:28px 28px 0 28px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:20px;box-shadow:0 12px 28px rgba(17,24,39,.1)}
 .card-lg{height:750px}
 .card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
@@ -46,15 +49,14 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
 .btn.danger{background:var(--danger)}
 .inline{display:inline}
 .empty{padding:12px;color:var(--muted)}
-.file-list{display:flex;flex-direction:column;gap:16px}
+.file-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 #local .card-body{display:flex;flex-direction:column;overflow:hidden;padding:0 24px}
 #local .file-list{flex:1;min-height:0;overflow:auto;padding-right:0;padding-top:0;padding-bottom:0;margin-top:0;margin-bottom:0}
 #local{display:flex;flex-direction:column;height:750px}
-.file-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 20px 24px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column}
+.file-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 20px 24px;box-shadow:var(--shadow);overflow:hidden;display:flex;flex-direction:column;min-height:280px}
 .file-card .file-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 .file-name{font-weight:700;color:#1f2937}
 .file-meta{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;flex:1;min-height:0;overflow:auto;padding-right:4px}
-.file-card{min-height:280px}
 .meta-item{font-size:13px;color:#374151;word-break:break-all;overflow-wrap:anywhere;line-height:1.6}
 .meta-item strong{color:#0f172a}
 .file-actions{margin-top:18px;display:flex;gap:12px;flex-wrap:wrap}

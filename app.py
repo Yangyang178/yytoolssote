@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+import sqlite3
 from pathlib import Path
 from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory, jsonify
 import requests
@@ -10,7 +11,7 @@ BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 UPLOAD_DIR = BASE_DIR / "uploads"
 DATA_DIR = BASE_DIR / "data"
-DB_FILE = DATA_DIR / "db.json"
+DB_FILE = DATA_DIR / "db.sqlite"
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
@@ -25,17 +26,102 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 def ensure_dirs():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not DB_FILE.exists():
-        DB_FILE.write_text(json.dumps({"files": []}, ensure_ascii=False), encoding="utf-8")
 
-def load_db():
+
+def get_db():
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    ensure_dirs()
+    conn = get_db()
     try:
-        return json.loads(DB_FILE.read_text(encoding="utf-8"))
-    except Exception:
-        return {"files": []}
+        conn.execute('''CREATE TABLE IF NOT EXISTS files (
+                        id TEXT PRIMARY KEY,
+                        filename TEXT NOT NULL,
+                        stored_name TEXT NOT NULL,
+                        path TEXT NOT NULL,
+                        size INTEGER NOT NULL,
+                        dkfile TEXT,
+                        project_name TEXT,
+                        project_desc TEXT
+                    )''')
+        conn.commit()
+    finally:
+        conn.close()
 
-def save_db(data):
-    DB_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+def migrate_json_to_db():
+    old_json_file = DATA_DIR / "db.json"
+    if old_json_file.exists():
+        try:
+            old_data = json.loads(old_json_file.read_text(encoding="utf-8"))
+            conn = get_db()
+            try:
+                for item in old_data.get("files", []):
+                    conn.execute('''INSERT OR IGNORE INTO files (
+                                    id, filename, stored_name, path, size, 
+                                    dkfile, project_name, project_desc
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                                (item["id"], item["filename"], item["stored_name"], 
+                                 item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                                 item.get("project_name"), item.get("project_desc")))
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f"迁移JSON数据失败: {e}")
+
+def get_all_files():
+    conn = get_db()
+    try:
+        rows = conn.execute('SELECT * FROM files ORDER BY id DESC').fetchall()
+        return [{"id": row["id"], "filename": row["filename"], "stored_name": row["stored_name"],
+                "path": row["path"], "size": row["size"], "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "project_name": row["project_name"], "project_desc": row["project_desc"]}
+                for row in rows]
+    finally:
+        conn.close()
+
+
+def get_file_by_id(file_id):
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+        if row:
+            return {"id": row["id"], "filename": row["filename"], "stored_name": row["stored_name"],
+                    "path": row["path"], "size": row["size"], "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                    "project_name": row["project_name"], "project_desc": row["project_desc"]}
+        return None
+    finally:
+        conn.close()
+
+
+def add_file(item):
+    conn = get_db()
+    try:
+        conn.execute('''INSERT INTO files (
+                        id, filename, stored_name, path, size, 
+                        dkfile, project_name, project_desc
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                    (item["id"], item["filename"], item["stored_name"], 
+                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                     item.get("project_name"), item.get("project_desc")))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def delete_file(file_id):
+    conn = get_db()
+    try:
+        conn.execute('DELETE FROM files WHERE id = ?', (file_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def dkfile_headers():
     h = {"Accept": "application/json"}
@@ -86,8 +172,9 @@ def dkfile_delete(file_id):
 
 @app.get("/")
 def index():
-    ensure_dirs()
-    db = load_db()
+    init_db()
+    migrate_json_to_db()
+    files = get_all_files()
     remote_error = None
     info = None
     try:
@@ -95,7 +182,7 @@ def index():
     except Exception as e:
         remote_error = str(e)
     remote_table = []
-    for x in db.get("files", []):
+    for x in files:
         dk = x.get("dkfile") or {}
         d = dk.get("data") or {}
         if dk.get("success") and d:
@@ -106,11 +193,11 @@ def index():
                 "is_update": d.get("is_update"),
                 "updated_at": d.get("updated_at"),
             })
-    return render_template("index.html", files=db["files"], remote_table=remote_table, remote_error=remote_error, dk_info=info)
+    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info)
 
 @app.post("/upload")
 def upload():
-    ensure_dirs()
+    init_db()
     f = request.files.get("file")
     if not f or f.filename == "":
         flash("请选择文件")
@@ -125,7 +212,6 @@ def upload():
         dk_resp = dkfile_upload(dest, filename, project_name=request.form.get("project_name"), description=request.form.get("project_desc"))
     except Exception as e:
         dk_resp = {"error": str(e)}
-    db = load_db()
     project_name = request.form.get("project_name")
     project_desc = request.form.get("project_desc")
     item = {
@@ -138,8 +224,7 @@ def upload():
         "project_name": project_name,
         "project_desc": project_desc,
     }
-    db["files"].insert(0, item)
-    save_db(db)
+    add_file(item)
     try:
         if isinstance(dk_resp, dict) and dk_resp.get("success"):
             url = (dk_resp.get("data") or {}).get("url")
@@ -153,19 +238,18 @@ def upload():
 
 @app.get("/files/<file_id>")
 def file_detail(file_id):
-    db = load_db()
-    found = next((x for x in db["files"] if x["id"] == file_id), None)
+    init_db()
+    found = get_file_by_id(file_id)
     if not found:
         return render_template("detail.html", not_found=True, item=None)
     return render_template("detail.html", not_found=False, item=found)
 
 @app.post("/files/<file_id>/delete")
 def file_delete(file_id):
-    db = load_db()
-    idx = next((i for i, x in enumerate(db["files"]) if x["id"] == file_id), None)
-    if idx is None:
+    init_db()
+    item = get_file_by_id(file_id)
+    if not item:
         return redirect(url_for("index"))
-    item = db["files"][idx]
     try:
         p = Path(item["path"])
         if p.exists():
@@ -179,8 +263,7 @@ def file_delete(file_id):
             dkfile_delete(did)
     except Exception:
         pass
-    del db["files"][idx]
-    save_db(db)
+    delete_file(file_id)
     return redirect(url_for("index"))
 
 @app.get("/download/<stored_name>")
@@ -189,7 +272,9 @@ def download_local(stored_name):
 
 @app.get("/api/files")
 def api_files():
-    return jsonify(load_db())
+    init_db()
+    files = get_all_files()
+    return jsonify({"files": files})
 
 @app.get("/dkfile/status")
 def dk_status():
@@ -210,7 +295,9 @@ def ai():
         ai_output = (res.get("choices") or [{}])[0].get("message", {}).get("content")
     except Exception as e:
         ai_error = str(e)
-    db = load_db()
+    init_db()
+    migrate_json_to_db()
+    files = get_all_files()
     remote_error = None
     info = None
     try:
@@ -218,7 +305,7 @@ def ai():
     except Exception as e:
         remote_error = str(e)
     remote_table = []
-    for x in db.get("files", []):
+    for x in files:
         dk = x.get("dkfile") or {}
         d = dk.get("data") or {}
         if dk.get("success") and d:
@@ -229,8 +316,19 @@ def ai():
                 "is_update": d.get("is_update"),
                 "updated_at": d.get("updated_at"),
             })
-    return render_template("index.html", files=db["files"], remote_table=remote_table, remote_error=remote_error, dk_info=info, ai_output=ai_output, ai_error=ai_error)
+    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, ai_output=ai_output, ai_error=ai_error)
+
+@app.after_request
+def add_cache_control(response):
+    if request.path.endswith('.css') or request.path.endswith('.js'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
+
 
 if __name__ == "__main__":
-    ensure_dirs()
+    app.debug = True
+    init_db()
+    migrate_json_to_db()
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "9876")))
