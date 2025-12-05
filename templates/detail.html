@@ -19,7 +19,7 @@
         <div class="actions">
           <a class="btn" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
-            <button class="btn danger" type="submit">删除</button>
+            <button class="btn danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
           </form>
         </div>
       </div>

@@ -9,12 +9,73 @@
 <body>
   <header class="hero">
     <div class="container">
-      <div class="hero-inner">
-        <div class="hero-title">yytoolssite-aipro</div>
-        <div class="hero-sub">智能文件管理系统 · 轻松上传、存储与管理您的文件</div>
+      <div class="hero-content">
+        <div class="hero-text">
+          <div class="hero-title">yytoolssite-aipro</div>
+          <div class="hero-sub">智能文件管理系统 · 轻松上传、存储与管理您的文件</div>
+        </div>
+        <div class="auth-buttons">
+          <a href="{{ url_for('user_center') }}" class="btn btn-light user-center-btn">用户中心</a>
+          {% if session.user_id %}
+            <div class="user-menu">
+              <span class="username">欢迎，{{ session.username }}</span>
+              <a href="{{ url_for('logout') }}" class="btn btn-light">退出登录</a>
+            </div>
+          {% else %}
+            <a href="{{ url_for('login') }}" class="btn btn-light">登录</a>
+            <a href="{{ url_for('register') }}" class="btn btn-primary">注册</a>
+          {% endif %}
+        </div>
       </div>
     </div>
   </header>
+  <style>
+  .hero-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 28px 0;
+  }
+  .hero-text {
+    flex: 1;
+  }
+  .auth-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .username {
+    margin-right: 12px;
+    color: white;
+    font-weight: 600;
+  }
+  .btn-light {
+    background: white;
+    color: var(--blue-700);
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: 2px solid white;
+  }
+  .btn-primary {
+    background: transparent;
+    color: white;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-weight: 600;
+    border: 2px solid white;
+  }
+  .btn-light:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+  }
+  .btn-primary:hover {
+    background: white;
+    color: var(--blue-700);
+  }
+  </style>
   <main>
     <div class="container">
       {% with messages = get_flashed_messages() %}

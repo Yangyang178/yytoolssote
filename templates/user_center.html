@@ -1,0 +1,419 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="user-center-container">
+    <div class="container">
+        <h1 class="page-title">用户中心</h1>
+        
+        {% if user %}
+            <div class="user-info-section">
+                <div class="user-card">
+                    <div class="user-avatar">
+                        <div class="avatar-icon">{{ user.username[0] | upper }}</div>
+                    </div>
+                    <div class="user-details">
+                        <h2 class="user-name">{{ user.username }}</h2>
+                        <p class="user-email">{{ user.email }}</p>
+                        <div class="user-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">{{ files | length }}</span>
+                                <span class="stat-label">上传文件</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="user-files-section">
+                <div class="section-header">
+                    <h2 class="section-title">我的文件</h2>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">上传新文件</a>
+                </div>
+                
+                {% if files %}
+                    <div class="file-list">
+                        {% for f in files %}
+                        {% set d = (f.dkfile or {}).get('data') %}
+                        <div class="file-card">
+                            <div class="file-head">
+                                <div class="file-name">{{ f.filename }}</div>
+                                <div class="meta-item">大小：<strong>{{ (f.size or 0) | int }} B</strong></div>
+                            </div>
+                            <div class="file-meta">
+                                <div class="meta-item">项目名称：<strong>{{ f.project_name or '-' }}</strong></div>
+                                <div class="meta-item">项目描述：<strong>{{ f.project_desc or '-' }}</strong></div>
+                                <div class="meta-item">远端链接：<strong>{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</strong></div>
+                                <div class="meta-item">创建时间：<strong>{{ d and d.created_at or '-' }}</strong></div>
+                                <div class="meta-item">更新时间：<strong>{{ d and d.updated_at or '-' }}</strong></div>
+                            </div>
+                            <div class="file-actions">
+                                <a class="btn" href="{{ url_for('file_detail', file_id=f.id) }}" {% if not user %}onclick="alert('请先登录，才能查看文件详情'); return false;"{% endif %}>详情</a>
+                                <a class="btn" href="{{ url_for('download_local', stored_name=f.stored_name) }}" {% if not user %}onclick="alert('请先登录，才能下载文件'); return false;"{% endif %}>下载</a>
+                                <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
+                                    <button class="btn danger" type="submit" onclick="{% if not user %}alert('请先登录，才能删除文件'); return false;{% else %}return confirm('确定要删除这个文件吗？此操作不可恢复。');{% endif %}">删除</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-placeholder">
+                        <div class="empty-icon">📁</div>
+                        <div class="empty-title">暂无文件</div>
+                        <div class="empty-desc">您还没有上传任何文件</div>
+                        <div class="empty-actions">
+                            <a href="{{ url_for('index') }}" class="btn btn-primary">上传第一个文件</a>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="not-logged-in-section">
+                <div class="not-logged-in-card">
+                    <div class="not-logged-in-icon">👤</div>
+                    <h2 class="not-logged-in-title">您尚未登录</h2>
+                    <p class="not-logged-in-desc">登录后，您可以查看和管理您的文件，享受完整的智能文件管理系统功能</p>
+                    <div class="not-logged-in-actions">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
+                        <a href="{{ url_for('register') }}" class="btn btn-light">注册</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+.user-center-container {
+    min-height: calc(100vh - 120px);
+    padding: 20px 0;
+}
+
+.page-title {
+    text-align: center;
+    margin: 0 0 40px 0;
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    background: linear-gradient(135deg, var(--blue-700), var(--blue-500));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.user-info-section {
+    margin-bottom: 40px;
+}
+
+.user-card {
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
+    padding: 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    border: 1px solid var(--border);
+}
+
+.user-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue-600), var(--blue-700));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.avatar-icon {
+    font-size: 36px;
+    font-weight: 700;
+    color: white;
+}
+
+.user-details {
+    flex: 1;
+}
+
+.user-name {
+    margin: 0 0 8px 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.user-email {
+    margin: 0 0 16px 0;
+    color: var(--muted);
+    font-size: 16px;
+}
+
+.user-stats {
+    display: flex;
+    gap: 40px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--blue-600);
+}
+
+.stat-label {
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.user-files-section {
+    margin-bottom: 40px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.section-title {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.file-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 24px;
+}
+
+.file-card {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    transition: all 0.3s ease;
+}
+
+.file-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 32px rgba(17, 24, 39, 0.12);
+    border-color: var(--blue-300);
+}
+
+.file-card .file-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.file-name {
+    font-weight: 700;
+    color: var(--text);
+    font-size: 18px;
+    word-break: break-all;
+}
+
+.file-meta {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.meta-item {
+    font-size: 14px;
+    color: var(--text);
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
+
+.meta-item strong {
+    color: var(--blue-600);
+    font-weight: 600;
+}
+
+.file-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.empty-placeholder {
+    background: white;
+    border: 2px dashed var(--border);
+    border-radius: 16px;
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--muted);
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-title {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+}
+
+.empty-desc {
+    font-size: 16px;
+    margin-bottom: 24px;
+}
+
+.empty-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+}
+
+.not-logged-in-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 500px;
+    padding: 20px;
+}
+
+.not-logged-in-card {
+    background: white;
+    border-radius: 24px;
+    box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
+    padding: 48px;
+    text-align: center;
+    width: 100%;
+    max-width: 500px;
+    border: 1px solid var(--border);
+}
+
+.not-logged-in-icon {
+    font-size: 64px;
+    margin-bottom: 24px;
+    opacity: 0.7;
+}
+
+.not-logged-in-title {
+    margin: 0 0 12px 0;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.not-logged-in-desc {
+    margin: 0 0 32px 0;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.not-logged-in-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.not-logged-in-actions .btn {
+    flex: 1;
+    min-width: 150px;
+    padding: 14px 24px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.btn-light {
+    background: white;
+    color: var(--blue-600);
+    border: 2px solid var(--blue-600);
+}
+
+.btn-light:hover {
+    background: var(--blue-50);
+    color: var(--blue-700);
+    border-color: var(--blue-700);
+}
+
+@media (max-width: 768px) {
+    .user-card {
+        flex-direction: column;
+        text-align: center;
+        padding: 24px;
+    }
+    
+    .user-stats {
+        justify-content: center;
+        gap: 32px;
+    }
+    
+    .section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .file-list {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .file-card {
+        padding: 20px;
+    }
+    
+    .file-meta {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    
+    .file-actions {
+        justify-content: center;
+    }
+    
+    .not-logged-in-card {
+        padding: 32px 24px;
+        margin: 20px 0;
+    }
+    
+    .not-logged-in-title {
+        font-size: 24px;
+    }
+    
+    .not-logged-in-actions {
+        flex-direction: column;
+    }
+    
+    .not-logged-in-actions .btn {
+        width: 100%;
+    }
+}
+</style>
+{% endblock %}
