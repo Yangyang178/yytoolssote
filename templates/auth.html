@@ -20,6 +20,21 @@
         {% if success %}
             <div class="success-message">{{ success }}</div>
         {% endif %}
+        {% if request.args.get('step') == 'verify' %}
+            {% if not request.args.get('debug_code') %}
+                <div class="info-message">
+                    <strong>验证码已发送：</strong>
+                    请检查您的邮箱 <strong>{{ request.args.get('email') }}</strong>，我们已向该邮箱发送了验证码
+                    <p class="info-note">如果没有收到邮件，请检查垃圾邮件或重新发送验证码</p>
+                </div>
+            {% else %}
+                <div class="debug-code-message">
+                    <strong>调试模式：</strong>
+                    验证码：<span class="debug-code">{{ request.args.get('debug_code') }}</span>
+                    <p class="debug-note">请复制上方验证码进行验证（仅用于调试环境）</p>
+                </div>
+            {% endif %}
+        {% endif %}
         
         {% if mode == 'register' %}
             <form action="{{ url_for('register') }}" method="post" class="auth-form">
@@ -324,6 +339,47 @@
     padding-top: 32px;
     border-top: 2px solid var(--border);
     position: relative;
+}
+
+.debug-code-message {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    text-align: center;
+    border: 2px solid #fcd34d;
+}
+
+.debug-code {
+    font-size: 32px;
+    font-weight: 700;
+    color: #b45309;
+    letter-spacing: 4px;
+    margin: 8px 0;
+    display: block;
+}
+
+.debug-note {
+    margin: 8px 0 0 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.info-message {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: var(--blue-800);
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 24px;
+    text-align: center;
+    border: 2px solid #93c5fd;
+}
+
+.info-note {
+    margin: 8px 0 0 0;
+    font-size: 14px;
+    opacity: 0.9;
 }
 
 .verify-form::before {

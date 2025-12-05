@@ -68,18 +68,46 @@ def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         expires_at TIMESTAMP NOT NULL
                     )''')
+        
+        # 创建files表（如果不存在），先不包含user_id列
         conn.execute('''CREATE TABLE IF NOT EXISTS files (
                         id TEXT PRIMARY KEY,
-                        user_id TEXT NOT NULL,
                         filename TEXT NOT NULL,
                         stored_name TEXT NOT NULL,
                         path TEXT NOT NULL,
                         size INTEGER NOT NULL,
                         dkfile TEXT,
                         project_name TEXT,
-                        project_desc TEXT,
+                        project_desc TEXT
+                    )''')
+        
+        # 检查并添加user_id列（如果不存在）
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN user_id TEXT DEFAULT "default_user"')
+        except sqlite3.OperationalError:
+            # 列已经存在，跳过
+            pass
+        
+        # 创建access_logs表
+        conn.execute('''CREATE TABLE IF NOT EXISTS access_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT,
+                        action TEXT NOT NULL,
+                        ip_address TEXT,
+                        user_agent TEXT,
+                        access_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )''')
+        
+        # 检查并添加avatar字段到users表（如果不存在）
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN avatar TEXT')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
+        
         conn.commit()
     finally:
         conn.close()
@@ -98,14 +126,29 @@ def migrate_json_to_db():
                                 VALUES (?, ?, ?)''', 
                             (default_user_id, "default@example.com", "默认用户"))
                 
+                # 检查files表是否有user_id列
+                cursor = conn.execute("PRAGMA table_info(files)")
+                columns = [row[1] for row in cursor.fetchall()]
+                
                 for item in old_data.get("files", []):
-                    conn.execute('''INSERT OR IGNORE INTO files (
-                                    id, user_id, filename, stored_name, path, size, 
-                                    dkfile, project_name, project_desc
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                                (item["id"], default_user_id, item["filename"], item["stored_name"], 
-                                 item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                                 item.get("project_name"), item.get("project_desc")))
+                    if "user_id" in columns:
+                        # 如果有user_id列，包含它
+                        conn.execute('''INSERT OR IGNORE INTO files (
+                                        id, user_id, filename, stored_name, path, size, 
+                                        dkfile, project_name, project_desc
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                                    (item["id"], default_user_id, item["filename"], item["stored_name"], 
+                                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                                     item.get("project_name"), item.get("project_desc")))
+                    else:
+                        # 如果没有user_id列，不包含它
+                        conn.execute('''INSERT OR IGNORE INTO files (
+                                        id, filename, stored_name, path, size, 
+                                        dkfile, project_name, project_desc
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                                    (item["id"], item["filename"], item["stored_name"], 
+                                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                                     item.get("project_name"), item.get("project_desc")))
                 conn.commit()
             finally:
                 conn.close()
@@ -118,8 +161,10 @@ def generate_verification_code():
 
 
 def send_verification_email(email, code, purpose):
+    # 确保我们尝试发送邮件，不考虑开发模式
     if not all([SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM]):
-        raise Exception("邮箱配置不完整")
+        # SMTP配置不完整，返回验证码用于调试
+        return False, code
     
     subject = """yytoolssite-aipro 验证码"""
     if purpose == "register":
@@ -129,16 +174,48 @@ def send_verification_email(email, code, purpose):
         body = f"""您正在登录 yytoolssite-aipro 账号，您的验证码是：{code}\n
 验证码有效期为 {CODE_EXPIRATION_MINUTES} 分钟，请尽快使用。"""
     
-    msg = MIMEMultipart()
+    msg = MIMEText(body, 'plain', 'utf-8')
     msg['From'] = SMTP_FROM
     msg['To'] = email
     msg['Subject'] = subject
-    msg.attach(MIMEText(body, 'plain', 'utf-8'))
     
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+    try:
+        # 尝试使用TLS连接，这是QQ邮箱推荐的方式
+        print(f"尝试使用TLS连接到 {SMTP_HOST}:587...")
+        server = smtplib.SMTP(SMTP_HOST, 587, timeout=15)
+        server.set_debuglevel(2)  # 开启详细调试模式
+        server.ehlo()  # 发送EHLO命令
+        print("EHLO命令发送成功")
         server.starttls()
+        print("STARTTLS命令发送成功")
+        server.ehlo()  # 重新发送EHLO命令
+        print("TLS连接后EHLO命令发送成功")
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.send_message(msg)
+        print("SMTP登录成功")
+        server.sendmail(SMTP_FROM, [email], msg.as_string())
+        print("邮件发送成功")
+        server.quit()
+        return True, None
+    except Exception as e:
+        # 如果TLS失败，尝试SSL连接
+        print(f"TLS连接失败: {str(e)}")
+        try:
+            print(f"尝试使用SSL连接到 {SMTP_HOST}:465...")
+            server = smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=15)
+            server.set_debuglevel(2)  # 开启详细调试模式
+            server.ehlo()  # 发送EHLO命令
+            print("SSL连接EHLO命令发送成功")
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            print("SSL登录成功")
+            server.sendmail(SMTP_FROM, [email], msg.as_string())
+            print("SSL邮件发送成功")
+            server.quit()
+            return True, None
+        except Exception as ssl_e:
+            # 两种连接方式都失败，返回验证码用于调试
+            print(f"SSL连接失败: {str(ssl_e)}")
+            print(f"SMTP发送邮件失败: TLS错误 - {str(e)}, SSL错误 - {str(ssl_e)}")
+            return False, code
 
 
 def save_verification_code(email, code, purpose):
@@ -188,14 +265,18 @@ def get_all_files(user_id=None):
         conn.close()
 
 
-def get_file_by_id(file_id, user_id):
+def get_file_by_id(file_id, user_id=None, check_owner=True):
     conn = get_db()
     try:
-        row = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, user_id)).fetchone()
+        if check_owner and user_id:
+            row = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, user_id)).fetchone()
+        else:
+            row = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
         if row:
             return {"id": row["id"], "filename": row["filename"], "stored_name": row["stored_name"],
                     "path": row["path"], "size": row["size"], "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
-                    "project_name": row["project_name"], "project_desc": row["project_desc"]}
+                    "project_name": row["project_name"], "project_desc": row["project_desc"],
+                    "user_id": row["user_id"]}
         return None
     finally:
         conn.close()
@@ -225,13 +306,44 @@ def delete_file(file_id, user_id):
         conn.close()
 
 
+def log_access(file_id, action, request):
+    conn = get_db()
+    try:
+        user_id = session.get('user_id')
+        ip_address = request.remote_addr
+        user_agent = request.user_agent.string
+        conn.execute('''INSERT INTO access_logs (file_id, user_id, action, ip_address, user_agent)
+                        VALUES (?, ?, ?, ?, ?)''', 
+                    (file_id, user_id, action, ip_address, user_agent))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def get_user_by_email(email):
     conn = get_db()
     try:
         row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         if row:
-            return {"id": row["id"], "email": row["email"], "username": row["username"]}
+            return {"id": row["id"], "email": row["email"], "username": row["username"], "avatar": row["avatar"] if "avatar" in row else None}
         return None
+    finally:
+        conn.close()
+
+
+def get_access_logs(user_id):
+    conn = get_db()
+    try:
+        rows = conn.execute('''SELECT al.*, f.filename 
+                           FROM access_logs al 
+                           JOIN files f ON al.file_id = f.id 
+                           WHERE f.user_id = ? 
+                           ORDER BY al.access_time DESC''', 
+                          (user_id,)).fetchall()
+        return [{"id": row["id"], "file_id": row["file_id"], "filename": row["filename"],
+                "action": row["action"], "ip_address": row["ip_address"],
+                "user_agent": row["user_agent"], "access_time": row["access_time"]}
+                for row in rows]
     finally:
         conn.close()
 
@@ -272,6 +384,10 @@ def deepseek_headers():
     return h
 
 def deepseek_chat(messages, model="deepseek-chat"):
+    # 检查是否配置了DEEPSEEK_API_KEY
+    if not DEEPSEEK_API_KEY:
+        raise Exception("DEEPSEEK_API_KEY not configured")
+    
     url = f"{DEEPSEEK_BASE}/chat/completions"
     payload = {"model": model, "messages": messages, "stream": False}
     r = requests.post(url, headers=deepseek_headers(), json=payload, timeout=60)
@@ -307,7 +423,8 @@ def dkfile_delete(file_id):
 def index():
     init_db()
     migrate_json_to_db()
-    files = get_all_files(session.get('user_id'))
+    # 让登录用户也能看到所有文件，而不仅仅是自己上传的文件
+    files = get_all_files()
     remote_error = None
     info = None
     try:
@@ -375,9 +492,11 @@ def upload():
 @login_required
 def file_detail(file_id):
     init_db()
-    found = get_file_by_id(file_id, session['user_id'])
+    found = get_file_by_id(file_id, check_owner=False)
     if not found:
         return render_template("detail.html", not_found=True, item=None)
+    # 记录访问日志
+    log_access(file_id, 'view', request)
     return render_template("detail.html", not_found=False, item=found)
 
 @app.post("/files/<file_id>/delete")
@@ -406,6 +525,16 @@ def file_delete(file_id):
 @app.get("/download/<stored_name>")
 @login_required
 def download_local(stored_name):
+    # 查找文件ID
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT id FROM files WHERE stored_name = ?', 
+                          (stored_name,)).fetchone()
+        if row:
+            # 记录下载日志
+            log_access(row['id'], 'download', request)
+    finally:
+        conn.close()
     return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=True)
 
 @app.get("/api/files")
@@ -438,7 +567,8 @@ def ai():
         ai_error = str(e)
     init_db()
     migrate_json_to_db()
-    files = get_all_files(session['user_id'])
+    # 让登录用户也能看到所有文件，而不仅仅是自己上传的文件
+    files = get_all_files()
     remote_error = None
     info = None
     try:
@@ -470,9 +600,9 @@ def register():
         
         try:
             code = generate_verification_code()
-            send_verification_email(email, code, 'register')
+            success, message = send_verification_email(email, code, 'register')
             save_verification_code(email, code, 'register')
-            return redirect(url_for('register', step='verify', email=email))
+            return redirect(url_for('register', step='verify', email=email, debug_code=message if not success else None))
         except Exception as e:
             return render_template('auth.html', mode='register', page_title='注册', error=f'发送验证码失败：{str(e)}')
     
@@ -515,9 +645,9 @@ def login():
         
         try:
             code = generate_verification_code()
-            send_verification_email(email, code, 'login')
+            success, message = send_verification_email(email, code, 'login')
             save_verification_code(email, code, 'login')
-            return redirect(url_for('login', step='verify', email=email))
+            return redirect(url_for('login', step='verify', email=email, debug_code=message if not success else None))
         except Exception as e:
             return render_template('auth.html', mode='login', page_title='登录', error=f'发送验证码失败：{str(e)}')
     
@@ -547,15 +677,73 @@ def verify_login():
 def user_center():
     init_db()
     if 'user_id' in session:
+        # 用户中心只显示当前用户的文件列表
         files = get_all_files(session['user_id'])
-        user = {
-            'email': session.get('email'),
-            'username': session.get('username')
-        }
+        access_logs = get_access_logs(session['user_id'])
+        
+        # 从数据库获取用户信息，包括头像
+        conn = get_db()
+        try:
+            row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+            if row:
+                user = {
+                    'id': row['id'],
+                    'email': row['email'],
+                    'username': row['username'],
+                    'avatar': row['avatar'] if 'avatar' in row else None
+                }
+            else:
+                user = {
+                    'email': session.get('email'),
+                    'username': session.get('username')
+                }
+        finally:
+            conn.close()
     else:
         files = []
+        access_logs = []
         user = None
-    return render_template('user_center.html', user=user, files=files)
+    return render_template('user_center.html', user=user, files=files, access_logs=access_logs)
+
+
+@app.route('/update_profile', methods=['POST'])
+@login_required
+def update_profile():
+    init_db()
+    user_id = session['user_id']
+    username = request.form.get('username')
+    avatar = request.files.get('avatar')
+    
+    conn = get_db()
+    try:
+        if username:
+            # 更新用户名
+            conn.execute('UPDATE users SET username = ? WHERE id = ?', (username, user_id))
+            # 更新session中的用户名
+            session['username'] = username
+        
+        if avatar and avatar.filename:
+            # 保存头像文件
+            avatar_id = uuid.uuid4().hex
+            avatar_ext = avatar.filename.rsplit('.', 1)[1].lower() if '.' in avatar.filename else 'png'
+            avatar_name = f"{avatar_id}.{avatar_ext}"
+            avatar_path = os.path.join('static', 'avatars')
+            
+            # 确保目录存在
+            if not os.path.exists(avatar_path):
+                os.makedirs(avatar_path)
+            
+            # 保存文件
+            avatar.save(os.path.join(avatar_path, avatar_name))
+            
+            # 更新数据库中的头像路径
+            conn.execute('UPDATE users SET avatar = ? WHERE id = ?', (avatar_name, user_id))
+        
+        conn.commit()
+    finally:
+        conn.close()
+    
+    return redirect(url_for('user_center'))
 
 
 @app.route('/logout')

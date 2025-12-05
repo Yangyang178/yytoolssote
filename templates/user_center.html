@@ -2,79 +2,188 @@
 {% block content %}
 <div class="user-center-container">
     <div class="container">
-        <h1 class="page-title">用户中心</h1>
+        <div class="page-header">
+            <h1 class="page-title">用户中心</h1>
+        </div>
         
         {% if user %}
-            <div class="user-info-section">
-                <div class="user-card">
-                    <div class="user-avatar">
-                        <div class="avatar-icon">{{ user.username[0] | upper }}</div>
-                    </div>
-                    <div class="user-details">
-                        <h2 class="user-name">{{ user.username }}</h2>
-                        <p class="user-email">{{ user.email }}</p>
-                        <div class="user-stats">
+            <!-- 用户信息卡片 -->
+            <div class="user-profile-card">
+                <div class="profile-header">
+                    <div class="profile-info">
+                        <div class="avatar-section">
+                            <div class="user-avatar">
+                                {% if user.avatar %}
+                                    <img src="{{ url_for('static', filename='avatars/' + user.avatar) }}" alt="用户头像" class="avatar-image">
+                                {% else %}
+                                    <div class="avatar-icon">{{ user.username[0] | upper }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="profile-details">
+                                <h2 class="user-name">{{ user.username }}</h2>
+                                <p class="user-email">{{ user.email }}</p>
+                            </div>
+                        </div>
+                        <div class="profile-stats">
                             <div class="stat-item">
-                                <span class="stat-value">{{ files | length }}</span>
+                                <span class="stat-number">{{ files | length }}</span>
                                 <span class="stat-label">上传文件</span>
                             </div>
                         </div>
                     </div>
+                    <div class="profile-actions">
+                        <button class="btn btn-edit" onclick="toggleEditModal()">
+                            <i class="icon-edit">✏️</i> 编辑资料
+                        </button>
+                    </div>
                 </div>
             </div>
             
-            <div class="user-files-section">
-                <div class="section-header">
-                    <h2 class="section-title">我的文件</h2>
-                    <a href="{{ url_for('index') }}" class="btn btn-primary">上传新文件</a>
+            <!-- 编辑资料模态框 -->
+            <div id="edit-modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>编辑个人资料</h3>
+                        <span class="close" onclick="toggleEditModal()">&times;</span>
+                    </div>
+                    <div class="modal-body">
+                        <form action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
+                            <div class="form-group">
+                                <label for="username">昵称</label>
+                                <input type="text" id="username" name="username" value="{{ user.username }}" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="avatar">头像</label>
+                                <input type="file" id="avatar" name="avatar" accept="image/*">
+                                <p class="form-hint">支持JPG、PNG格式，大小不超过2MB</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-cancel" onclick="toggleEditModal()">取消</button>
+                                <button type="submit" class="btn btn-submit">保存修改</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- 内容区域 -->
+            <div class="content-wrapper">
+                <!-- 我的文件 -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">我的文件</h2>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="icon-upload">📤</i> 上传新文件
+                        </a>
+                    </div>
+                    
+                    {% if files %}
+                        <div class="file-grid">
+                            {% for f in files %}
+                            {% set d = (f.dkfile or {}).get('data') %}
+                            <div class="file-card">
+                                <div class="file-header">
+                                    <div class="file-icon">📄</div>
+                                    <h3 class="file-name">{{ f.filename }}</h3>
+                                </div>
+                                <div class="file-info">
+                                    <div class="info-item">
+                                        <span class="info-label">大小：</span>
+                                        <span class="info-value">{{ (f.size or 0) | int }} B</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">项目：</span>
+                                        <span class="info-value">{{ f.project_name or '-' }}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">创建时间：</span>
+                                        <span class="info-value">{{ d and d.created_at or '-' }}</span>
+                                    </div>
+                                </div>
+                                <div class="file-actions">
+                                    <a class="btn-action btn-detail" href="{{ url_for('file_detail', file_id=f.id) }}">
+                                        <i>👁️</i> 详情
+                                    </a>
+                                    <a class="btn-action btn-download" href="{{ url_for('download_local', stored_name=f.stored_name) }}">
+                                        <i>📥</i> 下载
+                                    </a>
+                                    <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
+                                        <button class="btn-action btn-delete" type="submit">
+                                            <i>🗑️</i> 删除
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">📁</div>
+                            <h3 class="empty-title">暂无文件</h3>
+                            <p class="empty-desc">您还没有上传任何文件</p>
+                            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                                <i class="icon-upload">📤</i> 上传第一个文件
+                            </a>
+                        </div>
+                    {% endif %}
+                </section>
                 
-                {% if files %}
-                    <div class="file-list">
-                        {% for f in files %}
-                        {% set d = (f.dkfile or {}).get('data') %}
-                        <div class="file-card">
-                            <div class="file-head">
-                                <div class="file-name">{{ f.filename }}</div>
-                                <div class="meta-item">大小：<strong>{{ (f.size or 0) | int }} B</strong></div>
-                            </div>
-                            <div class="file-meta">
-                                <div class="meta-item">项目名称：<strong>{{ f.project_name or '-' }}</strong></div>
-                                <div class="meta-item">项目描述：<strong>{{ f.project_desc or '-' }}</strong></div>
-                                <div class="meta-item">远端链接：<strong>{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</strong></div>
-                                <div class="meta-item">创建时间：<strong>{{ d and d.created_at or '-' }}</strong></div>
-                                <div class="meta-item">更新时间：<strong>{{ d and d.updated_at or '-' }}</strong></div>
-                            </div>
-                            <div class="file-actions">
-                                <a class="btn" href="{{ url_for('file_detail', file_id=f.id) }}" {% if not user %}onclick="alert('请先登录，才能查看文件详情'); return false;"{% endif %}>详情</a>
-                                <a class="btn" href="{{ url_for('download_local', stored_name=f.stored_name) }}" {% if not user %}onclick="alert('请先登录，才能下载文件'); return false;"{% endif %}>下载</a>
-                                <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
-                                    <button class="btn danger" type="submit" onclick="{% if not user %}alert('请先登录，才能删除文件'); return false;{% else %}return confirm('确定要删除这个文件吗？此操作不可恢复。');{% endif %}">删除</button>
-                                </form>
-                            </div>
-                        </div>
-                        {% endfor %}
+                <!-- 访问记录 -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">访问记录</h2>
                     </div>
-                {% else %}
-                    <div class="empty-placeholder">
-                        <div class="empty-icon">📁</div>
-                        <div class="empty-title">暂无文件</div>
-                        <div class="empty-desc">您还没有上传任何文件</div>
-                        <div class="empty-actions">
-                            <a href="{{ url_for('index') }}" class="btn btn-primary">上传第一个文件</a>
+                    
+                    {% if access_logs %}
+                        <div class="logs-container">
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th>文件名</th>
+                                        <th>操作类型</th>
+                                        <th>IP地址</th>
+                                        <th>访问时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in access_logs %}
+                                    <tr class="log-row">
+                                        <td>{{ log.filename }}</td>
+                                        <td>
+                                            {% if log.action == 'view' %}
+                                                <span class="action-tag action-view">查看</span>
+                                            {% elif log.action == 'download' %}
+                                                <span class="action-tag action-download">下载</span>
+                                            {% else %}
+                                                <span class="action-tag action-other">{{ log.action }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ log.ip_address }}</td>
+                                        <td>{{ log.access_time }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
                         </div>
-                    </div>
-                {% endif %}
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">📋</div>
+                            <h3 class="empty-title">暂无访问记录</h3>
+                            <p class="empty-desc">当有用户访问您的文件时，这里会显示访问记录</p>
+                        </div>
+                    {% endif %}
+                </section>
             </div>
         {% else %}
-            <div class="not-logged-in-section">
-                <div class="not-logged-in-card">
-                    <div class="not-logged-in-icon">👤</div>
-                    <h2 class="not-logged-in-title">您尚未登录</h2>
-                    <p class="not-logged-in-desc">登录后，您可以查看和管理您的文件，享受完整的智能文件管理系统功能</p>
-                    <div class="not-logged-in-actions">
+            <!-- 未登录状态 -->
+            <div class="not-logged-in">
+                <div class="login-prompt">
+                    <div class="prompt-icon">👤</div>
+                    <h2 class="prompt-title">您尚未登录</h2>
+                    <p class="prompt-desc">登录后，您可以查看和管理您的文件，享受完整的智能文件管理系统功能</p>
+                    <div class="prompt-actions">
                         <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-                        <a href="{{ url_for('register') }}" class="btn btn-light">注册</a>
+                        <a href="{{ url_for('register') }}" class="btn btn-outline">注册</a>
                     </div>
                 </div>
             </div>
@@ -83,296 +192,730 @@
 </div>
 
 <style>
+/* CSS 变量 */
+:root {
+    --primary-color: #4F46E5;
+    --primary-hover: #4338CA;
+    --secondary-color: #64748B;
+    --success-color: #10B981;
+    --warning-color: #F59E0B;
+    --danger-color: #EF4444;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-tertiary: #F1F5F9;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --border-color: #E2E8F0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 全局样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* 容器 */
 .user-center-container {
     min-height: calc(100vh - 120px);
-    padding: 20px 0;
+    padding: 30px 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* 页面头部 */
+.page-header {
+    text-align: center;
+    margin-bottom: 30px;
 }
 
 .page-title {
-    text-align: center;
-    margin: 0 0 40px 0;
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text);
-    background: linear-gradient(135deg, var(--blue-700), var(--blue-500));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0;
 }
 
-.user-info-section {
-    margin-bottom: 40px;
+/* 用户资料卡片 */
+.user-profile-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 30px;
+    transition: var(--transition);
 }
 
-.user-card {
-    background: white;
-    border-radius: 24px;
-    box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
-    padding: 32px;
+.user-profile-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.profile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.profile-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.avatar-section {
     display: flex;
     align-items: center;
-    gap: 24px;
-    border: 1px solid var(--border);
+    gap: 20px;
 }
 
 .user-avatar {
-    width: 80px;
-    height: 80px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--blue-600), var(--blue-700));
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    box-shadow: var(--shadow-md);
 }
 
 .avatar-icon {
-    font-size: 36px;
-    font-weight: 700;
+    font-size: 40px;
+    font-weight: 800;
     color: white;
 }
 
-.user-details {
-    flex: 1;
+.avatar-image {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid white;
+    box-shadow: var(--shadow-md);
+}
+
+.profile-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
 .user-name {
-    margin: 0 0 8px 0;
-    font-size: 24px;
+    font-size: 2rem;
     font-weight: 700;
-    color: var(--text);
+    color: var(--text-primary);
+    margin: 0;
 }
 
 .user-email {
-    margin: 0 0 16px 0;
-    color: var(--muted);
-    font-size: 16px;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin: 0;
 }
 
-.user-stats {
+.profile-stats {
     display: flex;
-    gap: 40px;
+    gap: 30px;
+    margin-top: 10px;
 }
 
 .stat-item {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 4px;
 }
 
-.stat-value {
-    font-size: 20px;
+.stat-number {
+    font-size: 1.8rem;
     font-weight: 700;
-    color: var(--blue-600);
+    color: var(--primary-color);
 }
 
 .stat-label {
-    font-size: 14px;
-    color: var(--muted);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
     font-weight: 500;
 }
 
-.user-files-section {
-    margin-bottom: 40px;
+.profile-actions {
+    display: flex;
+    gap: 12px;
 }
 
+/* 按钮样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    outline: none;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-outline {
+    background: transparent;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.btn-outline:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-edit {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-edit:hover {
+    background: var(--border-color);
+    transform: translateY(-1px);
+}
+
+.btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn-cancel:hover {
+    background: var(--border-color);
+}
+
+.btn-submit {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-submit:hover {
+    background: var(--primary-hover);
+}
+
+/* 内容区域 */
+.content-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.content-section {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+}
+
+.content-section:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+/* 区域头部 */
 .section-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 24px;
+    margin-bottom: 25px;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: 15px;
 }
 
 .section-title {
-    margin: 0;
-    font-size: 24px;
+    font-size: 1.5rem;
     font-weight: 700;
-    color: var(--text);
+    color: var(--text-primary);
+    margin: 0;
 }
 
-.file-list {
+/* 文件网格 */
+.file-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 24px;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
 }
 
+/* 文件卡片 */
 .file-card {
-    background: white;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    box-shadow: var(--shadow);
-    overflow: hidden;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    transition: var(--transition);
     display: flex;
     flex-direction: column;
-    min-height: 300px;
-    transition: all 0.3s ease;
+    gap: 15px;
 }
 
 .file-card:hover {
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-md);
     transform: translateY(-2px);
-    box-shadow: 0 16px 32px rgba(17, 24, 39, 0.12);
-    border-color: var(--blue-300);
+    border-color: var(--primary-color);
 }
 
-.file-card .file-head {
+.file-header {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
-    flex-wrap: wrap;
     gap: 12px;
+}
+
+.file-icon {
+    font-size: 1.8rem;
 }
 
 .file-name {
-    font-weight: 700;
-    color: var(--text);
-    font-size: 18px;
-    word-break: break-all;
-}
-
-.file-meta {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-top: 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
     flex: 1;
-    min-height: 0;
-    overflow: auto;
-    padding-right: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.meta-item {
-    font-size: 14px;
-    color: var(--text);
-    word-break: break-all;
-    overflow-wrap: anywhere;
-    line-height: 1.6;
+.file-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 0.9rem;
 }
 
-.meta-item strong {
-    color: var(--blue-600);
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.info-label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.info-value {
+    color: var(--text-primary);
     font-weight: 600;
 }
 
+/* 文件操作按钮 */
 .file-actions {
-    margin-top: 20px;
     display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: auto;
 }
 
-.empty-placeholder {
-    background: white;
-    border: 2px dashed var(--border);
-    border-radius: 16px;
-    padding: 60px 20px;
+.btn-action {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+}
+
+.btn-detail {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn-detail:hover {
+    background: var(--border-color);
+}
+
+.btn-download {
+    background: var(--success-color);
+    color: white;
+}
+
+.btn-download:hover {
+    background: #059669;
+}
+
+.btn-delete {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #DC2626;
+}
+
+/* 空状态 */
+.empty-state {
     text-align: center;
-    color: var(--muted);
+    padding: 60px 20px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 2px dashed var(--border-color);
 }
 
 .empty-icon {
-    font-size: 48px;
-    margin-bottom: 16px;
+    font-size: 4rem;
+    margin-bottom: 20px;
     opacity: 0.5;
 }
 
 .empty-title {
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 8px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 10px;
 }
 
 .empty-desc {
-    font-size: 16px;
-    margin-bottom: 24px;
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 30px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
 }
 
-.empty-actions {
-    display: flex;
-    justify-content: center;
-    gap: 12px;
+/* 访问记录 */
+.logs-container {
+    overflow-x: auto;
 }
 
-.not-logged-in-section {
+.logs-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.logs-table th,
+.logs-table td {
+    padding: 15px 20px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.logs-table th {
+    background: var(--bg-secondary);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.log-row {
+    transition: var(--transition);
+}
+
+.log-row:hover {
+    background: var(--bg-secondary);
+}
+
+/* 操作标签 */
+.action-tag {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.action-view {
+    background: #EFF6FF;
+    color: var(--primary-color);
+}
+
+.action-download {
+    background: #ECFDF5;
+    color: var(--success-color);
+}
+
+.action-other {
+    background: #FEF3C7;
+    color: var(--warning-color);
+}
+
+/* 未登录状态 */
+.not-logged-in {
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 500px;
-    padding: 20px;
+    min-height: 400px;
 }
 
-.not-logged-in-card {
-    background: white;
-    border-radius: 24px;
-    box-shadow: 0 12px 28px rgba(17, 24, 39, 0.08);
-    padding: 48px;
+.login-prompt {
     text-align: center;
-    width: 100%;
+    background: var(--bg-primary);
+    padding: 50px;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
     max-width: 500px;
-    border: 1px solid var(--border);
+    width: 100%;
 }
 
-.not-logged-in-icon {
-    font-size: 64px;
-    margin-bottom: 24px;
-    opacity: 0.7;
+.prompt-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
 }
 
-.not-logged-in-title {
-    margin: 0 0 12px 0;
-    font-size: 28px;
+.prompt-title {
+    font-size: 1.8rem;
     font-weight: 700;
-    color: var(--text);
+    color: var(--text-primary);
+    margin-bottom: 15px;
 }
 
-.not-logged-in-desc {
-    margin: 0 0 32px 0;
-    color: var(--muted);
-    font-size: 16px;
+.prompt-desc {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 30px;
     line-height: 1.6;
 }
 
-.not-logged-in-actions {
+.prompt-actions {
     display: flex;
-    gap: 16px;
+    gap: 15px;
     justify-content: center;
     flex-wrap: wrap;
 }
 
-.not-logged-in-actions .btn {
+.prompt-actions .btn {
     flex: 1;
-    min-width: 150px;
-    padding: 14px 24px;
-    font-size: 16px;
+    min-width: 140px;
+}
+
+/* 模态框样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+    animation: fadeIn 0.3s ease;
+}
+
+.modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: var(--bg-primary);
+    margin: auto;
+    padding: 0;
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 550px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { 
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    padding: 25px 30px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.close {
+    color: var(--text-muted);
+    font-size: 1.8rem;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    transition: var(--transition);
+    padding: 5px;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.close:hover {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+}
+
+.modal-body {
+    padding: 30px;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 25px;
+}
+
+.form-group:last-of-type {
+    margin-bottom: 30px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 10px;
     font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
 }
 
-.btn-light {
-    background: white;
-    color: var(--blue-600);
-    border: 2px solid var(--blue-600);
+.form-group input[type="text"] {
+    width: 100%;
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    transition: var(--transition);
+    outline: none;
 }
 
-.btn-light:hover {
-    background: var(--blue-50);
-    color: var(--blue-700);
-    border-color: var(--blue-700);
+.form-group input[type="text"]:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
 
+.form-group input[type="file"] {
+    display: block;
+    margin-bottom: 8px;
+    padding: 15px;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background-color: var(--bg-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    width: 100%;
+}
+
+.form-group input[type="file"]:hover {
+    border-color: var(--primary-color);
+    background-color: rgba(79, 70, 229, 0.05);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 8px;
+    font-style: italic;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 30px;
+    border-top: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    border-bottom-left-radius: var(--radius-lg);
+    border-bottom-right-radius: var(--radius-lg);
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
-    .user-card {
-        flex-direction: column;
-        text-align: center;
-        padding: 24px;
+    .page-title {
+        font-size: 2rem;
     }
     
-    .user-stats {
+    .user-profile-card {
+        padding: 20px;
+    }
+    
+    .profile-header {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+    
+    .avatar-section {
+        flex-direction: column;
+    }
+    
+    .profile-stats {
         justify-content: center;
-        gap: 32px;
+    }
+    
+    .content-section {
+        padding: 20px;
     }
     
     .section-header {
@@ -380,40 +923,102 @@
         align-items: flex-start;
     }
     
-    .file-list {
+    .file-grid {
         grid-template-columns: 1fr;
-        gap: 16px;
     }
     
-    .file-card {
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
         padding: 20px;
     }
     
-    .file-meta {
-        grid-template-columns: 1fr;
-        gap: 12px;
-    }
-    
-    .file-actions {
-        justify-content: center;
-    }
-    
-    .not-logged-in-card {
-        padding: 32px 24px;
-        margin: 20px 0;
-    }
-    
-    .not-logged-in-title {
-        font-size: 24px;
-    }
-    
-    .not-logged-in-actions {
+    .modal-footer {
         flex-direction: column;
     }
     
-    .not-logged-in-actions .btn {
+    .modal-footer .btn {
+        width: 100%;
+    }
+    
+    .logs-table {
+        min-width: 600px;
+    }
+    
+    .login-prompt {
+        padding: 30px 20px;
+    }
+    
+    .prompt-actions {
+        flex-direction: column;
+    }
+    
+    .prompt-actions .btn {
         width: 100%;
     }
 }
 </style>
+
+<div id="app-data" data-is-logged-in="{{ user is not none | tojson | safe }}" style="display: none;"></div>
+
+<script>
+// 检查用户是否登录
+const appData = document.getElementById('app-data');
+const isLoggedIn = JSON.parse(appData.dataset.isLoggedIn);
+const fileActions = document.querySelectorAll('.file-action');
+
+// 处理文件操作事件
+fileActions.forEach(action => {
+  if (action.tagName === 'A') {
+    // 处理链接点击
+    action.addEventListener('click', (e) => {
+      if (!isLoggedIn) {
+        alert('请先登录，才能执行此操作');
+        e.preventDefault();
+        return;
+      }
+    });
+  } else if (action.tagName === 'BUTTON') {
+    // 处理按钮点击
+    action.addEventListener('click', (e) => {
+      if (!isLoggedIn) {
+        alert('请先登录，才能执行此操作');
+        e.preventDefault();
+        return;
+      }
+      
+      // 如果是删除按钮，显示确认对话框
+      if (action.textContent.trim() === '删除') {
+        if (!confirm('确定要删除这个文件吗？此操作不可恢复。')) {
+          e.preventDefault();
+        }
+      }
+    });
+  }
+});
+
+// 模态框功能
+const modal = document.getElementById('edit-modal');
+
+function toggleEditModal() {
+  if (modal.style.display === 'flex') {
+    modal.style.display = 'none';
+  } else {
+    modal.style.display = 'flex';
+    modal.classList.add('show');
+  }
+}
+
+// 点击模态框外部关闭模态框
+window.onclick = function(event) {
+  if (event.target === modal) {
+    toggleEditModal();
+  }
+}
+</script>
 {% endblock %}

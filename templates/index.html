@@ -15,11 +15,11 @@
           <label class="form-label">项目描述</label>
           <textarea class="textarea" name="project_desc" placeholder="输入项目描述（可选）"></textarea>
         </div>
-        <input id="file-input" type="file" name="file" required hidden {% if not session.user_id %}onchange="alert('请先登录，才能使用文件上传功能'); this.value='';"{% endif %}>
-        <label class="upload-zone" for="file-input" {% if not session.user_id %}onclick="alert('请先登录，才能使用文件上传功能'); return false;"{% endif %}>
+        <input id="file-input" type="file" name="file" required hidden>
+        <label class="upload-zone" for="file-input">
           <div class="upload-icon">⬆️</div>
           <div class="upload-cta">拖放文件到此处，或点击整个区域选择文件</div>
-          <div class="upload-sub"><button type="button" class="btn btn-light" onclick="{% if session.user_id %}document.getElementById('file-input').click(){% else %}alert('请先登录，才能使用文件上传功能'){% endif %}">浏览文件</button></div>
+          <div class="upload-sub"><button type="button" class="btn btn-light browse-btn">浏览文件</button></div>
           <div id="selected-file" class="selected-file"></div>
         </label>
         <div class="actions">
@@ -56,10 +56,10 @@
               <div class="meta-item">更新时间：<strong>{{ d and d.updated_at or '-' }}</strong></div>
             </div>
             <div class="file-actions">
-              <a class="btn" href="{{ url_for('file_detail', file_id=f.id) }}" {% if not session.user_id %}onclick="alert('请先登录，才能查看文件详情'); return false;"{% endif %}>详情</a>
-              <a class="btn" href="{{ url_for('download_local', stored_name=f.stored_name) }}" {% if not session.user_id %}onclick="alert('请先登录，才能下载文件'); return false;"{% endif %}>下载</a>
+              <a class="btn file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
+              <a class="btn file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
               <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
-                <button class="btn danger" type="submit" onclick="{% if not session.user_id %}alert('请先登录，才能删除文件'); return false;{% else %}return confirm('确定要删除这个文件吗？此操作不可恢复。');{% endif %}">删除</button>
+                <button class="btn danger file-action" type="submit">删除</button>
               </form>
             </div>
           </div>
@@ -144,17 +144,108 @@
   </div>
 </section>
 
+<div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" style="display: none;"></div>
+
 <script>
 const zone = document.querySelector('.upload-zone');
 const input = document.getElementById('file-input');
 const selected = document.getElementById('selected-file');
-function showName(){selected.textContent = input.files && input.files[0] ? input.files[0].name : ''}
-zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('drag')});
-zone.addEventListener('dragleave',e=>{zone.classList.remove('drag')});
-zone.addEventListener('drop',e=>{e.preventDefault();zone.classList.remove('drag');
-  const dt = new DataTransfer();
-  if(e.dataTransfer.files.length){dt.items.add(e.dataTransfer.files[0]);input.files = dt.files;showName();}
+const browseBtn = document.querySelector('.browse-btn');
+const fileActions = document.querySelectorAll('.file-action');
+const uploadForm = document.querySelector('.upload-form');
+const appData = document.getElementById('app-data');
+
+// 检查用户是否登录
+const isLoggedIn = JSON.parse(appData.dataset.isLoggedIn);
+
+function showName() {
+  selected.textContent = input.files && input.files[0] ? input.files[0].name : '';
+}
+
+// 浏览文件按钮点击事件
+browseBtn.addEventListener('click', () => {
+  if (isLoggedIn) {
+    document.getElementById('file-input').click();
+  } else {
+    alert('请先登录，才能使用文件上传功能');
+  }
 });
-input.addEventListener('change',showName);
+
+// 文件输入变化事件
+input.addEventListener('change', (e) => {
+  if (!isLoggedIn) {
+    alert('请先登录，才能使用文件上传功能');
+    e.target.value = '';
+    return;
+  }
+  showName();
+});
+
+// 上传表单提交事件
+uploadForm.addEventListener('submit', (e) => {
+  if (!isLoggedIn) {
+    alert('请先登录，才能使用文件上传功能');
+    e.preventDefault();
+    return;
+  }
+});
+
+// 拖拽事件处理
+zone.addEventListener('dragover', e => {
+  e.preventDefault();
+  zone.classList.add('drag');
+});
+
+zone.addEventListener('dragleave', e => {
+  e.preventDefault();
+  zone.classList.remove('drag');
+});
+
+zone.addEventListener('drop', e => {
+  e.preventDefault();
+  zone.classList.remove('drag');
+  
+  if (!isLoggedIn) {
+    alert('请先登录，才能使用文件上传功能');
+    return;
+  }
+  
+  const dt = new DataTransfer();
+  if (e.dataTransfer.files.length) {
+    dt.items.add(e.dataTransfer.files[0]);
+    input.files = dt.files;
+    showName();
+  }
+});
+
+// 处理文件操作事件
+fileActions.forEach(action => {
+  if (action.tagName === 'A') {
+    // 处理链接点击
+    action.addEventListener('click', (e) => {
+      if (!isLoggedIn) {
+        alert('请先登录，才能执行此操作');
+        e.preventDefault();
+        return;
+      }
+    });
+  } else if (action.tagName === 'BUTTON') {
+    // 处理按钮点击
+    action.addEventListener('click', (e) => {
+      if (!isLoggedIn) {
+        alert('请先登录，才能执行此操作');
+        e.preventDefault();
+        return;
+      }
+      
+      // 如果是删除按钮，显示确认对话框
+      if (action.textContent.trim() === '删除') {
+        if (!confirm('确定要删除这个文件吗？此操作不可恢复。')) {
+          e.preventDefault();
+        }
+      }
+    });
+  }
+});
 </script>
 {% endblock %}
