@@ -1,0 +1,481 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="ai-container">
+    <div class="container">
+        <div class="ai-header">
+            <h1 class="ai-title">AI 对话（DeepSeek）</h1>
+            <p class="ai-subtitle">与AI进行智能对话，获取专业回答</p>
+        </div>
+        
+        <div class="ai-card">
+            <form action="{{ url_for('ai') }}" method="post" class="ai-form" {% if not session.user_id %}onsubmit="alert('请先登录，才能使用AI对话功能'); return false;"{% endif %}>
+                <div class="form-section">
+                    <h2 class="section-title">提问</h2>
+                    
+                    <div class="form-group">
+                        <label for="prompt" class="form-label">您的问题</label>
+                        <textarea id="prompt" name="prompt" rows="5" placeholder="在此输入您的问题" class="form-textarea" required></textarea>
+                        <p class="form-hint">请详细描述您的问题，以便AI给出更准确的回答</p>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <h2 class="section-title">AI设置</h2>
+                    
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="model" class="form-label">AI模型</label>
+                            <select id="model" name="model" class="form-select">
+                                <option value="deepseek-chat">DeepSeek Chat</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <a href="{{ url_for('index') }}" class="btn btn-cancel">取消</a>
+                    <button type="submit" class="btn btn-primary btn-submit">
+                        <span class="btn-icon">🤖</span>
+                        发送到 DeepSeek
+                    </button>
+                </div>
+            </form>
+            
+            {% if ai_error %}
+                <div class="error-message">
+                    <h3 class="error-title">请求失败</h3>
+                    <p class="error-text">{{ ai_error }}</p>
+                </div>
+            {% endif %}
+            
+            {% if ai_output %}
+                <div class="response-section">
+                    <h2 class="section-title">AI回复</h2>
+                    <div class="ai-output">
+                        {{ ai_output }}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="ai-features">
+            <h2 class="features-title">AI对话的优势</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">💡</div>
+                    <h3 class="feature-title">智能回答</h3>
+                    <p class="feature-desc">基于DeepSeek强大的AI模型，提供准确、专业的回答</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3 class="feature-title">快速响应</h3>
+                    <p class="feature-desc">实时处理您的问题，快速返回结果</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📚</div>
+                    <h3 class="feature-title">知识渊博</h3>
+                    <p class="feature-desc">涵盖广泛的知识领域，解答各类问题</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">安全可靠</h3>
+                    <p class="feature-desc">保护您的隐私，确保对话内容安全</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* CSS 变量 */
+:root {
+    --primary-color: #4F46E5;
+    --primary-hover: #4338CA;
+    --secondary-color: #64748B;
+    --success-color: #10B981;
+    --danger-color: #EF4444;
+    --warning-color: #F59E0B;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-tertiary: #F1F5F9;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --border-color: #E2E8F0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* 容器 */
+.ai-container {
+    min-height: calc(100vh - 120px);
+    padding: 40px 0;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* 页面头部 */
+.ai-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.ai-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.ai-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+/* AI卡片 */
+.ai-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 40px;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.ai-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+/* 表单样式 */
+.ai-form {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* 表单组 */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.form-textarea {
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    transition: var(--transition);
+    outline: none;
+    resize: vertical;
+    min-height: 150px;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+.form-textarea:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-select {
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    transition: var(--transition);
+    outline: none;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* 表单行 */
+.form-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.form-group.half {
+    flex: 1;
+    min-width: 250px;
+}
+
+/* 表单操作 */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    outline: none;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-cancel:hover {
+    background: var(--border-color);
+}
+
+.btn-submit {
+    font-size: 1.1rem;
+    padding: 14px 30px;
+}
+
+.btn-icon {
+    font-size: 1.2rem;
+}
+
+/* 错误信息 */
+.error-message {
+    background: #FEF2F2;
+    border: 1px solid #FECACA;
+    border-radius: var(--radius-md);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.error-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #DC2626;
+    margin: 0;
+}
+
+.error-text {
+    color: #991B1B;
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 响应区域 */
+.response-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.ai-output {
+    background: #EFF6FF;
+    border: 1px solid #BFDBFE;
+    border-radius: var(--radius-md);
+    padding: 20px;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: #1E40AF;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-height: 150px;
+}
+
+/* 特性展示 */
+.ai-features {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+}
+
+.features-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 25px 0;
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+}
+
+.feature-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+}
+
+.feature-card:hover {
+    background: var(--bg-tertiary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    opacity: 0.8;
+}
+
+.feature-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.feature-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .ai-container {
+        padding: 20px 0;
+    }
+    
+    .ai-title {
+        font-size: 2rem;
+    }
+    
+    .ai-card {
+        padding: 20px;
+    }
+    
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .form-group.half {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// 检查用户是否登录
+const appData = document.getElementById('app-data');
+const isLoggedIn = JSON.parse(appData.dataset.isLoggedIn);
+const aiForm = document.querySelector('.ai-form');
+
+// AI表单提交事件
+aiForm.addEventListener('submit', (e) => {
+  if (!isLoggedIn) {
+    alert('请先登录，才能使用AI对话功能');
+    e.preventDefault();
+    return;
+  }
+});
+</script>
+
+<div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" style="display: none;"></div>
+{% endblock %}

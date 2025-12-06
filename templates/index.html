@@ -1,222 +1,171 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="grid-three full-width">
-  <section id="upload" class="card card-lg">
-    <div class="card-head">
-      <div class="card-title">文件上传</div>
+<!-- 英雄区域 -->
+<section class="hero-section">
+  <div class="hero-container">
+    <div class="hero-content">
+      <h1 class="hero-title">智能文件管理系统</h1>
+      <p class="hero-subtitle">轻松上传、存储与管理您的文件，让工作更高效</p>
+      <div class="hero-actions">
+        <a href="{{ url_for('upload_page') }}" class="btn btn-primary btn-large">立即上传文件</a>
+        {% if not session.user_id %}
+          <a href="{{ url_for('register') }}" class="btn btn-light btn-large">免费注册</a>
+        {% endif %}
+      </div>
     </div>
-    <div class="card-body">
-      <form class="upload-form" action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" {% if not session.user_id %}onsubmit="alert('请先登录，才能使用文件上传功能'); return false;"{% endif %}>
-        <div class="form-row">
-          <label class="form-label">项目名称</label>
-          <input class="input" type="text" name="project_name" value="默认项目" placeholder="默认项目">
-        </div>
-        <div class="form-row">
-          <label class="form-label">项目描述</label>
-          <textarea class="textarea" name="project_desc" placeholder="输入项目描述（可选）"></textarea>
-        </div>
-        <input id="file-input" type="file" name="file" required hidden>
-        <label class="upload-zone" for="file-input">
-          <div class="upload-icon">⬆️</div>
-          <div class="upload-cta">拖放文件到此处，或点击整个区域选择文件</div>
-          <div class="upload-sub"><button type="button" class="btn btn-light browse-btn">浏览文件</button></div>
-          <div id="selected-file" class="selected-file"></div>
-        </label>
-        <div class="actions">
-          <button class="btn btn-upload" type="submit">
-            <svg class="btn-ico" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 11l18-7-8 18-2-7-8-4z" fill="currentColor"/>
-            </svg>
-            上传文件
-          </button>
-        </div>
-      </form>
-    </div>
-  </section>
+  </div>
+</section>
 
-  <section id="local" class="card card-lg">
-    <div class="card-head">
-      <div class="card-title">文件列表</div>
+<!-- 功能亮点区域 -->
+<section class="features-section">
+  <div class="container">
+    <h2 class="section-header">核心功能</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📤</div>
+        <h3 class="feature-title">便捷上传</h3>
+        <p class="feature-desc">支持多种文件格式，一键上传，简单高效</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💾</div>
+        <h3 class="feature-title">安全存储</h3>
+        <p class="feature-desc">可靠的文件存储服务，保障您的数据安全</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3 class="feature-title">智能管理</h3>
+        <p class="feature-desc">清晰的文件列表，便于查找和管理</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3 class="feature-title">AI辅助</h3>
+        <p class="feature-desc">集成AI对话功能，提供智能帮助</p>
+      </div>
     </div>
-    <div class="card-body">
-      {% if files %}
-        <div class="file-list">
-          {% for f in files %}
-          {% set d = (f.dkfile or {}).get('data') %}
-          <div class="file-card">
-            <div class="file-head">
-              <div class="file-name">{{ f.filename }}</div>
-              <div class="meta-item">大小：<strong>{{ (f.size or 0) | int }} B</strong></div>
+  </div>
+</section>
+
+<!-- 文件列表区域 -->
+<section class="files-section">
+  <div class="container">
+    <div class="section-header-wrapper">
+      <h2 class="section-header">文件列表</h2>
+      <div class="section-actions">
+        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+          <i class="icon-upload">📤</i> 上传新文件
+        </a>
+      </div>
+    </div>
+    
+    {% if files %}
+      <div class="files-grid">
+        {% for f in files %}
+        {% set d = (f.dkfile or {}).get('data') %}
+        <div class="file-card">
+          <div class="file-card-header">
+            <div class="file-icon-big">📄</div>
+            <div class="file-info-header">
+              <h3 class="file-name">{{ f.filename }}</h3>
+              <div class="file-size">{{ (f.size or 0) | int }} B</div>
             </div>
+          </div>
+          <div class="file-card-body">
             <div class="file-meta">
-              <div class="meta-item">项目名称：<strong>{{ f.project_name or '-' }}</strong></div>
-              <div class="meta-item">项目描述：<strong>{{ f.project_desc or '-' }}</strong></div>
-              <div class="meta-item">远端链接：<strong>{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</strong></div>
-              <div class="meta-item">创建时间：<strong>{{ d and d.created_at or '-' }}</strong></div>
-              <div class="meta-item">更新时间：<strong>{{ d and d.updated_at or '-' }}</strong></div>
+              <div class="meta-row">
+                <span class="meta-label">项目名称：</span>
+                <span class="meta-value">{{ f.project_name or '-' }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">项目描述：</span>
+                <span class="meta-value">{{ f.project_desc or '-' }}</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">远端链接：</span>
+                <span class="meta-value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
+              </div>
+              <div class="meta-row">
+                <span class="meta-label">创建时间：</span>
+                <span class="meta-value">{{ d and d.created_at or '-' }}</span>
+              </div>
             </div>
+          </div>
+          <div class="file-card-footer">
             <div class="file-actions">
-              <a class="btn file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
-              <a class="btn file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
+              <a class="btn btn-secondary file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
+              <a class="btn btn-primary file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
               <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
-                <button class="btn danger file-action" type="submit">删除</button>
+                <button class="btn btn-danger file-action" type="submit">删除</button>
               </form>
             </div>
           </div>
-          {% endfor %}
         </div>
-      {% else %}
-        <div class="empty-placeholder">
-          <div class="empty-icon">☁️</div>
-          <div class="empty-title">暂无文件</div>
-          {% if session.user_id %}
-            <div class="empty-desc">上传您的第一个文件开始使用</div>
-          {% else %}
-            <div class="empty-desc">请先登录，查看和管理您的文件</div>
-            <div class="auth-required-actions" style="margin-top: 16px;">
-              <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-              <a href="{{ url_for('register') }}" class="btn btn-light">注册</a>
-            </div>
-          {% endif %}
-        </div>
-      {% endif %}
-    </div>
-  </section>
-
-  <section id="ai" class="card card-lg">
-    <div class="card-head">
-      <div class="card-title">AI 对话（DeepSeek）</div>
-    </div>
-    <div class="card-body">
-      <form action="{{ url_for('ai') }}" method="post" {% if not session.user_id %}onsubmit="alert('请先登录，才能使用AI对话功能'); return false;"{% endif %}>
-        <div class="form-row">
-          <label class="form-label">问题</label>
-          <textarea class="textarea" name="prompt" placeholder="在此输入你的问题"></textarea>
-        </div>
-        <div class="actions">
-          <button class="btn btn-primary" type="submit">发送到 DeepSeek</button>
-        </div>
-      </form>
-      {% if ai_error %}
-        <div class="error" style="margin-top:10px">请求失败：{{ ai_error }}</div>
-      {% endif %}
-      {% if ai_output %}
-        <div class="section-title" style="margin-top:16px">回复</div>
-        <div class="ai-output">{{ ai_output }}</div>
-      {% endif %}
-    </div>
-  </section>
-</div>
-
-<section id="remote" class="card">
-  <div class="card-head">
-    <div class="card-title">DKFile 远端文件</div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">📁</div>
+        <h3 class="empty-title">暂无文件</h3>
+        {% if session.user_id %}
+          <p class="empty-desc">您还没有上传任何文件，开始上传您的第一个文件吧</p>
+          <div class="empty-actions">
+            <a href="{{ url_for('upload_page') }}" class="btn btn-primary">立即上传</a>
+          </div>
+        {% else %}
+          <p class="empty-desc">请先登录，查看和管理您的文件</p>
+          <div class="empty-actions">
+            <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
+            <a href="{{ url_for('register') }}" class="btn btn-light">注册</a>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
-  <div class="card-body">
-    {% if remote_table and remote_table|length > 0 %}
-      <table class="table">
+</section>
+
+<!-- 远端文件区域 -->
+{% if remote_table and remote_table|length > 0 %}
+<section class="remote-section">
+  <div class="container">
+    <h2 class="section-header">DKFile 远端文件</h2>
+    <div class="remote-table-wrapper">
+      <table class="remote-table">
         <thead>
           <tr>
             <th>文件名</th>
             <th>URL</th>
             <th>创建时间</th>
-            <th>更新</th>
+            <th>更新状态</th>
           </tr>
         </thead>
         <tbody>
           {% for r in remote_table %}
           <tr>
             <td>{{ r.file_name }}</td>
-            <td><a href="{{ r.url }}" target="_blank">访问</a></td>
+            <td><a href="{{ r.url }}" target="_blank">访问链接</a></td>
             <td>{{ r.created_at or '-' }}</td>
-            <td>{{ r.is_update and '是' or '否' }}{% if r.updated_at %}（{{ r.updated_at }}）{% endif %}</td>
+            <td>
+              <span class="status-badge {{ 'status-updated' if r.is_update else 'status-no-update' }}">
+                {{ '已更新' if r.is_update else '未更新' }}
+              </span>
+              {% if r.updated_at %}<small class="update-time">({{ r.updated_at }})</small>{% endif %}
+            </td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
-    {% else %}
-      {% if remote_error %}
-        <div class="error">请求失败：{{ remote_error }}</div>
-      {% else %}
-        <div class="empty">暂无上传记录</div>
-      {% endif %}
-    {% endif %}
+    </div>
   </div>
 </section>
+{% endif %}
 
 <div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" style="display: none;"></div>
 
 <script>
-const zone = document.querySelector('.upload-zone');
-const input = document.getElementById('file-input');
-const selected = document.getElementById('selected-file');
-const browseBtn = document.querySelector('.browse-btn');
 const fileActions = document.querySelectorAll('.file-action');
-const uploadForm = document.querySelector('.upload-form');
 const appData = document.getElementById('app-data');
 
 // 检查用户是否登录
 const isLoggedIn = JSON.parse(appData.dataset.isLoggedIn);
-
-function showName() {
-  selected.textContent = input.files && input.files[0] ? input.files[0].name : '';
-}
-
-// 浏览文件按钮点击事件
-browseBtn.addEventListener('click', () => {
-  if (isLoggedIn) {
-    document.getElementById('file-input').click();
-  } else {
-    alert('请先登录，才能使用文件上传功能');
-  }
-});
-
-// 文件输入变化事件
-input.addEventListener('change', (e) => {
-  if (!isLoggedIn) {
-    alert('请先登录，才能使用文件上传功能');
-    e.target.value = '';
-    return;
-  }
-  showName();
-});
-
-// 上传表单提交事件
-uploadForm.addEventListener('submit', (e) => {
-  if (!isLoggedIn) {
-    alert('请先登录，才能使用文件上传功能');
-    e.preventDefault();
-    return;
-  }
-});
-
-// 拖拽事件处理
-zone.addEventListener('dragover', e => {
-  e.preventDefault();
-  zone.classList.add('drag');
-});
-
-zone.addEventListener('dragleave', e => {
-  e.preventDefault();
-  zone.classList.remove('drag');
-});
-
-zone.addEventListener('drop', e => {
-  e.preventDefault();
-  zone.classList.remove('drag');
-  
-  if (!isLoggedIn) {
-    alert('请先登录，才能使用文件上传功能');
-    return;
-  }
-  
-  const dt = new DataTransfer();
-  if (e.dataTransfer.files.length) {
-    dt.items.add(e.dataTransfer.files[0]);
-    input.files = dt.files;
-    showName();
-  }
-});
 
 // 处理文件操作事件
 fileActions.forEach(action => {
@@ -248,4 +197,458 @@ fileActions.forEach(action => {
   }
 });
 </script>
+
+<style>
+/* 新增样式 */
+:root {
+  --primary-color: #4F46E5;
+  --primary-hover: #4338CA;
+  --secondary-color: #64748B;
+  --success-color: #10B981;
+  --danger-color: #EF4444;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8FAFC;
+  --bg-tertiary: #F1F5F9;
+  --text-primary: #1E293B;
+  --text-secondary: #64748B;
+  --border-color: #E2E8F0;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --transition: all 0.3s ease;
+}
+
+/* 英雄区域样式 */
+.hero-section {
+  background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%);
+  color: white;
+  padding: 80px 0;
+  margin-bottom: 40px;
+  margin-top: -1px;
+}
+
+.hero-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 28px;
+  text-align: center;
+}
+
+.hero-title {
+  font-size: 3rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+  line-height: 1.2;
+}
+
+.hero-subtitle {
+  font-size: 1.25rem;
+  opacity: 0.9;
+  margin-bottom: 32px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-large {
+  padding: 16px 32px;
+  font-size: 1.125rem;
+  border-radius: 12px;
+  font-weight: 700;
+}
+
+/* 功能亮点区域样式 */
+.features-section {
+  background: var(--bg-secondary);
+  padding: 60px 0;
+  margin-bottom: 40px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 32px;
+  margin-top: 40px;
+}
+
+.feature-card {
+  background: white;
+  padding: 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+  transition: var(--transition);
+  border: 1px solid var(--border-color);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-color);
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  color: var(--primary-color);
+}
+
+.feature-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.feature-desc {
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* 文件列表区域样式 */
+.files-section {
+  padding: 0 0 40px 0;
+}
+
+.section-header-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.section-header {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.section-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+/* 文件卡片样式 */
+.file-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+  transition: var(--transition);
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+}
+
+.file-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--primary-color);
+}
+
+.file-card-header {
+  padding: 24px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.file-icon-big {
+  font-size: 3rem;
+  color: var(--primary-color);
+}
+
+.file-info-header {
+  flex: 1;
+}
+
+.file-size {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-top: 4px;
+}
+
+.file-card-body {
+  padding: 24px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.file-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.meta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.875rem;
+}
+
+.meta-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.meta-value {
+  color: var(--text-primary);
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.meta-value a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.meta-value a:hover {
+  text-decoration: underline;
+}
+
+.file-card-footer {
+  padding: 20px 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.file-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* 按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  text-decoration: none;
+  outline: none;
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--border-color);
+}
+
+.btn-danger {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+}
+
+/* 空状态样式 */
+.empty-state {
+  text-align: center;
+  padding: 80px 20px;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius-lg);
+}
+
+.empty-icon {
+  font-size: 4rem;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.empty-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.empty-desc {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* 远端文件表格样式 */
+.remote-section {
+  background: var(--bg-secondary);
+  padding: 60px 0;
+  margin-top: 40px;
+}
+
+.remote-table-wrapper {
+  overflow-x: auto;
+  background: white;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+}
+
+.remote-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.remote-table th,
+.remote-table td {
+  padding: 16px 24px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.remote-table th {
+  background: var(--bg-secondary);
+  font-weight: 700;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.remote-table tbody tr {
+  transition: var(--transition);
+}
+
+.remote-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.status-updated {
+  background: #ECFDF5;
+  color: var(--success-color);
+}
+
+.status-no-update {
+  background: #FEF3C7;
+  color: #F59E0B;
+}
+
+.update-time {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-left: 8px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+  
+  .section-header {
+    font-size: 1.5rem;
+  }
+  
+  .features-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .files-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .section-header-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .section-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .file-card-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  .file-info-header {
+    text-align: center;
+  }
+  
+  .remote-table th,
+  .remote-table td {
+    padding: 12px 16px;
+  }
+}
+</style>
 {% endblock %}

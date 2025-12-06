@@ -1,0 +1,505 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="upload-container">
+    <div class="container">
+        <div class="upload-header">
+            <h1 class="upload-title">上传发布文件</h1>
+            <p class="upload-subtitle">轻松上传、存储与管理您的文件</p>
+        </div>
+        
+        <div class="upload-form-card">
+            <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="upload-form">
+                <div class="form-section">
+                    <h2 class="section-title">文件信息</h2>
+                    
+                    <div class="form-group">
+                        <label for="file" class="form-label">选择文件</label>
+                        <div class="file-upload">
+                            <input type="file" id="file" name="file" required class="file-input">
+                            <label for="file" class="file-label">
+                                <span class="file-icon">📁</span>
+                                <span class="file-text">点击选择文件或拖拽文件到此处</span>
+                            </label>
+                        </div>
+                        <p class="form-hint">支持各种文件格式，单个文件大小不超过200MB</p>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group half">
+                            <label for="project_name" class="form-label">项目名称</label>
+                            <input type="text" id="project_name" name="project_name" placeholder="请输入项目名称" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="project_desc" class="form-label">项目描述</label>
+                        <textarea id="project_desc" name="project_desc" rows="4" placeholder="请输入项目描述" class="form-textarea"></textarea>
+                    </div>
+                </div>
+                
+                <div class="form-section">
+                    <h2 class="section-title">上传设置</h2>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="is_public" name="is_public" checked class="checkbox-input">
+                            <label for="is_public" class="checkbox-label">公开此文件</label>
+                        </div>
+                        <p class="form-hint">公开的文件可以被其他用户访问</p>
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <a href="{{ url_for('index') }}" class="btn btn-cancel">取消</a>
+                    <button type="submit" class="btn btn-primary btn-submit">
+                        <span class="btn-icon">📤</span>
+                        上传发布
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="upload-features">
+            <h2 class="features-title">上传发布的优势</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🚀</div>
+                    <h3 class="feature-title">快速上传</h3>
+                    <p class="feature-desc">支持大文件快速上传，断点续传</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3 class="feature-title">安全可靠</h3>
+                    <p class="feature-desc">文件加密存储，保障您的数据安全</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3 class="feature-title">多端访问</h3>
+                    <p class="feature-desc">支持在不同设备上访问和管理文件</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔄</div>
+                    <h3 class="feature-title">版本管理</h3>
+                    <p class="feature-desc">支持文件版本管理，轻松回溯历史版本</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* CSS 变量 */
+:root {
+    --primary-color: #4F46E5;
+    --primary-hover: #4338CA;
+    --secondary-color: #64748B;
+    --success-color: #10B981;
+    --danger-color: #EF4444;
+    --warning-color: #F59E0B;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-tertiary: #F1F5F9;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --border-color: #E2E8F0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 全局样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    line-height: 1.6;
+}
+
+/* 容器 */
+.upload-container {
+    min-height: calc(100vh - 120px);
+    padding: 40px 0;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* 页面头部 */
+.upload-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.upload-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.upload-subtitle {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+}
+
+/* 表单卡片 */
+.upload-form-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+    margin-bottom: 40px;
+    transition: var(--transition);
+}
+
+.upload-form-card:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+/* 表单样式 */
+.upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.section-title {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* 表单组 */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+.form-input, .form-textarea {
+    padding: 12px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    color: var(--text-primary);
+    background-color: var(--bg-secondary);
+    transition: var(--transition);
+    outline: none;
+}
+
+.form-input:focus, .form-textarea:focus {
+    border-color: var(--primary-color);
+    background: var(--bg-primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.form-hint {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+/* 文件上传 */
+.file-upload {
+    position: relative;
+    margin: 10px 0;
+}
+
+.file-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.file-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 30px;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+    text-align: center;
+    justify-content: center;
+    flex-direction: column;
+    min-height: 120px;
+}
+
+.file-label:hover {
+    border-color: var(--primary-color);
+    background: rgba(79, 70, 229, 0.05);
+}
+
+.file-icon {
+    font-size: 2rem;
+}
+
+.file-text {
+    font-size: 1rem;
+    color: var(--text-secondary);
+}
+
+/* 表单行 */
+.form-row {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.form-group.half {
+    flex: 1;
+    min-width: 250px;
+}
+
+/* 复选框组 */
+.checkbox-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
+    cursor: pointer;
+}
+
+.checkbox-label {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    font-weight: 500;
+}
+
+/* 表单操作 */
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 15px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+/* 按钮样式 */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    outline: none;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-cancel:hover {
+    background: var(--border-color);
+}
+
+.btn-submit {
+    font-size: 1.1rem;
+    padding: 14px 30px;
+}
+
+.btn-icon {
+    font-size: 1.2rem;
+}
+
+/* 特性展示 */
+.upload-features {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+}
+
+.features-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 25px 0;
+    text-align: center;
+}
+
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 25px;
+}
+
+.feature-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+    padding: 20px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    transition: var(--transition);
+}
+
+.feature-card:hover {
+    background: var(--bg-tertiary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    opacity: 0.8;
+}
+
+.feature-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+.feature-desc {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.5;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .upload-container {
+        padding: 20px 0;
+    }
+    
+    .upload-title {
+        font-size: 2rem;
+    }
+    
+    .upload-form-card {
+        padding: 20px;
+    }
+    
+    .form-row {
+        flex-direction: column;
+    }
+    
+    .form-group.half {
+        width: 100%;
+        min-width: auto;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// 文件上传拖拽功能
+const fileInput = document.querySelector('.file-input');
+const fileLabel = document.querySelector('.file-label');
+const fileText = document.querySelector('.file-text');
+
+// 监听文件选择
+fileInput.addEventListener('change', function(e) {
+    if (this.files.length > 0) {
+        fileText.textContent = this.files[0].name;
+    } else {
+        fileText.textContent = '点击选择文件或拖拽文件到此处';
+    }
+});
+
+// 拖拽功能
+fileLabel.addEventListener('dragover', function(e) {
+    e.preventDefault();
+    this.classList.add('dragover');
+});
+
+fileLabel.addEventListener('dragleave', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+});
+
+fileLabel.addEventListener('drop', function(e) {
+    e.preventDefault();
+    this.classList.remove('dragover');
+    
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        fileText.textContent = e.dataTransfer.files[0].name;
+    }
+});
+</script>
+{% endblock %}

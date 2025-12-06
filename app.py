@@ -445,6 +445,20 @@ def index():
             })
     return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, username=session.get('username'))
 
+
+@app.get("/upload_page")
+def upload_page():
+    """上传发布页面"""
+    init_db()
+    return render_template("upload_page.html", username=session.get('username'))
+
+
+@app.get("/ai_page")
+def ai_page():
+    """AI对话页面"""
+    init_db()
+    return render_template("ai_page.html", username=session.get('username'))
+
 @app.post("/upload")
 @login_required
 def upload():
