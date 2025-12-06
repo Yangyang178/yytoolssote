@@ -16,13 +16,12 @@
       </div>
       <div class="nav-buttons">
         <a href="{{ url_for('index') }}" class="nav-btn nav-btn-light">首页</a>
-        <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
         <a href="{{ url_for('upload_page') }}" class="nav-btn nav-btn-primary">上传发布</a>
         <a href="{{ url_for('ai_page') }}" class="nav-btn nav-btn-primary">AI对话</a>
+        <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
         {% if session.user_id %}
           <div class="nav-user-menu">
             <span class="nav-username">欢迎，{{ session.username }}</span>
-            <a href="{{ url_for('logout') }}" class="nav-btn nav-btn-light">退出登录</a>
           </div>
         {% else %}
           <a href="{{ url_for('login') }}" class="nav-btn nav-btn-light">登录</a>

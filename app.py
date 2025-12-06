@@ -11,6 +11,7 @@ from flask import Flask, request, render_template, redirect, url_for, flash, sen
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
+from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).parent
@@ -58,8 +59,16 @@ def init_db():
                         id TEXT PRIMARY KEY,
                         email TEXT NOT NULL UNIQUE,
                         username TEXT NOT NULL,
+                        password TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )''')
+        
+        # 检查并添加password字段到现有users表
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ""')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
         conn.execute('''CREATE TABLE IF NOT EXISTS verification_codes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         email TEXT NOT NULL,
@@ -351,9 +360,9 @@ def get_access_logs(user_id):
 def add_user(user):
     conn = get_db()
     try:
-        conn.execute('''INSERT INTO users (id, email, username)
-                        VALUES (?, ?, ?)''', 
-                    (user["id"], user["email"], user["username"]))
+        conn.execute('''INSERT INTO users (id, email, username, password)
+                        VALUES (?, ?, ?, ?)''', 
+                    (user["id"], user["email"], user["username"], user["password"]))
         conn.commit()
     finally:
         conn.close()
@@ -423,8 +432,8 @@ def dkfile_delete(file_id):
 def index():
     init_db()
     migrate_json_to_db()
-    # 让登录用户也能看到所有文件，而不仅仅是自己上传的文件
-    files = get_all_files()
+    # 首页只显示默认用户的文件，用户上传的文件只显示在用户中心
+    files = get_all_files(user_id="default_user")
     remote_error = None
     info = None
     try:
@@ -581,8 +590,8 @@ def ai():
         ai_error = str(e)
     init_db()
     migrate_json_to_db()
-    # 让登录用户也能看到所有文件，而不仅仅是自己上传的文件
-    files = get_all_files()
+    # AI页面也只显示默认用户的文件，用户上传的文件只显示在用户中心
+    files = get_all_files(user_id="default_user")
     remote_error = None
     info = None
     try:
@@ -605,22 +614,56 @@ def ai():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # 优先从表单中获取login_method，其次从URL参数中获取
+    login_method = request.form.get('login_method', request.args.get('login_method', 'password'))
+    
     if request.method == 'POST':
         email = request.form['email']
         username = request.form['username']
         
-        if get_user_by_email(email):
-            return render_template('auth.html', mode='register', page_title='注册', error='该邮箱已被注册')
-        
-        try:
-            code = generate_verification_code()
-            success, message = send_verification_email(email, code, 'register')
-            save_verification_code(email, code, 'register')
-            return redirect(url_for('register', step='verify', email=email, debug_code=message if not success else None))
-        except Exception as e:
-            return render_template('auth.html', mode='register', page_title='注册', error=f'发送验证码失败：{str(e)}')
+        if login_method == 'password':
+            # 密码注册流程
+            password = request.form.get('password')
+            confirm_password = request.form.get('confirm_password')
+            
+            if not password:
+                return render_template('auth.html', mode='register', page_title='注册', error='请输入密码', login_method=login_method)
+            
+            if password != confirm_password:
+                return render_template('auth.html', mode='register', page_title='注册', error='两次输入的密码不一致', login_method=login_method)
+            
+            if get_user_by_email(email):
+                return render_template('auth.html', mode='register', page_title='注册', error='该邮箱已被注册', login_method=login_method)
+            
+            # 直接注册，不发送验证码
+            user_id = uuid.uuid4().hex
+            hashed_password = generate_password_hash(password)
+            add_user({
+                'id': user_id, 
+                'email': email, 
+                'username': username,
+                'password': hashed_password
+            })
+            
+            session['user_id'] = user_id
+            session['email'] = email
+            session['username'] = username
+            
+            return redirect(url_for('index'))
+        else:
+            # 验证码注册流程（原流程）
+            if get_user_by_email(email):
+                return render_template('auth.html', mode='register', page_title='注册', error='该邮箱已被注册', login_method=login_method)
+            
+            try:
+                code = generate_verification_code()
+                success, message = send_verification_email(email, code, 'register')
+                save_verification_code(email, code, 'register')
+                return redirect(url_for('register', step='verify', email=email, debug_code=message if not success else None, login_method=login_method))
+            except Exception as e:
+                return render_template('auth.html', mode='register', page_title='注册', error=f'发送验证码失败：{str(e)}', login_method=login_method)
     
-    return render_template('auth.html', mode='register', page_title='注册')
+    return render_template('auth.html', mode='register', page_title='注册', login_method=login_method)
 
 
 @app.route('/verify_register', methods=['POST'])
@@ -628,15 +671,25 @@ def verify_register():
     email = request.form['email']
     code = request.form['code']
     username = request.form.get('username', '')
+    password = request.form.get('password')
+    confirm_password = request.form.get('confirm_password')
+    login_method = request.form.get('login_method', 'code')
     
     if not verify_code(email, code, 'register'):
-        return render_template('auth.html', mode='register', page_title='注册', error='验证码无效或已过期', step='verify')
+        return render_template('auth.html', mode='register', page_title='注册', error='验证码无效或已过期', step='verify', login_method=login_method)
     
     if get_user_by_email(email):
-        return render_template('auth.html', mode='register', page_title='注册', error='该邮箱已被注册')
+        return render_template('auth.html', mode='register', page_title='注册', error='该邮箱已被注册', step='verify', login_method=login_method)
     
     user_id = uuid.uuid4().hex
-    add_user({'id': user_id, 'email': email, 'username': username})
+    hashed_password = generate_password_hash(password) if password else ''
+    
+    add_user({
+        'id': user_id, 
+        'email': email, 
+        'username': username,
+        'password': hashed_password
+    })
     
     session['user_id'] = user_id
     session['email'] = email
@@ -650,35 +703,70 @@ def login():
     if 'user_id' in session:
         return redirect(url_for('index'))
     
+    # 优先从表单中获取login_method，其次从URL参数中获取
+    login_method = request.form.get('login_method', request.args.get('login_method', 'password'))
+    step = request.args.get('step', 'enter')
+    
     if request.method == 'POST':
         email = request.form['email']
         
-        user = get_user_by_email(email)
-        if not user:
-            return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册')
+        # 获取密码字段
+        password = request.form.get('password')
         
-        try:
-            code = generate_verification_code()
-            success, message = send_verification_email(email, code, 'login')
-            save_verification_code(email, code, 'login')
-            return redirect(url_for('login', step='verify', email=email, debug_code=message if not success else None))
-        except Exception as e:
-            return render_template('auth.html', mode='login', page_title='登录', error=f'发送验证码失败：{str(e)}')
+        # 智能判断登录方式：如果有密码字段，执行密码登录；否则执行验证码登录
+        if login_method == 'password' and password:
+            # 密码登录流程
+            user = get_user_by_email(email)
+            if not user:
+                return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', login_method=login_method)
+            
+            # 验证密码
+            conn = get_db()
+            try:
+                row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+                if not row:
+                    return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', login_method=login_method)
+                
+                if not check_password_hash(row['password'], password):
+                    return render_template('auth.html', mode='login', page_title='登录', error='密码错误', login_method=login_method)
+                
+                # 登录成功
+                session['user_id'] = row['id']
+                session['email'] = row['email']
+                session['username'] = row['username']
+                
+                return redirect(url_for('index'))
+            finally:
+                conn.close()
+        else:
+            # 验证码登录流程
+            user = get_user_by_email(email)
+            if not user:
+                return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', login_method=login_method)
+            
+            try:
+                code = generate_verification_code()
+                success, message = send_verification_email(email, code, 'login')
+                save_verification_code(email, code, 'login')
+                return redirect(url_for('login', step='verify', email=email, debug_code=message if not success else None, login_method='code'))
+            except Exception as e:
+                return render_template('auth.html', mode='login', page_title='登录', error=f'发送验证码失败：{str(e)}', login_method=login_method)
     
-    return render_template('auth.html', mode='login', page_title='登录')
+    return render_template('auth.html', mode='login', page_title='登录', login_method=login_method, step=step)
 
 
 @app.route('/verify_login', methods=['POST'])
 def verify_login():
     email = request.form['email']
     code = request.form['code']
+    login_method = request.form.get('login_method', 'code')
     
     if not verify_code(email, code, 'login'):
-        return render_template('auth.html', mode='login', page_title='登录', error='验证码无效或已过期', step='verify')
+        return render_template('auth.html', mode='login', page_title='登录', error='验证码无效或已过期', step='verify', login_method=login_method)
     
     user = get_user_by_email(email)
     if not user:
-        return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册')
+        return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', step='verify', login_method=login_method)
     
     session['user_id'] = user['id']
     session['email'] = user['email']
@@ -758,6 +846,127 @@ def update_profile():
         conn.close()
     
     return redirect(url_for('user_center'))
+
+
+@app.route('/account-settings')
+@login_required
+def account_settings():
+    """账户设置页面"""
+    init_db()
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if row:
+            user = {
+                'id': row['id'],
+                'email': row['email'],
+                'username': row['username'],
+                'avatar': row['avatar'] if 'avatar' in row else None
+            }
+        else:
+            user = {
+                'email': session.get('email'),
+                'username': session.get('username')
+            }
+    finally:
+        conn.close()
+    return render_template('account_settings.html', user=user)
+
+
+@app.route('/change-password', methods=['POST'])
+@login_required
+def change_password():
+    """修改密码"""
+    init_db()
+    current_password = request.form.get('current_password')
+    new_password = request.form.get('new_password')
+    confirm_password = request.form.get('confirm_password')
+    
+    # 验证密码一致性
+    if new_password != confirm_password:
+        return render_template('account_settings.html', error='两次输入的密码不一致', user={'email': session.get('email'), 'username': session.get('username')})
+    
+    # 验证当前密码是否正确
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not row:
+            return render_template('account_settings.html', error='用户不存在', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        if not check_password_hash(row['password'], current_password):
+            return render_template('account_settings.html', error='当前密码错误', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        # 更新密码
+        hashed_password = generate_password_hash(new_password)
+        conn.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_password, session['user_id']))
+        conn.commit()
+        return render_template('account_settings.html', success='密码修改成功', user={'email': session.get('email'), 'username': session.get('username')})
+    finally:
+        conn.close()
+
+
+@app.route('/send-email-code', methods=['POST'])
+@login_required
+def send_email_code():
+    """发送邮箱验证码"""
+    init_db()
+    new_email = request.json.get('new_email')
+    
+    if not new_email:
+        return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
+    
+    # 验证邮箱是否已被使用
+    conn = get_db()
+    try:
+        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (new_email, session['user_id'])).fetchone()
+        if existing_user:
+            return jsonify({'success': False, 'message': '该邮箱已被使用'}), 400
+    finally:
+        conn.close()
+    
+    try:
+        code = generate_verification_code()
+        success, message = send_verification_email(new_email, code, 'change_email')
+        save_verification_code(new_email, code, 'change_email')
+        
+        if success:
+            return jsonify({'success': True, 'message': '验证码已发送'})
+        else:
+            return jsonify({'success': True, 'message': '验证码已发送（调试模式：' + message + '）'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'发送验证码失败：{str(e)}'}), 500
+
+
+@app.route('/change-email', methods=['POST'])
+@login_required
+def change_email():
+    """修改邮箱"""
+    init_db()
+    new_email = request.form.get('new_email')
+    code = request.form.get('code')
+    
+    # 验证验证码
+    if not code:
+        return render_template('account_settings.html', error='请输入验证码', user={'email': session.get('email'), 'username': session.get('username')})
+    
+    if not verify_code(new_email, code, 'change_email'):
+        return render_template('account_settings.html', error='验证码无效或已过期', user={'email': session.get('email'), 'username': session.get('username')})
+    
+    # 验证邮箱是否已被使用
+    conn = get_db()
+    try:
+        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (new_email, session['user_id'])).fetchone()
+        if existing_user:
+            return render_template('account_settings.html', error='该邮箱已被使用', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        # 更新邮箱
+        conn.execute('UPDATE users SET email = ? WHERE id = ?', (new_email, session['user_id']))
+        conn.commit()
+        # 更新session中的邮箱
+        session['email'] = new_email
+        return render_template('account_settings.html', success='邮箱修改成功', user={'email': new_email, 'username': session.get('username')})
+    finally:
+        conn.close()
 
 
 @app.route('/logout')

@@ -22,6 +22,9 @@ logs/
 # Static files
 static/avatars/
 
+# Uploads
+uploads/
+
 # OS files
 .DS_Store
 Thumbs.db

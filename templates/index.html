@@ -63,7 +63,12 @@
         {% set d = (f.dkfile or {}).get('data') %}
         <div class="file-card">
           <div class="file-card-header">
-            <div class="file-icon-big">📄</div>
+            <div class="file-icon-container">
+              <div class="file-icon">
+                <div class="file-icon-top"></div>
+                <div class="file-icon-content"></div>
+              </div>
+            </div>
             <div class="file-info-header">
               <h3 class="file-name">{{ f.filename }}</h3>
               <div class="file-size">{{ (f.size or 0) | int }} B</div>
@@ -375,9 +380,68 @@ fileActions.forEach(action => {
   border-bottom: 1px solid var(--border-color);
 }
 
-.file-icon-big {
-  font-size: 3rem;
-  color: var(--primary-color);
+.file-icon-container {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4F46E5, #3B82F6);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.file-icon {
+  width: 40px;
+  height: 52px;
+  background: white;
+  border-radius: 6px;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+.file-icon::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: linear-gradient(90deg, #4F46E5, #3B82F6);
+  border-radius: 1px;
+}
+
+.file-icon::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: linear-gradient(90deg, #4F46E5, #3B82F6);
+  opacity: 0.6;
+  border-radius: 1px;
+}
+
+.file-icon-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: linear-gradient(90deg, #EF4444, #DC2626);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.file-icon-content {
+  position: absolute;
+  top: 22px;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.1), rgba(79, 70, 229, 0.05));
+  border-radius: 4px;
 }
 
 .file-info-header {
@@ -388,6 +452,16 @@ fileActions.forEach(action => {
   color: var(--text-secondary);
   font-size: 0.875rem;
   margin-top: 4px;
+}
+
+.file-name {
+  font-weight: 700;
+  color: #1f2937;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .file-card-body {

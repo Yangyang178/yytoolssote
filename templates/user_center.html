@@ -35,6 +35,12 @@
                         <button class="btn btn-edit" onclick="toggleEditModal()">
                             <i class="icon-edit">✏️</i> 编辑资料
                         </button>
+                        <a href="{{ url_for('account_settings') }}" class="btn btn-account">
+                            <i class="icon-account">⚙️</i> 账户设置
+                        </a>
+                        <a href="{{ url_for('logout') }}" class="btn btn-logout">
+                            <i class="icon-logout">🚪</i> 退出登录
+                        </a>
                     </div>
                 </div>
             </div>
@@ -432,6 +438,32 @@ body {
 
 .btn-submit:hover {
     background: var(--primary-hover);
+}
+
+.btn-account {
+    background: #4F46E5;
+    color: white;
+    border: 1px solid #4F46E5;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-account:hover {
+    background: #4338CA;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-logout {
+    background: #EF4444;
+    color: white;
+    border: 1px solid #EF4444;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-logout:hover {
+    background: #DC2626;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
 /* 内容区域 */
