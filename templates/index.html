@@ -57,11 +57,21 @@
       </div>
     </div>
     
+    <!-- 搜索框 -->
+    <div class="search-container">
+      <div class="search-box">
+        <input type="text" id="file-search" placeholder="搜索文件名或项目名称..." class="search-input">
+        <button class="search-btn" onclick="searchFiles()">
+          <span class="search-icon">🔍</span>
+        </button>
+      </div>
+    </div>
+    
     {% if files %}
       <div class="files-grid">
         {% for f in files %}
         {% set d = (f.dkfile or {}).get('data') %}
-        <div class="file-card">
+        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }}">
           <div class="file-card-header">
             <div class="file-icon-container">
               <div class="file-icon">
@@ -84,6 +94,16 @@
                 {% endif %}
               </h3>
               <div class="file-size">{{ (f.size or 0) | int }} B</div>
+            </div>
+            <div class="file-interactions">
+              <button class="interaction-btn like-btn" data-file-id="{{ f.id }}">
+                <i class="icon-like">❤️</i>
+                <span class="count">0</span>
+              </button>
+              <button class="interaction-btn favorite-btn" data-file-id="{{ f.id }}">
+                <i class="icon-favorite">⭐</i>
+                <span class="count">0</span>
+              </button>
             </div>
           </div>
           <div class="file-card-body">
@@ -212,6 +232,166 @@ fileActions.forEach(action => {
     });
   }
 });
+
+// 初始化文件互动状态
+async function initFileInteractions() {
+  const fileCards = document.querySelectorAll('.file-card');
+  
+  for (const card of fileCards) {
+    const likeBtn = card.querySelector('.like-btn');
+    const favoriteBtn = card.querySelector('.favorite-btn');
+    const fileId = likeBtn.dataset.fileId;
+    
+    try {
+      const response = await fetch(`/api/files/${fileId}/interactions`);
+      const data = await response.json();
+      
+      if (data.success) {
+        // 更新点赞数和状态
+        const likeCount = likeBtn.querySelector('.count');
+        likeCount.textContent = data.like_count;
+        if (data.is_liked) {
+          likeBtn.classList.add('active');
+        }
+        
+        // 更新收藏数和状态
+        const favoriteCount = favoriteBtn.querySelector('.count');
+        favoriteCount.textContent = data.favorite_count;
+        if (data.is_favorited) {
+          favoriteBtn.classList.add('active');
+        }
+      }
+    } catch (error) {
+      console.error(`初始化文件 ${fileId} 互动状态失败：`, error);
+    }
+  }
+}
+
+// 处理点赞按钮点击事件
+async function handleLike(fileId, btn) {
+  if (!isLoggedIn) {
+    alert('请先登录，才能执行此操作');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/files/${fileId}/like`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      // 更新按钮状态
+      if (data.liked) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+      
+      // 更新点赞数
+      const countElement = btn.querySelector('.count');
+      countElement.textContent = data.count;
+    }
+  } catch (error) {
+    console.error(`点赞失败：`, error);
+    alert('点赞失败，请稍后重试');
+  }
+}
+
+// 处理收藏按钮点击事件
+async function handleFavorite(fileId, btn) {
+  if (!isLoggedIn) {
+    alert('请先登录，才能执行此操作');
+    return;
+  }
+  
+  try {
+    const response = await fetch(`/api/files/${fileId}/favorite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      // 更新按钮状态
+      if (data.favorited) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+      
+      // 更新收藏数
+      const countElement = btn.querySelector('.count');
+      countElement.textContent = data.count;
+    }
+  } catch (error) {
+    console.error(`收藏失败：`, error);
+    alert('收藏失败，请稍后重试');
+  }
+}
+
+// 绑定事件监听
+function bindInteractionEvents() {
+  // 处理点赞按钮点击事件
+  const likeBtns = document.querySelectorAll('.like-btn');
+  likeBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const fileId = btn.dataset.fileId;
+      handleLike(fileId, btn);
+    });
+  });
+  
+  // 处理收藏按钮点击事件
+  const favoriteBtns = document.querySelectorAll('.favorite-btn');
+  favoriteBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const fileId = btn.dataset.fileId;
+      handleFavorite(fileId, btn);
+    });
+  });
+}
+
+// 搜索文件功能
+function searchFiles() {
+  const searchInput = document.getElementById('file-search');
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  const fileCards = document.querySelectorAll('.file-card');
+  
+  fileCards.forEach(card => {
+    const searchData = card.dataset.search.toLowerCase();
+    if (searchTerm === '' || searchData.includes(searchTerm)) {
+      card.style.display = 'block';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+}
+
+// 回车键触发搜索
+window.addEventListener('DOMContentLoaded', () => {
+  // 初始化文件互动状态
+  initFileInteractions();
+  
+  // 绑定事件监听
+  bindInteractionEvents();
+  
+  // 添加搜索框回车键事件监听
+  const searchInput = document.getElementById('file-search');
+  if (searchInput) {
+    searchInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        searchFiles();
+      }
+    });
+  }
+});
 </script>
 
 <style>
@@ -241,7 +421,7 @@ fileActions.forEach(action => {
 .hero-section {
   background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%);
   color: white;
-  padding: 80px 0;
+  padding: 160px 0 80px 0;
   margin-bottom: 40px;
   margin-top: -1px;
 }
@@ -336,6 +516,69 @@ fileActions.forEach(action => {
   padding: 0 0 40px 0;
 }
 
+/* 搜索框样式 */
+.search-container {
+  margin-bottom: 30px;
+}
+
+.search-box {
+  display: flex;
+  max-width: 600px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 2px solid #E2E8F0;
+  transition: all 0.3s ease;
+}
+
+.search-box:focus-within {
+  border-color: #4F46E5;
+  box-shadow: 0 6px 20px rgba(79, 70, 229, 0.15);
+}
+
+.search-input {
+  flex: 1;
+  padding: 16px 20px;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: #1E293B;
+  background: transparent;
+}
+
+.search-input::placeholder {
+  color: #94A3B8;
+  font-size: 15px;
+}
+
+.search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  border: none;
+  background: linear-gradient(135deg, #4F46E5, #3B82F6);
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 18px;
+}
+
+.search-btn:hover {
+  background: linear-gradient(135deg, #4338CA, #2563EB);
+  transform: scale(1.05);
+}
+
+.search-btn:active {
+  transform: scale(0.98);
+}
+
+.search-icon {
+  font-size: 18px;
+}
+
 .section-header-wrapper {
   display: flex;
   justify-content: space-between;
@@ -359,8 +602,9 @@ fileActions.forEach(action => {
 
 .files-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(350px, 350px));
   gap: 24px;
+  justify-content: center;
 }
 
 /* 文件卡片样式 */
@@ -373,7 +617,7 @@ fileActions.forEach(action => {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  min-height: 280px;
+  min-height: 320px;
 }
 
 .file-card:hover {
@@ -388,6 +632,7 @@ fileActions.forEach(action => {
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid var(--border-color);
+  position: relative;
 }
 
 .file-icon-container {
@@ -458,6 +703,7 @@ fileActions.forEach(action => {
 .file-info-header {
   flex: 1;
   min-width: 0;
+  max-width: calc(100% - 120px);
 }
 
 .file-name {
@@ -535,10 +781,11 @@ fileActions.forEach(action => {
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   flex-wrap: wrap;
   gap: 12px;
+  align-items: stretch;
 }
 
 .file-meta {
@@ -559,6 +806,87 @@ fileActions.forEach(action => {
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+}
+
+/* 文件互动按钮样式 */
+.file-interactions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.interaction-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  width: auto;
+  min-width: 70px;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.interaction-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary-color);
+}
+
+.like-btn:hover {
+  background: rgba(239, 68, 68, 0.05);
+  color: var(--danger-color);
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+.like-btn.active {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger-color);
+  border-color: var(--danger-color);
+}
+
+.favorite-btn:hover {
+  background: rgba(245, 158, 11, 0.05);
+  color: var(--warning-color);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.favorite-btn.active {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning-color);
+  border-color: var(--warning-color);
+}
+
+.icon-like,
+.icon-favorite {
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.interaction-btn:hover .icon-like,
+.interaction-btn:hover .icon-favorite {
+  transform: scale(1.1);
+}
+
+.count {
+  font-weight: 700;
+  font-size: 0.75rem;
 }
 
 /* 按钮样式 */
@@ -643,10 +971,30 @@ fileActions.forEach(action => {
     flex-direction: column;
     text-align: center;
     gap: 12px;
+    position: relative;
   }
   
   .file-info-header {
     text-align: center;
+    max-width: 100%;
+  }
+  
+  .file-interactions {
+    position: absolute;
+    top: 10px;
+    right: 16px;
+    gap: 6px;
+  }
+  
+  .interaction-btn {
+    padding: 5px 14px;
+    font-size: 0.7rem;
+    min-width: 65px;
+  }
+  
+  .icon-like,
+  .icon-favorite {
+    font-size: 0.8rem;
   }
   
   .file-card-body {

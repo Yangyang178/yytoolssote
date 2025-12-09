@@ -130,14 +130,102 @@
                     {% endif %}
                 </section>
                 
+                <!-- 收藏文件 -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">收藏文件</h2>
+                    </div>
+                    
+                    {% if favorite_files %}
+                        <div class="files-grid">
+                            {% for f in favorite_files %}
+                            {% set d = (f.dkfile or {}).get('data') %}
+                            <div class="file-card">
+                              <div class="file-card-header">
+                                <div class="file-icon-container">
+                                  <div class="file-icon">
+                                    <div class="file-icon-top"></div>
+                                    <div class="file-icon-content"></div>
+                                  </div>
+                                </div>
+                                <div class="file-info-header">
+                                  <h3 class="file-name">
+                                    {% if f.filename == 'watermark-remover.html' %}
+                                      图片去水印工具
+                                    {% elif f.filename == 'subscription_manager.html' %}
+                                      订阅服务管理器
+                                    {% elif f.filename == 'color_mixing_game.html' %}
+                                      色彩混合大师
+                                    {% elif f.filename == 'font_pairing_recommender.html' %}
+                                      字体配对推荐器
+                                    {% else %}
+                                      {{ f.filename }}
+                                    {% endif %}
+                                  </h3>
+                                  <div class="file-size">{{ (f.size or 0) | int }} B</div>
+                                </div>
+                              </div>
+                              <div class="file-card-body">
+                                <div class="file-project">
+                                  <div class="project-name">
+                                    <span class="label">项目名称：</span>
+                                    <span class="value">{{ f.project_name or '-' }}</span>
+                                  </div>
+                                  <div class="project-desc">
+                                    <span class="label">项目描述：</span>
+                                    <span class="value">{{ f.project_desc or '-' }}</span>
+                                  </div>
+                                  <div class="remote-link">
+                                    <span class="label">远端链接：</span>
+                                    <span class="value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
+                                  </div>
+                                  <div class="like-count">
+                                    <span class="label">点赞数：</span>
+                                    <span class="value">{{ f.like_count }}</span>
+                                  </div>
+                                  <div class="favorite-count">
+                                    <span class="label">收藏数：</span>
+                                    <span class="value">{{ f.favorite_count }}</span>
+                                  </div>
+                                  <div class="created-time">
+                                    <span class="label">创建时间：</span>
+                                    <span class="value">{{ d and d.created_at or '-' }}</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div class="file-card-footer">
+                                <div class="file-actions">
+                                  <a class="btn btn-detail file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
+                                  <a class="btn btn-download file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
+                                  <button class="btn btn-unfavorite file-action" data-file-id="{{ f.id }}">取消收藏</button>
+                                </div>
+                              </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">⭐</div>
+                            <h3 class="empty-title">暂无收藏文件</h3>
+                            <p class="empty-desc">您还没有收藏任何文件，去首页探索并收藏感兴趣的文件吧</p>
+                            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                                <i class="icon-explore">🔍</i> 去首页探索
+                            </a>
+                        </div>
+                    {% endif %}
+                </section>
+                
                 <!-- 访问记录 -->
                 <section class="content-section">
                     <div class="section-header">
                         <h2 class="section-title">访问记录</h2>
+                        <button class="toggle-btn" onclick="toggleLogs()">
+                            <span id="toggle-icon">▼</span>
+                        </button>
                     </div>
                     
                     {% if access_logs %}
-                        <div class="logs-container">
+                        <div id="logs-container" class="logs-container">
                             <table class="logs-table">
                                 <thead>
                                     <tr>
@@ -168,10 +256,12 @@
                             </table>
                         </div>
                     {% else %}
-                        <div class="empty-state">
-                            <div class="empty-icon">📋</div>
-                            <h3 class="empty-title">暂无访问记录</h3>
-                            <p class="empty-desc">当有用户访问您的文件时，这里会显示访问记录</p>
+                        <div id="logs-container" class="logs-container">
+                            <div class="empty-state">
+                                <div class="empty-icon">📋</div>
+                                <h3 class="empty-title">暂无访问记录</h3>
+                                <p class="empty-desc">当有用户访问您的文件时，这里会显示访问记录</p>
+                            </div>
                         </div>
                     {% endif %}
                 </section>
@@ -709,6 +799,288 @@ body {
     box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
 }
 
+/* 文件卡片样式 */
+.file-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  min-height: 320px;
+}
+
+.file-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  border-color: var(--primary-color);
+}
+
+.file-card-header {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+}
+
+.file-icon-container {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #4F46E5, #3B82F6);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  flex-shrink: 0;
+}
+
+.file-icon {
+  width: 32px;
+  height: 42px;
+  background: white;
+  border-radius: 5px;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+}
+
+.file-icon::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: linear-gradient(90deg, #4F46E5, #3B82F6);
+  border-radius: 1px;
+}
+
+.file-icon::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  left: 6px;
+  right: 6px;
+  height: 2px;
+  background: linear-gradient(90deg, #4F46E5, #3B82F6);
+  opacity: 0.6;
+  border-radius: 1px;
+}
+
+.file-icon-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background: linear-gradient(90deg, #EF4444, #DC2626);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.file-icon-content {
+  position: absolute;
+  top: 18px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.1), rgba(79, 70, 229, 0.05));
+  border-radius: 3px;
+}
+
+.file-info-header {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(100% - 120px);
+}
+
+.file-name {
+  font-weight: 700;
+  color: #1F2937;
+  font-size: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin: 0 0 4px;
+}
+
+.file-size {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin: 0;
+}
+
+.file-card-body {
+  padding: 20px 24px;
+  flex: 1;
+  overflow: hidden;
+}
+
+.file-project {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.project-name,
+.project-desc,
+.remote-link,
+.like-count,
+.favorite-count,
+.created-time {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.875rem;
+}
+
+.project-name .label,
+.project-desc .label,
+.remote-link .label,
+.like-count .label,
+.favorite-count .label,
+.created-time .label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.project-name .value,
+.project-desc .value,
+.remote-link .value,
+.like-count .value,
+.favorite-count .value,
+.created-time .value {
+  color: var(--text-primary);
+  font-weight: 500;
+  flex: 1;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.remote-link .value a {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.remote-link .value a:hover {
+  text-decoration: underline;
+}
+
+.file-card-footer {
+  padding: 16px 24px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.file-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.created-time {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  outline: none;
+  min-width: 60px;
+}
+
+.btn-detail {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-detail:hover {
+  background: var(--border-color);
+}
+
+.btn-download {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-download:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+}
+
+.btn-delete {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #DC2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+}
+
+.btn-unfavorite {
+  background: #F9FAFB;
+  color: #EF4444;
+  border: 1px solid #E2E8F0;
+}
+
+.btn-unfavorite:hover {
+  background: #FEF2F2;
+  border-color: #FECACA;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.15);
+}
+
+.btn-primary {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 /* 访问记录 */
 .logs-container {
     overflow-x: auto;
@@ -744,6 +1116,29 @@ body {
 
 .log-row:hover {
     background: var(--bg-secondary);
+}
+
+/* 折叠按钮样式 */
+.toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    margin-left: 12px;
+}
+
+.toggle-btn:hover {
+    background: var(--border-color);
+    transform: scale(1.05);
 }
 
 /* 操作标签 */
@@ -1086,9 +1481,45 @@ fileActions.forEach(action => {
           e.preventDefault();
         }
       }
+      
+      // 如果是取消收藏按钮，处理取消收藏操作
+      if (action.textContent.trim() === '取消收藏') {
+        if (!confirm('确定要取消收藏这个文件吗？')) {
+          e.preventDefault();
+          return;
+        }
+        
+        const fileId = action.dataset.fileId;
+        handleUnfavorite(fileId, action);
+        e.preventDefault();
+      }
     });
   }
 });
+
+// 处理取消收藏操作
+async function handleUnfavorite(fileId, btn) {
+  try {
+    const response = await fetch(`/api/files/${fileId}/favorite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    const data = await response.json();
+    
+    if (data.success) {
+      // 取消收藏成功，刷新页面或更新UI
+      window.location.reload();
+    } else {
+      alert('取消收藏失败，请稍后重试');
+    }
+  } catch (error) {
+    console.error(`取消收藏失败：`, error);
+    alert('取消收藏失败，请稍后重试');
+  }
+}
 
 // 模态框功能
 const modal = document.getElementById('edit-modal');
@@ -1106,6 +1537,22 @@ function toggleEditModal() {
 window.onclick = function(event) {
   if (event.target === modal) {
     toggleEditModal();
+  }
+}
+
+// 折叠/展开访问记录
+function toggleLogs() {
+  const logsContainer = document.getElementById('logs-container');
+  const toggleIcon = document.getElementById('toggle-icon');
+  
+  if (logsContainer.style.display === 'none' || logsContainer.style.display === '') {
+    // 展开记录
+    logsContainer.style.display = 'block';
+    toggleIcon.textContent = '▼';
+  } else {
+    // 折叠记录
+    logsContainer.style.display = 'none';
+    toggleIcon.textContent = '▶';
   }
 }
 </script>

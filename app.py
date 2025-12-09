@@ -116,7 +116,28 @@ def init_db():
         except sqlite3.OperationalError:
             # 字段已经存在，跳过
             pass
+            
+        # 创建likes表
+        conn.execute('''CREATE TABLE IF NOT EXISTS likes (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        UNIQUE(file_id, user_id)
+                    )''')
         
+        # 创建favorites表
+        conn.execute('''CREATE TABLE IF NOT EXISTS favorites (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        UNIQUE(file_id, user_id)
+                    )''')
         conn.commit()
     finally:
         conn.close()
@@ -266,10 +287,27 @@ def get_all_files(user_id=None):
             rows = conn.execute('SELECT * FROM files WHERE user_id = ? ORDER BY id DESC', (user_id,)).fetchall()
         else:
             rows = conn.execute('SELECT * FROM files ORDER BY id DESC').fetchall()
-        return [{"id": row["id"], "filename": row["filename"], "stored_name": row["stored_name"],
-                "path": row["path"], "size": row["size"], "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
-                "project_name": row["project_name"], "project_desc": row["project_desc"]}
-                for row in rows]
+        
+        result = []
+        for row in rows:
+            file_id = row["id"]
+            # 获取点赞数和收藏数
+            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+            
+            result.append({
+                "id": file_id, 
+                "filename": row["filename"], 
+                "stored_name": row["stored_name"],
+                "path": row["path"], 
+                "size": row["size"], 
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "project_name": row["project_name"], 
+                "project_desc": row["project_desc"],
+                "like_count": like_count,
+                "favorite_count": favorite_count
+            })
+        return result
     finally:
         conn.close()
 
@@ -282,10 +320,23 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
         else:
             row = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
         if row:
-            return {"id": row["id"], "filename": row["filename"], "stored_name": row["stored_name"],
-                    "path": row["path"], "size": row["size"], "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
-                    "project_name": row["project_name"], "project_desc": row["project_desc"],
-                    "user_id": row["user_id"]}
+            # 获取点赞数和收藏数
+            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+            
+            return {
+                "id": row["id"], 
+                "filename": row["filename"], 
+                "stored_name": row["stored_name"],
+                "path": row["path"], 
+                "size": row["size"], 
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "project_name": row["project_name"], 
+                "project_desc": row["project_desc"],
+                "user_id": row["user_id"],
+                "like_count": like_count,
+                "favorite_count": favorite_count
+            }
         return None
     finally:
         conn.close()
@@ -349,10 +400,156 @@ def get_access_logs(user_id):
                            WHERE f.user_id = ? 
                            ORDER BY al.access_time DESC''', 
                           (user_id,)).fetchall()
-        return [{"id": row["id"], "file_id": row["file_id"], "filename": row["filename"],
-                "action": row["action"], "ip_address": row["ip_address"],
-                "user_agent": row["user_agent"], "access_time": row["access_time"]}
+        return [{
+            "id": row["id"], 
+            "file_id": row["file_id"], 
+            "filename": row["filename"],
+            "action": row["action"], 
+            "ip_address": row["ip_address"],
+            "user_agent": row["user_agent"], 
+            "access_time": row["access_time"]
+        }
                 for row in rows]
+    finally:
+        conn.close()
+
+
+# 点赞相关函数
+def toggle_like(file_id, user_id):
+    """切换文件的点赞状态"""
+    conn = get_db()
+    try:
+        # 检查是否已经点赞
+        row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        if row:
+            # 已经点赞，取消点赞
+            conn.execute('DELETE FROM likes WHERE file_id = ? AND user_id = ?', 
+                        (file_id, user_id))
+            liked = False
+        else:
+            # 未点赞，添加点赞
+            conn.execute('INSERT INTO likes (file_id, user_id) VALUES (?, ?)', 
+                        (file_id, user_id))
+            liked = True
+        conn.commit()
+        
+        # 获取最新点赞数
+        count_row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', 
+                               (file_id,)).fetchone()
+        count = count_row['count']
+        
+        return liked, count
+    finally:
+        conn.close()
+
+
+def get_like_count(file_id):
+    """获取文件的点赞数量"""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', 
+                          (file_id,)).fetchone()
+        return row['count']
+    finally:
+        conn.close()
+
+
+def is_liked(file_id, user_id):
+    """检查用户是否已经点赞该文件"""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+# 收藏相关函数
+def toggle_favorite(file_id, user_id):
+    """切换文件的收藏状态"""
+    conn = get_db()
+    try:
+        # 检查是否已经收藏
+        row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        if row:
+            # 已经收藏，取消收藏
+            conn.execute('DELETE FROM favorites WHERE file_id = ? AND user_id = ?', 
+                        (file_id, user_id))
+            favorited = False
+        else:
+            # 未收藏，添加收藏
+            conn.execute('INSERT INTO favorites (file_id, user_id) VALUES (?, ?)', 
+                        (file_id, user_id))
+            favorited = True
+        conn.commit()
+        
+        # 获取最新收藏数
+        count_row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', 
+                               (file_id,)).fetchone()
+        count = count_row['count']
+        
+        return favorited, count
+    finally:
+        conn.close()
+
+
+def get_favorite_count(file_id):
+    """获取文件的收藏数量"""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', 
+                          (file_id,)).fetchone()
+        return row['count']
+    finally:
+        conn.close()
+
+
+def is_favorited(file_id, user_id):
+    """检查用户是否已经收藏该文件"""
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+def get_favorite_files(user_id):
+    """获取用户收藏的文件列表"""
+    conn = get_db()
+    try:
+        rows = conn.execute('''
+            SELECT f.* 
+            FROM files f 
+            JOIN favorites fav ON f.id = fav.file_id 
+            WHERE fav.user_id = ? 
+            ORDER BY fav.created_at DESC
+        ''', (user_id,)).fetchall()
+        
+        result = []
+        for row in rows:
+            file_id = row["id"]
+            # 获取点赞数和收藏数
+            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+            
+            result.append({
+                "id": file_id, 
+                "filename": row["filename"], 
+                "stored_name": row["stored_name"],
+                "path": row["path"], 
+                "size": row["size"], 
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "project_name": row["project_name"], 
+                "project_desc": row["project_desc"],
+                "like_count": like_count,
+                "favorite_count": favorite_count
+            })
+        return result
     finally:
         conn.close()
 
@@ -788,6 +985,8 @@ def user_center():
     if 'user_id' in session:
         # 用户中心只显示当前用户的文件列表
         files = get_all_files(session['user_id'])
+        # 获取用户收藏的文件列表
+        favorite_files = get_favorite_files(session['user_id'])
         access_logs = get_access_logs(session['user_id'])
         
         # 从数据库获取用户信息，包括头像
@@ -810,9 +1009,10 @@ def user_center():
             conn.close()
     else:
         files = []
+        favorite_files = []
         access_logs = []
         user = None
-    return render_template('user_center.html', user=user, files=files, access_logs=access_logs)
+    return render_template('user_center.html', user=user, files=files, favorite_files=favorite_files, access_logs=access_logs)
 
 
 @app.route('/update_profile', methods=['POST'])
@@ -980,6 +1180,56 @@ def change_email():
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+
+# API路由：处理点赞请求
+@app.post('/api/files/<file_id>/like')
+@login_required
+def api_toggle_like(file_id):
+    """切换文件的点赞状态"""
+    user_id = session['user_id']
+    liked, count = toggle_like(file_id, user_id)
+    return jsonify({'success': True, 'liked': liked, 'count': count})
+
+
+# API路由：处理收藏请求
+@app.post('/api/files/<file_id>/favorite')
+@login_required
+def api_toggle_favorite(file_id):
+    """切换文件的收藏状态"""
+    user_id = session['user_id']
+    favorited, count = toggle_favorite(file_id, user_id)
+    return jsonify({'success': True, 'favorited': favorited, 'count': count})
+
+
+# API路由：获取文件的点赞和收藏状态
+@app.get('/api/files/<file_id>/interactions')
+def api_get_interactions(file_id):
+    """获取文件的点赞和收藏状态"""
+    conn = get_db()
+    try:
+        # 获取点赞数和收藏数
+        like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+        favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+        
+        # 检查当前用户是否已点赞和收藏
+        user_id = session.get('user_id')
+        is_liked = False
+        is_favorited = False
+        
+        if user_id:
+            is_liked = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
+            is_favorited = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
+        
+        return jsonify({
+            'success': True,
+            'like_count': like_count,
+            'favorite_count': favorite_count,
+            'is_liked': is_liked,
+            'is_favorited': is_favorited
+        })
+    finally:
+        conn.close()
 
 
 @app.after_request
