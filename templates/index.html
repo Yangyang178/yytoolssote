@@ -632,7 +632,6 @@ window.addEventListener('DOMContentLoaded', () => {
   align-items: center;
   gap: 16px;
   border-bottom: 1px solid var(--border-color);
-  position: relative;
 }
 
 .file-icon-container {
@@ -703,18 +702,22 @@ window.addEventListener('DOMContentLoaded', () => {
 .file-info-header {
   flex: 1;
   min-width: 0;
-  max-width: calc(100% - 120px);
 }
 
 .file-name {
   font-weight: 700;
   color: #1F2937;
   font-size: 1.125rem;
-  white-space: nowrap;
+  margin: 0 0 4px;
+  word-wrap: break-word;
+  white-space: normal;
+  line-height: 1.3;
+  max-height: 2.6em;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 100%;
-  margin: 0 0 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .file-size {
@@ -813,14 +816,13 @@ window.addEventListener('DOMContentLoaded', () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  position: absolute;
-  top: 12px;
-  right: 16px;
+  position: static;
   width: auto;
-  margin: 0;
+  margin-left: 16px;
   padding: 0;
   border: none;
   background: transparent;
+  flex-shrink: 0;
 }
 
 .interaction-btn {
@@ -982,7 +984,7 @@ window.addEventListener('DOMContentLoaded', () => {
   .file-interactions {
     position: absolute;
     top: 10px;
-    right: 16px;
+    right: 20px;
     gap: 6px;
   }
   
