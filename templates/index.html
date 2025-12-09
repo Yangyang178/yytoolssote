@@ -70,36 +70,47 @@
               </div>
             </div>
             <div class="file-info-header">
-              <h3 class="file-name">{{ f.filename }}</h3>
+              <h3 class="file-name">
+                {% if f.filename == 'watermark-remover.html' %}
+                  图片去水印工具
+                {% elif f.filename == 'subscription_manager.html' %}
+                  订阅服务管理器
+                {% elif f.filename == 'color_mixing_game.html' %}
+                  色彩混合大师
+                {% elif f.filename == 'font_pairing_recommender.html' %}
+                  字体配对推荐器
+                {% else %}
+                  {{ f.filename }}
+                {% endif %}
+              </h3>
               <div class="file-size">{{ (f.size or 0) | int }} B</div>
             </div>
           </div>
           <div class="file-card-body">
-            <div class="file-meta">
-              <div class="meta-row">
-                <span class="meta-label">项目名称：</span>
-                <span class="meta-value">{{ f.project_name or '-' }}</span>
+            <div class="file-project">
+              <div class="project-name">
+                <span class="label">项目名称：</span>
+                <span class="value">{{ f.project_name or '-' }}</span>
               </div>
-              <div class="meta-row">
-                <span class="meta-label">项目描述：</span>
-                <span class="meta-value">{{ f.project_desc or '-' }}</span>
+              <div class="project-desc">
+                <span class="label">项目描述：</span>
+                <span class="value">{{ f.project_desc or '-' }}</span>
               </div>
-              <div class="meta-row">
-                <span class="meta-label">远端链接：</span>
-                <span class="meta-value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
-              </div>
-              <div class="meta-row">
-                <span class="meta-label">创建时间：</span>
-                <span class="meta-value">{{ d and d.created_at or '-' }}</span>
+              <div class="remote-link">
+                <span class="label">远端链接：</span>
+                <span class="value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
               </div>
             </div>
           </div>
           <div class="file-card-footer">
+            <div class="file-meta">
+              <div class="created-time">创建时间：{{ d and d.created_at or '-' }}</div>
+            </div>
             <div class="file-actions">
-              <a class="btn btn-secondary file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
-              <a class="btn btn-primary file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
+              <a class="btn btn-detail file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
+              <a class="btn btn-download file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
               <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
-                <button class="btn btn-danger file-action" type="submit">删除</button>
+                <button class="btn btn-delete file-action" type="submit">删除</button>
               </form>
             </div>
           </div>
@@ -356,24 +367,23 @@ fileActions.forEach(action => {
 .file-card {
   background: white;
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  border-radius: var(--radius-md);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   overflow: hidden;
-  transition: var(--transition);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  min-height: 320px;
+  min-height: 280px;
 }
 
 .file-card:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
   border-color: var(--primary-color);
 }
 
 .file-card-header {
-  padding: 24px;
-  background: var(--bg-secondary);
+  padding: 20px 24px;
   display: flex;
   align-items: center;
   gap: 16px;
@@ -381,32 +391,33 @@ fileActions.forEach(action => {
 }
 
 .file-icon-container {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #4F46E5, #3B82F6);
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+  flex-shrink: 0;
 }
 
 .file-icon {
-  width: 40px;
-  height: 52px;
+  width: 32px;
+  height: 42px;
   background: white;
-  border-radius: 6px;
+  border-radius: 5px;
   position: relative;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   overflow: hidden;
 }
 
 .file-icon::before {
   content: '';
   position: absolute;
-  top: 8px;
-  left: 8px;
-  right: 8px;
+  top: 6px;
+  left: 6px;
+  right: 6px;
   height: 2px;
   background: linear-gradient(90deg, #4F46E5, #3B82F6);
   border-radius: 1px;
@@ -415,9 +426,9 @@ fileActions.forEach(action => {
 .file-icon::after {
   content: '';
   position: absolute;
-  top: 14px;
-  left: 8px;
-  right: 8px;
+  top: 12px;
+  left: 6px;
+  right: 6px;
   height: 2px;
   background: linear-gradient(90deg, #4F46E5, #3B82F6);
   opacity: 0.6;
@@ -429,107 +440,175 @@ fileActions.forEach(action => {
   top: 0;
   left: 0;
   right: 0;
-  height: 8px;
+  height: 7px;
   background: linear-gradient(90deg, #EF4444, #DC2626);
   border-bottom: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .file-icon-content {
   position: absolute;
-  top: 22px;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
+  top: 18px;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
   background: linear-gradient(180deg, rgba(79, 70, 229, 0.1), rgba(79, 70, 229, 0.05));
-  border-radius: 4px;
+  border-radius: 3px;
 }
 
 .file-info-header {
   flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-weight: 700;
+  color: #1F2937;
+  font-size: 1.125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin: 0 0 4px;
 }
 
 .file-size {
   color: var(--text-secondary);
   font-size: 0.875rem;
-  margin-top: 4px;
-}
-
-.file-name {
-  font-weight: 700;
-  color: #1f2937;
-  font-size: 1rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
+  font-weight: 500;
+  margin: 0;
 }
 
 .file-card-body {
-  padding: 24px;
+  padding: 20px 24px;
   flex: 1;
   overflow: hidden;
 }
 
-.file-meta {
+.file-project {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: hidden;
 }
 
-.meta-row {
+.project-name,
+.project-desc,
+.remote-link {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  gap: 8px;
   font-size: 0.875rem;
 }
 
-.meta-label {
+.project-name .label,
+.project-desc .label,
+.remote-link .label,
+.created-time .label {
   color: var(--text-secondary);
   font-weight: 500;
+  flex-shrink: 0;
+  min-width: 80px;
 }
 
-.meta-value {
+.project-name .value,
+.project-desc .value,
+.remote-link .value,
+.created-time .value {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 500;
+  flex: 1;
   word-break: break-word;
+  line-height: 1.5;
 }
 
-.meta-value a {
+.remote-link .value a {
   color: var(--primary-color);
   text-decoration: none;
+  font-weight: 600;
 }
 
-.meta-value a:hover {
+.remote-link .value a:hover {
   text-decoration: underline;
 }
 
 .file-card-footer {
-  padding: 20px 24px;
+  padding: 16px 24px;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.file-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.created-time {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-actions {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 按钮样式 */
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
   border: none;
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
+  border-radius: 6px;
+  font-size: 0.8125rem;
   font-weight: 600;
   cursor: pointer;
-  transition: var(--transition);
+  transition: all 0.2s ease;
   text-decoration: none;
   outline: none;
+  min-width: 60px;
+}
+
+.btn-detail {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-detail:hover {
+  background: var(--border-color);
+}
+
+.btn-download {
+  background: var(--primary-color);
+  color: white;
+}
+
+.btn-download:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+}
+
+.btn-delete {
+  background: var(--danger-color);
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #DC2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
 }
 
 .btn-primary {
@@ -553,13 +632,54 @@ fileActions.forEach(action => {
   background: var(--border-color);
 }
 
-.btn-danger {
-  background: var(--danger-color);
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #DC2626;
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .file-card {
+    min-height: auto;
+  }
+  
+  .file-card-header {
+    padding: 16px 20px;
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  .file-info-header {
+    text-align: center;
+  }
+  
+  .file-card-body {
+    padding: 16px 20px;
+  }
+  
+  .file-card-footer {
+    padding: 12px 20px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .file-actions {
+    justify-content: center;
+  }
+  
+  .project-name,
+  .project-desc,
+  .remote-link {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .project-name .label,
+  .project-desc .label,
+  .remote-link .label {
+    min-width: auto;
+  }
+  
+  .btn {
+    width: 100%;
+  }
 }
 
 /* 空状态样式 */

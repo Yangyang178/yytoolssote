@@ -84,39 +84,35 @@
                     </div>
                     
                     {% if files %}
-                        <div class="file-grid">
+                        <div class="files-grid">
                             {% for f in files %}
                             {% set d = (f.dkfile or {}).get('data') %}
-                            <div class="file-card">
-                                <div class="file-header">
-                                    <div class="file-icon">📄</div>
-                                    <h3 class="file-name">{{ f.filename }}</h3>
+                            <div class="user-file-card">
+                                <div class="file-name-large">{{ f.filename }}</div>
+                                <div class="file-size-info">{{ (f.size or 0) | int }} B</div>
+                                <div class="file-metadata">
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">项目名称：</span>
+                                        <span class="metadata-value">{{ f.project_name or '-' }}</span>
+                                    </div>
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">项目描述：</span>
+                                        <span class="metadata-value">{{ f.project_desc or '-' }}</span>
+                                    </div>
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">远端链接：</span>
+                                        <span class="metadata-value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
+                                    </div>
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">创建时间：</span>
+                                        <span class="metadata-value">{{ d and d.created_at or '-' }}</span>
+                                    </div>
                                 </div>
-                                <div class="file-info">
-                                    <div class="info-item">
-                                        <span class="info-label">大小：</span>
-                                        <span class="info-value">{{ (f.size or 0) | int }} B</span>
-                                    </div>
-                                    <div class="info-item">
-                                        <span class="info-label">项目：</span>
-                                        <span class="info-value">{{ f.project_name or '-' }}</span>
-                                    </div>
-                                    <div class="info-item">
-                                        <span class="info-label">创建时间：</span>
-                                        <span class="info-value">{{ d and d.created_at or '-' }}</span>
-                                    </div>
-                                </div>
-                                <div class="file-actions">
-                                    <a class="btn-action btn-detail" href="{{ url_for('file_detail', file_id=f.id) }}">
-                                        <i>👁️</i> 详情
-                                    </a>
-                                    <a class="btn-action btn-download" href="{{ url_for('download_local', stored_name=f.stored_name) }}">
-                                        <i>📥</i> 下载
-                                    </a>
+                                <div class="file-card-actions">
+                                    <a class="file-action-btn action-detail" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
+                                    <a class="file-action-btn action-download" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
                                     <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
-                                        <button class="btn-action btn-delete" type="submit">
-                                            <i>🗑️</i> 删除
-                                        </button>
+                                        <button class="file-action-btn action-delete" type="submit">删除</button>
                                     </form>
                                 </div>
                             </div>
@@ -509,117 +505,21 @@ body {
     gap: 20px;
 }
 
-/* 文件卡片 */
-.file-card {
+/* 文件网格 */
+.file-grid,
+.files-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 24px;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
     background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
-    padding: 20px;
-    transition: var(--transition);
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
-
-.file-card:hover {
-    background: var(--bg-primary);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-2px);
-    border-color: var(--primary-color);
-}
-
-.file-header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.file-icon {
-    font-size: 1.8rem;
-}
-
-.file-name {
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    flex: 1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.file-info {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    font-size: 0.9rem;
-}
-
-.info-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.info-label {
-    color: var(--text-secondary);
-    font-weight: 500;
-}
-
-.info-value {
-    color: var(--text-primary);
-    font-weight: 600;
-}
-
-/* 文件操作按钮 */
-.file-actions {
-    display: flex;
-    gap: 10px;
-    margin-top: auto;
-}
-
-.btn-action {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    padding: 8px 12px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: var(--transition);
-    text-decoration: none;
-}
-
-.btn-detail {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.btn-detail:hover {
-    background: var(--border-color);
-}
-
-.btn-download {
-    background: var(--success-color);
-    color: white;
-}
-
-.btn-download:hover {
-    background: #059669;
-}
-
-.btn-delete {
-    background: var(--danger-color);
-    color: white;
-}
-
-.btn-delete:hover {
-    background: #DC2626;
+    border: 2px dashed var(--border-color);
+    border-radius: var(--radius-lg);
 }
 
 /* 空状态 */
@@ -651,6 +551,162 @@ body {
     max-width: 400px;
     margin-left: auto;
     margin-right: auto;
+}
+
+/* 用户文件卡片样式 */
+.user-file-card {
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+}
+
+.user-file-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #4F46E5, #3B82F6);
+    border-radius: 12px 0 0 12px;
+}
+
+.user-file-card:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    border-color: #4F46E5;
+    transform: translateY(-2px);
+}
+
+.file-name-large {
+    font-size: 1.375rem;
+    font-weight: 700;
+    color: #1E293B;
+    margin: 0;
+    line-height: 1.4;
+    padding-left: 12px;
+}
+
+.file-size-info {
+    font-size: 0.9375rem;
+    color: #64748B;
+    font-weight: 500;
+    margin: 0;
+    padding-left: 12px;
+}
+
+.file-metadata {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-left: 12px;
+}
+
+.metadata-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+}
+
+.metadata-label {
+    color: #94A3B8;
+    font-weight: 500;
+    flex-shrink: 0;
+    min-width: 100px;
+    text-align: right;
+}
+
+.metadata-value {
+    color: #334155;
+    font-weight: 500;
+    flex: 1;
+    word-break: break-word;
+}
+
+.metadata-value a {
+    color: #4F46E5;
+    text-decoration: none;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.metadata-value a:hover {
+    color: #4338CA;
+    text-decoration: underline;
+}
+
+.file-card-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    align-self: flex-start;
+    padding-left: 12px;
+    flex-wrap: nowrap;
+}
+
+.file-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    min-width: 85px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+}
+
+.action-detail {
+    background: #F8FAFC;
+    color: #4F46E5;
+    border: 1px solid #E2E8F0;
+}
+
+.action-detail:hover {
+    background: #F1F5F9;
+    border-color: #4F46E5;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
+}
+
+.action-download {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border: 1px solid #10B981;
+}
+
+.action-download:hover {
+    background: linear-gradient(135deg, #059669, #047857);
+    border-color: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.action-delete {
+    background: #F9FAFB;
+    color: #EF4444;
+    border: 1px solid #F3F4F6;
+}
+
+.action-delete:hover {
+    background: #F3F4F6;
+    border-color: #EF4444;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
 }
 
 /* 访问记录 */

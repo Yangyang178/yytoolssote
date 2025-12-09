@@ -1,0 +1,311 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="blog-container">
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">yytoolssite博客</h1>
+            <p class="page-subtitle">分享技术、生活和思考</p>
+        </div>
+        
+        <!-- 博客文章列表 -->
+        <div class="blog-posts">
+            <!-- 示例文章1 -->
+            <article class="blog-post">
+                <div class="post-header">
+                    <h2 class="post-title">Flask框架入门教程</h2>
+                    <div class="post-meta">
+                        <span class="post-date">2025-12-01</span>
+                        <span class="post-category">技术教程</span>
+                    </div>
+                </div>
+                <div class="post-excerpt">
+                    <p>Flask是一个轻量级的Python Web框架，适合快速开发Web应用。本文将介绍Flask的基本概念和使用方法，包括路由、模板、表单处理等...</p>
+                </div>
+                <div class="post-footer">
+                    <a href="#" class="btn-read-more">阅读全文</a>
+                </div>
+            </article>
+            
+            <!-- 示例文章2 -->
+            <article class="blog-post">
+                <div class="post-header">
+                    <h2 class="post-title">AI技术在文件管理中的应用</h2>
+                    <div class="post-meta">
+                        <span class="post-date">2025-11-25</span>
+                        <span class="post-category">AI技术</span>
+                    </div>
+                </div>
+                <div class="post-excerpt">
+                    <p>随着AI技术的发展，越来越多的应用开始集成AI功能。本文将探讨AI技术在文件管理系统中的应用，包括智能分类、内容提取、自动标签等...</p>
+                </div>
+                <div class="post-footer">
+                    <a href="#" class="btn-read-more">阅读全文</a>
+                </div>
+            </article>
+            
+            <!-- 示例文章3 -->
+            <article class="blog-post">
+                <div class="post-header">
+                    <h2 class="post-title">前端开发最佳实践</h2>
+                    <div class="post-meta">
+                        <span class="post-date">2025-11-20</span>
+                        <span class="post-category">前端开发</span>
+                    </div>
+                </div>
+                <div class="post-excerpt">
+                    <p>前端开发是Web应用的重要组成部分，良好的前端实践可以提高开发效率和用户体验。本文将分享一些前端开发的最佳实践，包括代码组织、性能优化、响应式设计等...</p>
+                </div>
+                <div class="post-footer">
+                    <a href="#" class="btn-read-more">阅读全文</a>
+                </div>
+            </article>
+        </div>
+        
+        <!-- 分页 -->
+        <div class="pagination">
+            <a href="#" class="page-btn page-prev">上一页</a>
+            <a href="#" class="page-btn page-active">1</a>
+            <a href="#" class="page-btn">2</a>
+            <a href="#" class="page-btn">3</a>
+            <a href="#" class="page-btn page-next">下一页</a>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 博客页面样式 */
+:root {
+    --primary-color: #4F46E5;
+    --primary-hover: #4338CA;
+    --secondary-color: #64748B;
+    --success-color: #10B981;
+    --warning-color: #F59E0B;
+    --danger-color: #EF4444;
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F8FAFC;
+    --bg-tertiary: #F1F5F9;
+    --text-primary: #1E293B;
+    --text-secondary: #64748B;
+    --text-muted: #94A3B8;
+    --border-color: #E2E8F0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 博客容器 */
+.blog-container {
+    min-height: calc(100vh - 120px);
+    background: var(--bg-secondary);
+    padding: 40px 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+/* 页面头部 */
+.page-header {
+    text-align: center;
+    margin-bottom: 50px;
+}
+
+.page-title {
+    font-size: 3rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin: 0 0 12px;
+}
+
+.page-subtitle {
+    font-size: 1.2rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* 博客文章列表 */
+.blog-posts {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+}
+
+/* 博客文章卡片 */
+.blog-post {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 30px;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+}
+
+.blog-post:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+    border-color: var(--primary-color);
+}
+
+/* 文章头部 */
+.post-header {
+    margin-bottom: 20px;
+}
+
+.post-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0 0 12px;
+    transition: var(--transition);
+}
+
+.post-title:hover {
+    color: var(--primary-color);
+}
+
+.post-meta {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.post-date {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.post-category {
+    background: var(--bg-tertiary);
+    color: var(--primary-color);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+}
+
+/* 文章摘要 */
+.post-excerpt {
+    margin-bottom: 20px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+}
+
+.post-excerpt p {
+    margin: 0;
+}
+
+/* 文章底部 */
+.post-footer {
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+}
+
+.btn-read-more {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--primary-color);
+    color: white;
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-read-more:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* 分页 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 50px;
+}
+
+.page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.page-btn:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.page-btn.page-active {
+    background: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.page-btn.page-prev,
+.page-btn.page-next {
+    width: auto;
+    padding: 0 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .blog-container {
+        padding: 20px 0;
+    }
+    
+    .page-title {
+        font-size: 2rem;
+    }
+    
+    .page-subtitle {
+        font-size: 1rem;
+    }
+    
+    .blog-post {
+        padding: 20px;
+    }
+    
+    .post-title {
+        font-size: 1.5rem;
+    }
+    
+    .post-meta {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .pagination {
+        gap: 5px;
+    }
+    
+    .page-btn {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9rem;
+    }
+}
+</style>
+{% endblock %}

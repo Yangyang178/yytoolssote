@@ -462,6 +462,13 @@ def upload_page():
     return render_template("upload_page.html", username=session.get('username'))
 
 
+@app.get("/blog_page")
+def blog_page():
+    """博客页面"""
+    init_db()
+    return render_template("blog_page.html", username=session.get('username'))
+
+
 @app.get("/ai_page")
 def ai_page():
     """AI对话页面"""
