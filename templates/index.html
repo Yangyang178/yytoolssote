@@ -61,6 +61,9 @@
     <div class="search-container">
       <div class="search-box">
         <input type="text" id="file-search" placeholder="搜索文件名或项目名称..." class="search-input">
+        <button class="clear-btn" id="clear-search" onclick="clearSearch()" style="display: none;">
+          <span class="clear-icon">×</span>
+        </button>
         <button class="search-btn" onclick="searchFiles()">
           <span class="search-icon">🔍</span>
         </button>
@@ -363,6 +366,14 @@ function searchFiles() {
   const searchInput = document.getElementById('file-search');
   const searchTerm = searchInput.value.toLowerCase().trim();
   const fileCards = document.querySelectorAll('.file-card');
+  const clearBtn = document.getElementById('clear-search');
+  
+  // 显示/隐藏清除按钮
+  if (searchTerm === '') {
+    clearBtn.style.display = 'none';
+  } else {
+    clearBtn.style.display = 'flex';
+  }
   
   fileCards.forEach(card => {
     const searchData = card.dataset.search.toLowerCase();
@@ -374,6 +385,24 @@ function searchFiles() {
   });
 }
 
+// 清除搜索内容
+function clearSearch() {
+  const searchInput = document.getElementById('file-search');
+  const clearBtn = document.getElementById('clear-search');
+  const fileCards = document.querySelectorAll('.file-card');
+  
+  // 清除输入内容
+  searchInput.value = '';
+  
+  // 隐藏清除按钮
+  clearBtn.style.display = 'none';
+  
+  // 显示所有文件卡片
+  fileCards.forEach(card => {
+    card.style.display = 'block';
+  });
+}
+
 // 回车键触发搜索
 window.addEventListener('DOMContentLoaded', () => {
   // 初始化文件互动状态
@@ -382,12 +411,28 @@ window.addEventListener('DOMContentLoaded', () => {
   // 绑定事件监听
   bindInteractionEvents();
   
-  // 添加搜索框回车键事件监听
   const searchInput = document.getElementById('file-search');
+  const clearBtn = document.getElementById('clear-search');
+  
+  // 添加搜索框回车键事件监听
   if (searchInput) {
     searchInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         searchFiles();
+      }
+    });
+    
+    // 监听输入变化，显示/隐藏清除按钮
+    searchInput.addEventListener('input', function() {
+      if (this.value === '') {
+        clearBtn.style.display = 'none';
+        // 显示所有文件卡片
+        const fileCards = document.querySelectorAll('.file-card');
+        fileCards.forEach(card => {
+          card.style.display = 'block';
+        });
+      } else {
+        clearBtn.style.display = 'flex';
       }
     });
   }
@@ -531,6 +576,7 @@ window.addEventListener('DOMContentLoaded', () => {
   overflow: hidden;
   border: 2px solid #E2E8F0;
   transition: all 0.3s ease;
+  position: relative;
 }
 
 .search-box:focus-within {
@@ -540,7 +586,7 @@ window.addEventListener('DOMContentLoaded', () => {
 
 .search-input {
   flex: 1;
-  padding: 16px 20px;
+  padding: 16px 50px 16px 20px;
   border: none;
   outline: none;
   font-size: 16px;
@@ -551,6 +597,42 @@ window.addEventListener('DOMContentLoaded', () => {
 .search-input::placeholder {
   color: #94A3B8;
   font-size: 15px;
+}
+
+/* 清除按钮样式 */
+.clear-btn {
+  position: absolute;
+  right: 90px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: #94A3B8;
+  cursor: pointer;
+  font-size: 20px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.clear-btn:hover {
+  background: #F1F5F9;
+  color: #1E293B;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.clear-btn:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.clear-icon {
+  font-size: 18px;
+  font-weight: bold;
 }
 
 .search-btn {

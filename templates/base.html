@@ -211,9 +211,63 @@
     margin: 0 auto;
     padding: 28px;
   }
+  
+  /* 页脚样式 */
+  .site-footer {
+    background: #1a1a1a;
+    color: #ffffff;
+    padding: 20px 0;
+    margin-top: 40px;
+    border-top: 1px solid #333;
+  }
+  
+  .site-footer .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+  }
+  
+  .footer-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    font-size: 14px;
+    color: #aaa;
+  }
+  
+  .footer-content a {
+    color: #aaa;
+    text-decoration: none;
+    transition: color 0.3s ease;
+  }
+  
+  .footer-content a:hover {
+    color: #fff;
+  }
+  
+  .copyright {
+    margin-right: 10px;
+  }
+  
+  .icp-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
   </style>
   <footer class="site-footer">
-    <div class="container">Powered by Python + HTML · DKFile 集成</div>
+    <div class="container">
+      <div class="footer-content">
+        <div class="copyright">© 2025 杨扬</div>
+        <div class="icp-info">
+          <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">蒙ICP备2025033131号-1</a>
+          <img src="https://beian.miit.gov.cn/images/ghs.png" alt="公安备案" style="margin-left: 8px; vertical-align: middle; height: 20px;">
+        </div>
+        <div class="powered-by">Powered by Python + HTML · DKFile 集成</div>
+      </div>
+    </div>
   </footer>
 </body>
 </html>
