@@ -1232,6 +1232,17 @@ def api_get_interactions(file_id):
         conn.close()
 
 
+@app.before_request
+def force_https():
+    # 在生产环境中强制使用HTTPS
+    if request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https':
+        pass
+    else:
+        # 对于Vercel部署，使用X-Forwarded-Host头
+        url = request.url.replace('http://', 'https://')
+        return redirect(url, code=301)
+
+
 @app.after_request
 def add_cache_control(response):
     if request.path.endswith('.css') or request.path.endswith('.js'):
