@@ -9,13 +9,15 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "app.py",
-      "headers": [
-        {
-          "key": "Strict-Transport-Security",
-          "value": "max-age=31536000; includeSubDomains"
-        }
-      ]
+      "dest": "app.py"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": {
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+      }
     }
   ]
 }
