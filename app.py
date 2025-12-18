@@ -1235,12 +1235,8 @@ def api_get_interactions(file_id):
 @app.before_request
 def force_https():
     # 在生产环境中强制使用HTTPS
-    if request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https':
-        pass
-    else:
-        # 对于Vercel部署，使用X-Forwarded-Host头
-        url = request.url.replace('http://', 'https://')
-        return redirect(url, code=301)
+    # Vercel已经自动处理HTTPS，所以这个中间件可能导致问题，暂时注释掉
+    pass
 
 
 @app.after_request
