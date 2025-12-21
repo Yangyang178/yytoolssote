@@ -1,0 +1,534 @@
+/* 上传页面专用样式 */
+:root {
+  --upload-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --upload-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  --upload-bg: #f8fafc;
+  --upload-card-bg: #ffffff;
+  --upload-text: #0f172a;
+  --upload-text-secondary: #64748b;
+  --upload-border: #e2e8f0;
+  --upload-success: #10b981;
+  --upload-danger: #ef4444;
+  --upload-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  --upload-radius: 16px;
+}
+
+/* 修复导航栏遮挡问题 */
+.upload-container {
+  min-height: 100vh;
+  padding: 120px 20px 80px;
+  margin: 0;
+  background: var(--upload-bg);
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* 页面背景装饰 */
+.upload-container::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 800px;
+  height: 800px;
+  background: var(--upload-gradient);
+  opacity: 0.05;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+.upload-container::after {
+  content: '';
+  position: absolute;
+  bottom: -40%;
+  left: -10%;
+  width: 600px;
+  height: 600px;
+  background: var(--upload-secondary);
+  opacity: 0.05;
+  border-radius: 50%;
+  filter: blur(60px);
+  z-index: 0;
+}
+
+/* 容器居中 */
+.upload-container .container {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* 页面标题区域 */
+.upload-header {
+  text-align: center;
+  margin-bottom: 60px;
+  padding: 0 20px;
+}
+
+.upload-title {
+  font-size: 3rem;
+  font-weight: 800;
+  background: var(--upload-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
+  letter-spacing: -0.5px;
+}
+
+.upload-subtitle {
+  font-size: 1.25rem;
+  color: var(--upload-text-secondary);
+  margin: 0;
+  font-weight: 400;
+}
+
+/* 卡片样式 */
+.upload-form-card {
+  background: var(--upload-card-bg);
+  border-radius: var(--upload-radius);
+  padding: 48px;
+  box-shadow: var(--upload-shadow);
+  border: 1px solid var(--upload-border);
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.upload-form-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--upload-gradient);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.3s ease;
+}
+
+.upload-form-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.upload-form-card:hover::before {
+  transform: scaleX(1);
+}
+
+/* 表单区域样式 */
+.form-section {
+  margin-bottom: 40px;
+  padding-bottom: 32px;
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+  margin-bottom: 32px;
+  padding-bottom: 0;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--upload-text);
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.section-title::before {
+  content: '';
+  width: 4px;
+  height: 24px;
+  background: var(--upload-gradient);
+  border-radius: 2px;
+}
+
+/* 文件上传区域 */
+.form-group {
+  margin-bottom: 28px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 12px;
+  font-weight: 600;
+  color: var(--upload-text);
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.file-upload {
+  position: relative;
+  width: 100%;
+}
+
+.file-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.file-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 240px;
+  border: 3px dashed #cbd5e1;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.file-label::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--upload-gradient);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.file-label:hover {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(102, 126, 234, 0.15);
+}
+
+.file-label:hover::before {
+  opacity: 0.05;
+}
+
+.file-label.dragover {
+  border-color: #667eea;
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+  box-shadow: 0 16px 32px rgba(102, 126, 234, 0.2);
+}
+
+.file-label.dragover::before {
+  opacity: 0.1;
+}
+
+.file-icon {
+  font-size: 5rem;
+  margin-bottom: 16px;
+  z-index: 1;
+  color: #667eea;
+  transition: all 0.3s ease;
+}
+
+.file-label:hover .file-icon {
+  transform: scale(1.1);
+}
+
+.file-text {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--upload-text-secondary);
+  z-index: 1;
+  transition: all 0.3s ease;
+  text-align: center;
+  max-width: 80%;
+}
+
+.file-label:hover .file-text {
+  color: #667eea;
+}
+
+.form-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--upload-text-secondary);
+  line-height: 1.5;
+}
+
+/* 输入框样式 */
+.form-input,
+.form-textarea {
+  width: 100%;
+  padding: 16px 20px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 16px;
+  background: #f8fafc;
+  color: var(--upload-text);
+  transition: all 0.3s ease;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  background: white;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  transform: translateY(-1px);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 120px;
+  line-height: 1.6;
+}
+
+/* 项目名称输入框 */
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.half {
+  flex: 1;
+}
+
+/* 复选框样式 */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkbox-input {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #667eea;
+  transition: all 0.2s ease;
+}
+
+.checkbox-input:hover {
+  transform: scale(1.1);
+}
+
+.checkbox-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--upload-text);
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.checkbox-label:hover {
+  color: #667eea;
+}
+
+/* 表单操作按钮 */
+.form-actions {
+  display: flex;
+  gap: 20px;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 40px;
+}
+
+/* 按钮样式 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 32px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translate(-50%, -50%);
+  transition: width 0.6s, height 0.6s;
+}
+
+.btn:hover::before {
+  width: 300px;
+  height: 300px;
+}
+
+.btn-cancel {
+  background: #f1f5f9;
+  color: var(--upload-text);
+  border: 2px solid #e2e8f0;
+}
+
+.btn-cancel:hover {
+  background: #e2e8f0;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.btn-primary {
+  background: var(--upload-gradient);
+  color: white;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(102, 126, 234, 0.4);
+}
+
+.btn-submit {
+  padding: 16px 40px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.btn-icon {
+  font-size: 20px;
+  z-index: 1;
+}
+
+.btn-text {
+  z-index: 1;
+}
+
+/* 动画效果 */
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 为页面元素添加动画 */
+.upload-header {
+  animation: fadeInDown 0.8s ease-out;
+}
+
+.upload-title {
+  animation: fadeInDown 0.8s ease-out;
+}
+
+.upload-subtitle {
+  animation: fadeInUp 0.8s ease-out 0.2s both;
+}
+
+.upload-form-card {
+  animation: fadeInUp 0.8s ease-out 0.4s both;
+  transform: translateY(20px);
+  opacity: 0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .upload-container {
+    padding: 100px 16px 60px;
+  }
+
+  .upload-title {
+    font-size: 2rem;
+  }
+
+  .upload-subtitle {
+    font-size: 1rem;
+  }
+
+  .upload-form-card {
+    padding: 32px 20px;
+  }
+
+  .form-row {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 16px;
+  }
+
+  .btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .file-label {
+    height: 200px;
+  }
+
+  .file-icon {
+    font-size: 3.5rem;
+  }
+
+  .file-text {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .upload-title {
+    font-size: 1.75rem;
+  }
+
+  .upload-form-card {
+    padding: 24px 16px;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+
+  .file-label {
+    height: 180px;
+  }
+
+  .file-icon {
+    font-size: 3rem;
+  }
+
+  .file-text {
+    font-size: 14px;
+  }
+}

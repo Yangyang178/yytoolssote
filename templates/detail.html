@@ -1,45 +1,86 @@
 {% extends 'base.html' %}
 {% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='blog.css') }}">
 {% if not_found %}
   <div class="empty">未找到文件</div>
 {% else %}
-  <section class="panel" style="margin-top: 160px; padding: 30px;">
-    <h2>文件详情</h2>
-    <div class="grid">
-      <div>
-        <div class="kv"><span>文件名</span><strong>{{ item.filename }}</strong></div>
-        <div class="kv"><span>大小</span><strong>{{ (item.size or 0) | int }} B</strong></div>
-        <div class="kv"><span>本地路径</span><strong>{{ item.path }}</strong></div>
-        {% if item.project_name %}
-        <div class="kv"><span>项目名称</span><strong>{{ item.project_name }}</strong></div>
-        {% endif %}
-        {% if item.project_desc %}
-        <div class="kv"><span>项目描述</span><strong>{{ item.project_desc }}</strong></div>
-        {% endif %}
-        <div class="actions">
-          <a class="btn" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
+  <div class="detail-container">
+    <section class="file-detail-panel">
+      <h1>文件详情</h1>
+      
+      <!-- 文件基本信息 -->
+      <div class="detail-section">
+        <h2>基本信息</h2>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">文件名</span>
+            <strong class="detail-value">{{ item.filename }}</strong>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">文件大小</span>
+            <strong class="detail-value">{{ (item.size or 0) | int }} B</strong>
+          </div>
+          <div class="detail-item full-width">
+            <span class="detail-label">本地路径</span>
+            <strong class="detail-value">{{ item.path }}</strong>
+          </div>
+          {% if item.project_name %}
+          <div class="detail-item">
+            <span class="detail-label">项目名称</span>
+            <strong class="detail-value">{{ item.project_name }}</strong>
+          </div>
+          {% endif %}
+          {% if item.project_desc %}
+          <div class="detail-item full-width">
+            <span class="detail-label">项目描述</span>
+            <strong class="detail-value">{{ item.project_desc }}</strong>
+          </div>
+          {% endif %}
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="detail-actions">
+          <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
-            <button class="btn danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
+            <button class="btn btn-danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
           </form>
         </div>
       </div>
-      <div>
-        <h3>DKFile 响应</h3>
+      
+      <!-- DKFile 响应信息 -->
+      <div class="detail-section">
+        <h2>DKFile 响应</h2>
         {% if item.dkfile %}
           {% set d = item.dkfile.data if item.dkfile and item.dkfile.success else None %}
           {% if d and d.url %}
-            <div class="kv"><span>远端地址</span><strong><a href="{{ d.url }}" target="_blank">{{ d.url }}</a></strong></div>
-            <div class="kv"><span>创建时间</span><strong>{{ d.created_at }}</strong></div>
-            {% if d.updated_at %}
-            <div class="kv"><span>更新时间</span><strong>{{ d.updated_at }}</strong></div>
-            {% endif %}
+            <div class="dkfile-info">
+              <div class="detail-grid">
+                <div class="detail-item full-width">
+                  <span class="detail-label">远端地址</span>
+                  <strong class="detail-value"><a href="{{ d.url }}" target="_blank" rel="noopener noreferrer">{{ d.url }}</a></strong>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">创建时间</span>
+                  <strong class="detail-value">{{ d.created_at }}</strong>
+                </div>
+                {% if d.updated_at %}
+                <div class="detail-item">
+                  <span class="detail-label">更新时间</span>
+                  <strong class="detail-value">{{ d.updated_at }}</strong>
+                </div>
+                {% endif %}
+              </div>
+            </div>
           {% endif %}
-          <pre class="code">{{ item.dkfile | tojson(indent=2) }}</pre>
+          <div class="code-section">
+            <h3>完整响应</h3>
+            <pre class="code">{{ item.dkfile | tojson(indent=2) }}</pre>
+          </div>
         {% else %}
-          <div class="empty">暂无</div>
+          <div class="empty">暂无 DKFile 响应</div>
         {% endif %}
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 {% endif %}
 {% endblock %}

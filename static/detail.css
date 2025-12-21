@@ -1,0 +1,124 @@
+/* 文件详情页面样式 */
+.file-detail-panel {
+    margin-top: 160px;
+    padding: 30px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.empty {
+    text-align: center;
+    padding: 100px 20px;
+    font-size: 1.25rem;
+    color: #64748B;
+}
+
+/* 详情网格布局 */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 24px;
+    margin-top: 24px;
+}
+
+/* 键值对样式 */
+.kv {
+    display: flex;
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #F8FAFC;
+    border-radius: 8px;
+    border-left: 4px solid #4F46E5;
+}
+
+.kv span {
+    font-weight: 600;
+    color: #64748B;
+    min-width: 120px;
+    margin-right: 16px;
+}
+
+.kv strong {
+    color: #1E293B;
+    flex: 1;
+    word-break: break-word;
+}
+
+/* 操作按钮样式 */
+.actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+    flex-wrap: wrap;
+}
+
+.actions .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.actions .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 下载按钮 */
+.actions .btn:first-child {
+    background-color: #4F46E5;
+    color: white;
+}
+
+.actions .btn:first-child:hover {
+    background-color: #4338CA;
+}
+
+/* 返回按钮 */
+.actions .btn:last-child {
+    background-color: #F1F5F9;
+    color: #1E293B;
+}
+
+.actions .btn:last-child:hover {
+    background-color: #E2E8F0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .file-detail-panel {
+        margin-top: 120px;
+        padding: 20px;
+    }
+    
+    .grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .kv {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .kv span {
+        min-width: auto;
+        margin-right: 0;
+    }
+    
+    .actions {
+        flex-direction: column;
+    }
+    
+    .actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

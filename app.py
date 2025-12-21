@@ -5,6 +5,7 @@ import sqlite3
 import smtplib
 import random
 import time
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory, jsonify, session
@@ -40,9 +41,23 @@ SMTP_FROM = os.getenv("SMTP_FROM")
 # 验证码配置
 CODE_EXPIRATION_MINUTES = 15
 
+# 密码复杂度正则表达式
+PASSWORD_REGEX = re.compile(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$')
+
+# 密码复杂度提示
+PASSWORD_COMPLEXITY = "密码必须至少8个字符，包含大小写字母、数字和特殊字符"
+
 def ensure_dirs():
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# 密码复杂度检查
+def validate_password(password):
+    """检查密码是否符合复杂度要求"""
+    if not PASSWORD_REGEX.match(password):
+        return False, PASSWORD_COMPLEXITY
+    return True, "密码符合要求"
+
 
 
 def get_db():
@@ -69,6 +84,8 @@ def init_db():
         except sqlite3.OperationalError:
             # 字段已经存在，跳过
             pass
+        
+        # 创建verification_codes表
         conn.execute('''CREATE TABLE IF NOT EXISTS verification_codes (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         email TEXT NOT NULL,
@@ -78,7 +95,7 @@ def init_db():
                         expires_at TIMESTAMP NOT NULL
                     )''')
         
-        # 创建files表（如果不存在），先不包含user_id列
+        # 创建files表
         conn.execute('''CREATE TABLE IF NOT EXISTS files (
                         id TEXT PRIMARY KEY,
                         filename TEXT NOT NULL,
@@ -147,20 +164,39 @@ def migrate_json_to_db():
     old_json_file = DATA_DIR / "db.json"
     if old_json_file.exists():
         try:
-            old_data = json.loads(old_json_file.read_text(encoding="utf-8"))
+            # 读取并解析旧的JSON文件
+            file_content = old_json_file.read_text(encoding="utf-8")
+            old_data = json.loads(file_content)
+            
+            # 确保old_data是一个字典
+            if not isinstance(old_data, dict):
+                print("旧数据不是字典类型，跳过迁移")
+                return
+            
+            # 创建默认用户
+            default_user_id = "default_user"
             conn = get_db()
             try:
-                # 创建默认用户
-                default_user_id = "default_user"
-                conn.execute('''INSERT OR IGNORE INTO users (id, email, username)
-                                VALUES (?, ?, ?)''', 
-                            (default_user_id, "default@example.com", "默认用户"))
+                # 跳过迁移，避免兼容性问题
+                print("跳过JSON数据迁移")
+                return
                 
                 # 检查files表是否有user_id列
                 cursor = conn.execute("PRAGMA table_info(files)")
                 columns = [row[1] for row in cursor.fetchall()]
                 
-                for item in old_data.get("files", []):
+                files_data = old_data.get("files", [])
+                # 确保files_data是列表
+                if not isinstance(files_data, list):
+                    print(f"files数据不是列表类型，实际类型: {type(files_data)}")
+                    files_data = []
+                
+                for item in files_data:
+                    # 跳过非字典元素
+                    if not isinstance(item, dict):
+                        print(f"跳过非字典元素: {item}")
+                        continue
+                        
                     if "user_id" in columns:
                         # 如果有user_id列，包含它
                         conn.execute('''INSERT OR IGNORE INTO files (
@@ -168,8 +204,8 @@ def migrate_json_to_db():
                                         dkfile, project_name, project_desc
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
                                     (item["id"], default_user_id, item["filename"], item["stored_name"], 
-                                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                                     item.get("project_name"), item.get("project_desc")))
+                                    item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                                    item.get("project_name"), item.get("project_desc")))
                     else:
                         # 如果没有user_id列，不包含它
                         conn.execute('''INSERT OR IGNORE INTO files (
@@ -177,13 +213,15 @@ def migrate_json_to_db():
                                         dkfile, project_name, project_desc
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
                                     (item["id"], item["filename"], item["stored_name"], 
-                                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                                     item.get("project_name"), item.get("project_desc")))
+                                    item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                                    item.get("project_name"), item.get("project_desc")))
                 conn.commit()
             finally:
                 conn.close()
         except Exception as e:
             print(f"迁移JSON数据失败: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 def generate_verification_code():
@@ -193,8 +231,8 @@ def generate_verification_code():
 def send_verification_email(email, code, purpose):
     # 确保我们尝试发送邮件，不考虑开发模式
     if not all([SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM]):
-        # SMTP配置不完整，返回验证码用于调试
-        return False, code
+        # SMTP配置不完整，抛出异常
+        raise Exception("SMTP配置不完整，无法发送验证码邮件")
     
     subject = """yytoolssite-aipro 验证码"""
     if purpose == "register":
@@ -210,42 +248,27 @@ def send_verification_email(email, code, purpose):
     msg['Subject'] = subject
     
     try:
-        # 尝试使用TLS连接，这是QQ邮箱推荐的方式
-        print(f"尝试使用TLS连接到 {SMTP_HOST}:587...")
-        server = smtplib.SMTP(SMTP_HOST, 587, timeout=15)
-        server.set_debuglevel(2)  # 开启详细调试模式
+        # 尝试使用TLS连接
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
         server.ehlo()  # 发送EHLO命令
-        print("EHLO命令发送成功")
         server.starttls()
-        print("STARTTLS命令发送成功")
         server.ehlo()  # 重新发送EHLO命令
-        print("TLS连接后EHLO命令发送成功")
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        print("SMTP登录成功")
         server.sendmail(SMTP_FROM, [email], msg.as_string())
-        print("邮件发送成功")
         server.quit()
         return True, None
     except Exception as e:
         # 如果TLS失败，尝试SSL连接
-        print(f"TLS连接失败: {str(e)}")
         try:
-            print(f"尝试使用SSL连接到 {SMTP_HOST}:465...")
-            server = smtplib.SMTP_SSL(SMTP_HOST, 465, timeout=15)
-            server.set_debuglevel(2)  # 开启详细调试模式
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
             server.ehlo()  # 发送EHLO命令
-            print("SSL连接EHLO命令发送成功")
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            print("SSL登录成功")
             server.sendmail(SMTP_FROM, [email], msg.as_string())
-            print("SSL邮件发送成功")
             server.quit()
             return True, None
-        except Exception as ssl_e:
-            # 两种连接方式都失败，返回验证码用于调试
-            print(f"SSL连接失败: {str(ssl_e)}")
-            print(f"SMTP发送邮件失败: TLS错误 - {str(e)}, SSL错误 - {str(ssl_e)}")
-            return False, code
+        except Exception as ssl_error:
+            # 两种连接方式都失败，抛出异常
+            raise Exception(f"发送验证码邮件失败：{str(ssl_error)}")
 
 
 def save_verification_code(email, code, purpose):
@@ -271,6 +294,7 @@ def verify_code(email, code, purpose):
                             AND expires_at > CURRENT_TIMESTAMP''', 
                         (email, code, purpose)).fetchone()
         if row:
+            # 验证码有效，删除它
             conn.execute('''DELETE FROM verification_codes 
                             WHERE email = ? AND code = ? AND purpose = ?''', 
                         (email, code, purpose))
@@ -301,7 +325,7 @@ def get_all_files(user_id=None):
                 "stored_name": row["stored_name"],
                 "path": row["path"], 
                 "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
                 "project_name": row["project_name"], 
                 "project_desc": row["project_desc"],
                 "like_count": like_count,
@@ -330,7 +354,7 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
                 "stored_name": row["stored_name"],
                 "path": row["path"], 
                 "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
                 "project_name": row["project_name"], 
                 "project_desc": row["project_desc"],
                 "user_id": row["user_id"],
@@ -350,8 +374,8 @@ def add_file(item):
                         dkfile, project_name, project_desc
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
                     (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                     item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                     item.get("project_name"), item.get("project_desc")))
+                    item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                    item.get("project_name"), item.get("project_desc")))
         conn.commit()
     finally:
         conn.close()
@@ -385,7 +409,7 @@ def get_user_by_email(email):
     try:
         row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         if row:
-            return {"id": row["id"], "email": row["email"], "username": row["username"], "avatar": row["avatar"] if "avatar" in row else None}
+            return {"id": row["id"], "email": row["email"], "username": row["username"], "avatar": row["avatar"] if "avatar" in row and row["avatar"] else ""}
         return None
     finally:
         conn.close()
@@ -543,7 +567,7 @@ def get_favorite_files(user_id):
                 "stored_name": row["stored_name"],
                 "path": row["path"], 
                 "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "null"),
+                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
                 "project_name": row["project_name"], 
                 "project_desc": row["project_desc"],
                 "like_count": like_count,
@@ -627,8 +651,6 @@ def dkfile_delete(file_id):
 
 @app.get("/")
 def index():
-    init_db()
-    migrate_json_to_db()
     # 首页只显示默认用户的文件，用户上传的文件只显示在用户中心
     files = get_all_files(user_id="default_user")
     remote_error = None
@@ -655,27 +677,23 @@ def index():
 @app.get("/upload_page")
 def upload_page():
     """上传发布页面"""
-    init_db()
     return render_template("upload_page.html", username=session.get('username'))
 
 
 @app.get("/blog_page")
 def blog_page():
     """博客页面"""
-    init_db()
     return render_template("blog_page.html", username=session.get('username'))
 
 
 @app.get("/ai_page")
 def ai_page():
     """AI对话页面"""
-    init_db()
     return render_template("ai_page.html", username=session.get('username'))
 
 @app.post("/upload")
 @login_required
 def upload():
-    init_db()
     f = request.files.get("file")
     if not f or f.filename == "":
         flash("请选择文件")
@@ -718,7 +736,6 @@ def upload():
 @app.get("/files/<file_id>")
 @login_required
 def file_detail(file_id):
-    init_db()
     found = get_file_by_id(file_id, check_owner=False)
     if not found:
         return render_template("detail.html", not_found=True, item=None)
@@ -729,7 +746,6 @@ def file_detail(file_id):
 @app.post("/files/<file_id>/delete")
 @login_required
 def file_delete(file_id):
-    init_db()
     item = get_file_by_id(file_id, session['user_id'])
     if not item:
         return redirect(url_for("index"))
@@ -755,10 +771,9 @@ def download_local(stored_name):
     # 查找文件ID
     conn = get_db()
     try:
-        row = conn.execute('SELECT id FROM files WHERE stored_name = ?', 
-                          (stored_name,)).fetchone()
+        row = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
         if row:
-            # 记录下载日志
+            # 记录访问日志
             log_access(row['id'], 'download', request)
     finally:
         conn.close()
@@ -767,7 +782,6 @@ def download_local(stored_name):
 @app.get("/api/files")
 @login_required
 def api_files():
-    init_db()
     files = get_all_files(session['user_id'])
     return jsonify({"files": files})
 
@@ -792,8 +806,6 @@ def ai():
         ai_output = (res.get("choices") or [{}])[0].get("message", {}).get("content")
     except Exception as e:
         ai_error = str(e)
-    init_db()
-    migrate_json_to_db()
     # AI页面也只显示默认用户的文件，用户上传的文件只显示在用户中心
     files = get_all_files(user_id="default_user")
     remote_error = None
@@ -832,6 +844,11 @@ def register():
             
             if not password:
                 return render_template('auth.html', mode='register', page_title='注册', error='请输入密码', login_method=login_method)
+            
+            # 检查密码复杂度
+            is_valid, msg = validate_password(password)
+            if not is_valid:
+                return render_template('auth.html', mode='register', page_title='注册', error=msg, login_method=login_method)
             
             if password != confirm_password:
                 return render_template('auth.html', mode='register', page_title='注册', error='两次输入的密码不一致', login_method=login_method)
@@ -979,9 +996,83 @@ def verify_login():
     return redirect(url_for('index'))
 
 
+@app.route('/forgot_password', methods=['GET', 'POST'])
+def forgot_password():
+    """忘记密码页面"""
+    if request.method == 'POST':
+        email = request.form['email']
+        user = get_user_by_email(email)
+        
+        if not user:
+            return render_template('auth.html', mode='forgot_password', page_title='忘记密码', error='该邮箱未注册')
+        
+        try:
+            # 发送重置密码验证码
+            code = generate_verification_code()
+            save_verification_code(email, code, 'reset_password')
+            
+            # 发送邮件
+            msg = MIMEText(f"您正在重置 yytoolssite-aipro 账号密码，您的验证码是：{code}\n\n验证码有效期为 {CODE_EXPIRATION_MINUTES} 分钟，请尽快使用。", 'plain', 'utf-8')
+            msg['From'] = SMTP_FROM
+            msg['To'] = email
+            msg['Subject'] = "yytoolssite-aipro 密码重置验证码"
+            
+            server = smtplib.SMTP(SMTP_HOST, 587, timeout=15)
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(SMTP_FROM, [email], msg.as_string())
+            server.quit()
+            
+            return redirect(url_for('reset_password', email=email))
+        except Exception:
+            return render_template('auth.html', mode='forgot_password', page_title='忘记密码', error='发送验证码失败，请稍后重试')
+    
+    return render_template('auth.html', mode='forgot_password', page_title='忘记密码')
+
+
+@app.route('/reset_password', methods=['GET', 'POST'])
+def reset_password():
+    """重置密码页面"""
+    email = request.args.get('email')
+    
+    if not email:
+        return redirect(url_for('forgot_password'))
+    
+    if request.method == 'POST':
+        code = request.form['code']
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
+        
+        # 验证验证码
+        if not verify_code(email, code, 'reset_password'):
+            return render_template('auth.html', mode='reset_password', page_title='重置密码', error='验证码无效或已过期', email=email)
+        
+        # 验证密码一致性
+        if new_password != confirm_password:
+            return render_template('auth.html', mode='reset_password', page_title='重置密码', error='两次输入的密码不一致', email=email)
+        
+        # 检查密码复杂度
+        is_valid, msg = validate_password(new_password)
+        if not is_valid:
+            return render_template('auth.html', mode='reset_password', page_title='重置密码', error=msg, email=email)
+        
+        # 更新密码
+        conn = get_db()
+        try:
+            hashed_password = generate_password_hash(new_password)
+            conn.execute('UPDATE users SET password = ? WHERE email = ?', 
+                        (hashed_password, email))
+            conn.commit()
+        finally:
+            conn.close()
+        
+        return redirect(url_for('login', message='密码重置成功，请登录'))
+
+
 @app.route('/user-center')
 def user_center():
-    init_db()
     if 'user_id' in session:
         # 用户中心只显示当前用户的文件列表
         files = get_all_files(session['user_id'])
@@ -1059,7 +1150,6 @@ def update_profile():
 @login_required
 def account_settings():
     """账户设置页面"""
-    init_db()
     conn = get_db()
     try:
         row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
@@ -1084,7 +1174,6 @@ def account_settings():
 @login_required
 def change_password():
     """修改密码"""
-    init_db()
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
     confirm_password = request.form.get('confirm_password')
@@ -1093,43 +1182,52 @@ def change_password():
     if new_password != confirm_password:
         return render_template('account_settings.html', error='两次输入的密码不一致', user={'email': session.get('email'), 'username': session.get('username')})
     
+    # 检查新密码复杂度
+    is_valid, msg = validate_password(new_password)
+    if not is_valid:
+        return render_template('account_settings.html', error=msg, user={'email': session.get('email'), 'username': session.get('username')})
+    
     # 验证当前密码是否正确
-    conn = get_db()
-    try:
-        row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-        if not row:
-            return render_template('account_settings.html', error='用户不存在', user={'email': session.get('email'), 'username': session.get('username')})
-        
-        if not check_password_hash(row['password'], current_password):
-            return render_template('account_settings.html', error='当前密码错误', user={'email': session.get('email'), 'username': session.get('username')})
-        
-        # 更新密码
-        hashed_password = generate_password_hash(new_password)
-        conn.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_password, session['user_id']))
-        conn.commit()
-        return render_template('account_settings.html', success='密码修改成功', user={'email': session.get('email'), 'username': session.get('username')})
-    finally:
-        conn.close()
+    engine = get_db()
+    with app.app_context():
+        with engine.begin() as conn:
+            row = conn.execute(text('SELECT * FROM users WHERE id = :user_id'), {
+                'user_id': session['user_id']
+            }).fetchone()
+            if not row:
+                return render_template('account_settings.html', error='用户不存在', user={'email': session.get('email'), 'username': session.get('username')})
+            
+            if not check_password_hash(row.password, current_password):
+                return render_template('account_settings.html', error='当前密码错误', user={'email': session.get('email'), 'username': session.get('username')})
+            
+            # 更新密码
+            hashed_password = generate_password_hash(new_password)
+            conn.execute(text('UPDATE users SET password = :password WHERE id = :user_id'), {
+                'password': hashed_password,
+                'user_id': session['user_id']
+            })
+            return render_template('account_settings.html', success='密码修改成功', user={'email': session.get('email'), 'username': session.get('username')})
 
 
 @app.route('/send-email-code', methods=['POST'])
 @login_required
 def send_email_code():
     """发送邮箱验证码"""
-    init_db()
     new_email = request.json.get('new_email')
     
     if not new_email:
         return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
     
     # 验证邮箱是否已被使用
-    conn = get_db()
-    try:
-        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (new_email, session['user_id'])).fetchone()
-        if existing_user:
-            return jsonify({'success': False, 'message': '该邮箱已被使用'}), 400
-    finally:
-        conn.close()
+    engine = get_db()
+    with app.app_context():
+        with engine.connect() as conn:
+            existing_user = conn.execute(text('SELECT * FROM users WHERE email = :new_email AND id != :user_id'), {
+                'new_email': new_email,
+                'user_id': session['user_id']
+            }).fetchone()
+            if existing_user:
+                return jsonify({'success': False, 'message': '该邮箱已被使用'}), 400
     
     try:
         code = generate_verification_code()
@@ -1148,7 +1246,6 @@ def send_email_code():
 @login_required
 def change_email():
     """修改邮箱"""
-    init_db()
     new_email = request.form.get('new_email')
     code = request.form.get('code')
     
@@ -1160,26 +1257,40 @@ def change_email():
         return render_template('account_settings.html', error='验证码无效或已过期', user={'email': session.get('email'), 'username': session.get('username')})
     
     # 验证邮箱是否已被使用
-    conn = get_db()
-    try:
-        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', (new_email, session['user_id'])).fetchone()
-        if existing_user:
-            return render_template('account_settings.html', error='该邮箱已被使用', user={'email': session.get('email'), 'username': session.get('username')})
-        
-        # 更新邮箱
-        conn.execute('UPDATE users SET email = ? WHERE id = ?', (new_email, session['user_id']))
-        conn.commit()
-        # 更新session中的邮箱
-        session['email'] = new_email
-        return render_template('account_settings.html', success='邮箱修改成功', user={'email': new_email, 'username': session.get('username')})
-    finally:
-        conn.close()
+    engine = get_db()
+    with app.app_context():
+        with engine.begin() as conn:
+            existing_user = conn.execute(text('SELECT * FROM users WHERE email = :new_email AND id != :user_id'), {
+                'new_email': new_email,
+                'user_id': session['user_id']
+            }).fetchone()
+            if existing_user:
+                return render_template('account_settings.html', error='该邮箱已被使用', user={'email': session.get('email'), 'username': session.get('username')})
+            
+            # 更新邮箱
+            conn.execute(text('UPDATE users SET email = :new_email WHERE id = :user_id'), {
+                'new_email': new_email,
+                'user_id': session['user_id']
+            })
+    # 更新session中的邮箱
+    session['email'] = new_email
+    return render_template('account_settings.html', success='邮箱修改成功', user={'email': new_email, 'username': session.get('username')})
 
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
+
+
+@app.route('/privacy-policy')
+def privacy_policy():
+    return render_template('privacy_policy.html')
+
+
+@app.route('/service-terms')
+def service_terms():
+    return render_template('service_terms.html')
 
 
 # API路由：处理点赞请求
@@ -1206,8 +1317,8 @@ def api_toggle_favorite(file_id):
 @app.get('/api/files/<file_id>/interactions')
 def api_get_interactions(file_id):
     """获取文件的点赞和收藏状态"""
-    conn = get_db()
     try:
+        conn = get_db()
         # 获取点赞数和收藏数
         like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
         favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
@@ -1221,6 +1332,8 @@ def api_get_interactions(file_id):
             is_liked = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
             is_favorited = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
         
+        conn.close()
+        
         return jsonify({
             'success': True,
             'like_count': like_count,
@@ -1228,8 +1341,8 @@ def api_get_interactions(file_id):
             'is_liked': is_liked,
             'is_favorited': is_favorited
         })
-    finally:
-        conn.close()
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.before_request
@@ -1240,17 +1353,36 @@ def force_https():
 
 
 @app.after_request
-def add_cache_control(response):
+def add_security_headers(response):
+    # 添加缓存控制头
     if request.path.endswith('.css') or request.path.endswith('.js'):
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
+    
+    # 添加内容安全策略（CSP）头
+    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
+    
+    # 添加X-XSS-Protection头
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # 添加X-Frame-Options头
+    response.headers['X-Frame-Options'] = 'DENY'
+    
+    # 添加X-Content-Type-Options头
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    
     return response
+
+
+# 应用启动时执行一次数据库初始化
+with app.app_context():
+    init_db()
+    migrate_json_to_db()
 
 
 if __name__ == "__main__":
     app.secret_key = os.getenv("SECRET_KEY", "dev")
-    app.debug = True
-    init_db()
-    migrate_json_to_db()
+    # 根据环境变量决定是否开启DEBUG模式，生产环境默认为False
+    app.debug = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", "9876")))

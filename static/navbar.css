@@ -1,0 +1,178 @@
+/* 导航栏样式 */
+body #main-nav {
+  background: linear-gradient(90deg, #1d4ed8, #3b82f6);
+  color: #fff;
+  width: 100%;
+  padding: 15px 0;
+  margin: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: block;
+}
+
+/* 导航栏容器 */
+body #main-nav .nav-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 40px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* 导航按钮基础样式 */
+body #main-nav .nav-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 浅色按钮样式 */
+body #main-nav .nav-btn-light {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+body #main-nav .nav-btn-light:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 主色按钮样式 */
+body #main-nav .nav-btn-primary {
+  background-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+body #main-nav .nav-btn-primary:hover {
+  background-color: #fff;
+  color: #1d4ed8;
+  border-color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* 导航栏Logo样式 */
+body #main-nav .nav-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-left: 20px;
+}
+
+body #main-nav .nav-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+body #main-nav .nav-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 导航按钮容器样式 */
+body #main-nav .nav-buttons {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  margin-right: 0;
+}
+
+/* 用户菜单样式 */
+body #main-nav .nav-user-menu {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+body #main-nav .nav-username {
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* main元素样式 */
+main {
+  padding-top: 0; /* 移除padding-top，避免导航栏下方出现白边 */
+  margin-top: 0;
+}
+
+/* 消息提示容器样式 */
+.flash-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+/* 页脚样式 */
+.site-footer {
+  background: #1a1a1a;
+  color: #ffffff;
+  padding: 20px 0;
+  margin-top: 40px;
+  border-top: 1px solid #333;
+}
+
+.site-footer .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  font-size: 14px;
+  color: #aaa;
+}
+
+.footer-content a {
+  color: #aaa;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footer-content a:hover {
+  color: #fff;
+}
+
+.copyright {
+  margin-right: 10px;
+}
+
+.icp-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.icp-info img {
+  margin-left: 8px;
+  vertical-align: middle;
+  height: 20px;
+}
