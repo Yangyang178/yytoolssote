@@ -1,5 +1,6 @@
 // 初始化全局变量
 let isLoggedIn = false;
+let searchTimeout = null;
 
 // 初始化登录状态
 function initLoginStatus() {
@@ -203,7 +204,96 @@ function bindInteractionEvents() {
   });
 }
 
-// 搜索文件功能
+// 搜索历史记录功能
+const SEARCH_HISTORY_KEY = 'search_history';
+const MAX_HISTORY_ITEMS = 10;
+
+// 获取搜索历史
+function getSearchHistory() {
+  const history = localStorage.getItem(SEARCH_HISTORY_KEY);
+  return history ? JSON.parse(history) : [];
+}
+
+// 保存搜索历史
+function saveSearchHistory(term) {
+  if (!term || term.trim() === '') {
+    return;
+  }
+  
+  const history = getSearchHistory();
+  // 移除重复项
+  const filteredHistory = history.filter(item => item.toLowerCase() !== term.toLowerCase());
+  // 添加到开头
+  filteredHistory.unshift(term);
+  // 限制数量
+  const limitedHistory = filteredHistory.slice(0, MAX_HISTORY_ITEMS);
+  // 保存到localStorage
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(limitedHistory));
+}
+
+// 使用搜索历史
+function useSearchHistory(term) {
+  const searchInput = document.getElementById('file-search');
+  if (searchInput) {
+    searchInput.value = term;
+    searchFiles();
+  }
+}
+
+// 检查文件是否符合日期筛选条件
+function isDateMatch(fileDate, filterValue) {
+  if (!filterValue || !fileDate) {
+    return true;
+  }
+  
+  const now = new Date();
+  const fileDateObj = new Date(fileDate);
+  
+  switch (filterValue) {
+    case 'today':
+      return now.toDateString() === fileDateObj.toDateString();
+    case 'week':
+      const weekAgo = new Date();
+      weekAgo.setDate(now.getDate() - 7);
+      return fileDateObj >= weekAgo;
+    case 'month':
+      const monthAgo = new Date();
+      monthAgo.setMonth(now.getMonth() - 1);
+      return fileDateObj >= monthAgo;
+    case 'year':
+      const yearAgo = new Date();
+      yearAgo.setFullYear(now.getFullYear() - 1);
+      return fileDateObj >= yearAgo;
+    default:
+      return true;
+  }
+}
+
+// 检查文件是否符合大小筛选条件
+function isSizeMatch(fileSize, filterValue) {
+  if (!filterValue || fileSize === undefined) {
+    return true;
+  }
+  
+  const sizeInBytes = parseInt(fileSize);
+  const oneMB = 1024 * 1024;
+  const oneGB = oneMB * 1024;
+  
+  switch (filterValue) {
+    case 'small':
+      return sizeInBytes < oneMB;
+    case 'medium':
+      return sizeInBytes >= oneMB && sizeInBytes < 10 * oneMB;
+    case 'large':
+      return sizeInBytes >= 10 * oneMB && sizeInBytes < 100 * oneMB;
+    case 'xlarge':
+      return sizeInBytes >= 100 * oneMB;
+    default:
+      return true;
+  }
+}
+
+// 更新搜索功能，结合基本搜索和高级筛选
 function searchFiles() {
   const searchInput = document.getElementById('file-search');
   if (!searchInput) {
@@ -225,13 +315,37 @@ function searchFiles() {
   
   fileCards.forEach(card => {
     const searchData = card.dataset?.search?.toLowerCase();
-    if (searchTerm === '' || (searchData && searchData.includes(searchTerm))) {
+    
+    // 基本搜索匹配
+    const searchMatch = searchTerm === '' || (searchData && searchData.includes(searchTerm));
+    
+    // 同时满足所有筛选条件
+    if (searchMatch) {
       card.style.display = 'block';
     } else {
       card.style.display = 'none';
     }
   });
+  
+  // 保存到搜索历史
+  if (searchTerm) {
+    saveSearchHistory(searchTerm);
+  }
 }
+
+// 防抖函数
+function debounce(func, wait) {
+  return function executedFunction(...args) {
+    const context = this;
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    searchTimeout = setTimeout(() => func.apply(context, args), wait);
+  };
+}
+
+// 实时搜索 - 必须在searchFiles之后定义
+const debouncedSearch = debounce(searchFiles, 300);
 
 // 清除搜索内容
 function clearSearch() {
@@ -240,25 +354,15 @@ function clearSearch() {
     return;
   }
   
-  const clearBtn = document.getElementById('clear-search');
-  const fileCards = document.querySelectorAll('.file-card');
-  
   // 清除输入内容
   searchInput.value = '';
   
-  // 隐藏清除按钮
-  if (clearBtn) {
-    clearBtn.classList.add('hidden');
-  }
-  
-  // 显示所有文件卡片
-  fileCards.forEach(card => {
-    card.style.display = 'block';
-  });
+  // 调用searchFiles函数，让它处理清除逻辑，包括显示/隐藏清除按钮和应用所有筛选条件
+  searchFiles();
 }
 
-// 回车键触发搜索
-window.addEventListener('DOMContentLoaded', () => {
+// 页面加载完成后执行
+document.addEventListener('DOMContentLoaded', () => {
   // 初始化登录状态
   initLoginStatus();
   
@@ -273,14 +377,45 @@ window.addEventListener('DOMContentLoaded', () => {
   
   const searchInput = document.getElementById('file-search');
   const clearBtn = document.getElementById('clear-search');
+  const searchBtn = document.querySelector('.search-btn');
+  
+  // 创建搜索历史下拉容器
+  const historyContainer = document.createElement('div');
+  historyContainer.id = 'search-history';
+  historyContainer.className = 'search-history-dropdown hidden';
+  
+  // 将搜索历史容器添加到搜索框父元素
+  const searchBox = document.querySelector('.search-box');
+  if (searchBox) {
+    searchBox.appendChild(historyContainer);
+  }
   
   // 添加搜索框回车键事件监听
   if (searchInput) {
+    // 实时搜索 - 添加防抖
+    searchInput.addEventListener('input', debouncedSearch);
+    
+    // 回车键触发
     searchInput.addEventListener('keypress', function(e) {
       if (e.key === 'Enter') {
         searchFiles();
       }
     });
+    
+    // 搜索框获得焦点 - 显示搜索历史
+    searchInput.addEventListener('focus', function() {
+      if (getSearchHistory().length > 0) {
+        renderSearchHistory();
+        historyContainer.classList.remove('hidden');
+      }
+    });
+    
+    // 点击搜索按钮 - 隐藏搜索历史
+    if (searchBtn) {
+      searchBtn.addEventListener('click', function() {
+        historyContainer.classList.add('hidden');
+      });
+    }
     
     // 监听输入变化，显示/隐藏清除按钮
     searchInput.addEventListener('input', function() {
@@ -288,11 +423,6 @@ window.addEventListener('DOMContentLoaded', () => {
         if (clearBtn) {
           clearBtn.classList.add('hidden');
         }
-        // 显示所有文件卡片
-        const fileCards = document.querySelectorAll('.file-card');
-        fileCards.forEach(card => {
-          card.style.display = 'block';
-        });
       } else {
         if (clearBtn) {
           clearBtn.classList.remove('hidden');
@@ -300,4 +430,56 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  
+  // 点击页面其他区域 - 隐藏搜索历史
+  document.addEventListener('click', function(e) {
+    const isClickInside = searchBox && searchBox.contains(e.target);
+    if (!isClickInside) {
+      historyContainer.classList.add('hidden');
+    }
+  });
 });
+
+// 渲染搜索历史
+function renderSearchHistory() {
+  const history = getSearchHistory();
+  const historyContainer = document.getElementById('search-history');
+  
+  if (!historyContainer) {
+    return;
+  }
+  
+  if (history.length === 0) {
+    historyContainer.innerHTML = '<div class="search-history-empty">暂无搜索历史</div>';
+    return;
+  }
+  
+  const historyHtml = history.map(term => `
+    <div class="search-history-item" onclick="useSearchHistory('${term}')">
+      <span class="history-term">${term}</span>
+      <button class="remove-history-btn" onclick="removeSearchHistory('${term}'); event.stopPropagation();">×</button>
+    </div>
+  `).join('');
+  
+  historyContainer.innerHTML = `
+    <div class="search-history-header">
+      <span>搜索历史</span>
+      <button class="clear-history-btn" onclick="clearSearchHistory()">清空</button>
+    </div>
+    <div class="search-history-list">${historyHtml}</div>
+  `;
+}
+
+// 移除单个搜索历史
+function removeSearchHistory(term) {
+  const history = getSearchHistory();
+  const filteredHistory = history.filter(item => item !== term);
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(filteredHistory));
+  renderSearchHistory();
+}
+
+// 清空搜索历史
+function clearSearchHistory() {
+  localStorage.removeItem(SEARCH_HISTORY_KEY);
+  renderSearchHistory();
+}

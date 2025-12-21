@@ -2,9 +2,9 @@
 {% block content %}
 <div class="upload-container">
     <div class="container">
-        <div class="upload-header">
-            <h1 class="upload-title">上传发布文件</h1>
-            <p class="upload-subtitle">轻松上传、存储与管理您的文件</p>
+        <div class="page-header">
+            <h1 class="page-title">上传发布文件</h1>
+            <p class="page-subtitle">轻松上传、存储与管理您的文件</p>
         </div>
         
         <div class="upload-form-card">
@@ -18,10 +18,13 @@
                             <input type="file" id="file" name="file" required class="file-input">
                             <label for="file" class="file-label">
                                 <span class="file-icon">📁</span>
-                                <span class="file-text">点击选择文件或拖拽文件到此处</span>
+                                <div class="file-info">
+                                    <span class="file-text">点击选择文件或拖拽文件到此处</span>
+                                    <span class="file-size"></span>
+                                </div>
                             </label>
                         </div>
-                        <p class="form-hint">支持各种文件格式，单个文件大小不超过200MB</p>
+                        <p class="form-hint">支持上传图片、文档、视频和音频文件，单个文件大小不超过200MB</p>
                     </div>
                     
                     <div class="form-row">

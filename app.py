@@ -698,6 +698,32 @@ def upload():
     if not f or f.filename == "":
         flash("请选择文件")
         return redirect(url_for("index"))
+    
+    # 服务器端文件验证
+    # 允许的文件类型
+    ALLOWED_MIME_PREFIXES = ['image/', 'application/', 'text/', 'video/', 'audio/']
+    ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 
+                         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'json', 'xml',
+                         'txt', 'csv', 'html', 'css', 'js', 'ts', 'py', 'java', 'c', 'cpp', 'php',
+                         'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
+                         'mp3', 'wav', 'ogg', 'wma', 'aac']
+    MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
+    
+    # 验证文件类型
+    file_mimetype = f.mimetype
+    file_extension = f.filename.rsplit('.', 1)[-1].lower()
+    is_allowed_type = any(file_mimetype.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES) or \
+                     file_extension in ALLOWED_EXTENSIONS
+    
+    if not is_allowed_type:
+        flash("不支持的文件类型，请上传图片、文档、视频或音频文件")
+        return redirect(url_for("index"))
+    
+    # 验证文件大小
+    if f.content_length > MAX_FILE_SIZE:
+        flash("文件大小超过限制，单个文件不超过200MB")
+        return redirect(url_for("index"))
+    
     filename = f.filename
     local_id = uuid.uuid4().hex
     local_name = f"{local_id}__{filename}"
@@ -778,6 +804,21 @@ def download_local(stored_name):
     finally:
         conn.close()
     return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=True)
+
+
+@app.get("/open/<stored_name>")
+@login_required
+def open_local(stored_name):
+    # 查找文件ID
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        if row:
+            # 记录访问日志
+            log_access(row['id'], 'open', request)
+    finally:
+        conn.close()
+    return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=False)
 
 @app.get("/api/files")
 @login_required
@@ -1361,7 +1402,11 @@ def add_security_headers(response):
         response.headers['Expires'] = '0'
     
     # 添加内容安全策略（CSP）头
-    response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
+    # 对于打开的文件，允许内联脚本和样式，以便HTML文件中的功能可以正常使用
+    if request.path.startswith('/open/'):
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
+    else:
+        response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
     
     # 添加X-XSS-Protection头
     response.headers['X-XSS-Protection'] = '1; mode=block'

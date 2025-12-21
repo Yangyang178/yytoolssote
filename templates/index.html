@@ -74,7 +74,7 @@
       <div class="files-grid">
         {% for f in files %}
         {% set d = (f.dkfile or {}).get('data') %}
-        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }}">
+        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }}" data-size="{{ f.size }}" data-date="{{ d and d.created_at or '' }}">
           <div class="file-card-header">
             <div class="file-icon-container">
               <div class="file-icon">

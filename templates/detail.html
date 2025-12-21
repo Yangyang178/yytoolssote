@@ -40,6 +40,7 @@
         
         <!-- 操作按钮 -->
         <div class="detail-actions">
+          <a class="btn btn-primary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">打开文件</a>
           <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
             <button class="btn btn-danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
