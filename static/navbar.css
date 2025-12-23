@@ -28,48 +28,90 @@ body #main-nav .nav-container {
 
 /* 导航按钮基础样式 */
 body #main-nav .nav-btn {
-  padding: 8px 16px;
-  border-radius: 20px;
+  padding: 10px 20px;
+  border-radius: 24px;
   font-weight: 600;
   text-decoration: none;
   font-size: 14px;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid transparent;
   background-color: rgba(255, 255, 255, 0.15);
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+  min-width: 90px;
+}
+
+/* 按钮悬停效果增强 */
+body #main-nav .nav-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+  z-index: 0;
+}
+
+body #main-nav .nav-btn:hover::before {
+  left: 100%;
+}
+
+/* 按钮文字层级 */
+body #main-nav .nav-btn span {
+  position: relative;
+  z-index: 1;
 }
 
 /* 浅色按钮样式 */
 body #main-nav .nav-btn-light {
   background-color: rgba(255, 255, 255, 0.15);
   border-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
 }
 
 body #main-nav .nav-btn-light:hover {
   background-color: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.6);
+  border-color: rgba(255, 255, 255, 0.8);
   color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* 主色按钮样式 */
 body #main-nav .nav-btn-primary {
-  background-color: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
 }
 
 body #main-nav .nav-btn-primary:hover {
   background-color: #fff;
   color: #1d4ed8;
   border-color: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  border-radius: 26px;
+}
+
+/* 活跃状态按钮样式 */
+body #main-nav .nav-btn.active {
+  background-color: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+body #main-nav .nav-btn-primary.active {
+  background-color: #fff;
+  color: #1d4ed8;
+  border-color: #fff;
 }
 
 /* 导航栏Logo样式 */
@@ -91,12 +133,76 @@ body #main-nav .nav-subtitle {
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* 导航切换按钮样式 */
+body #main-nav .nav-toggle {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 44px;
+  height: 44px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 8px;
+  z-index: 1001;
+}
+
+body #main-nav .nav-toggle:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.6);
+}
+
+body #main-nav .nav-toggle-icon {
+  position: relative;
+  width: 24px;
+  height: 2px;
+  background: #fff;
+  transition: all 0.3s ease;
+}
+
+body #main-nav .nav-toggle-icon::before,
+body #main-nav .nav-toggle-icon::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  background: #fff;
+  transition: all 0.3s ease;
+  left: 0;
+}
+
+body #main-nav .nav-toggle-icon::before {
+  top: -8px;
+}
+
+body #main-nav .nav-toggle-icon::after {
+  top: 8px;
+}
+
+body #main-nav .nav-toggle.active .nav-toggle-icon {
+  background: transparent;
+}
+
+body #main-nav .nav-toggle.active .nav-toggle-icon::before {
+  transform: rotate(45deg);
+  top: 0;
+}
+
+body #main-nav .nav-toggle.active .nav-toggle-icon::after {
+  transform: rotate(-45deg);
+  top: 0;
+}
+
 /* 导航按钮容器样式 */
 body #main-nav .nav-buttons {
   display: flex;
   gap: 20px;
   align-items: center;
   margin-right: 0;
+  transition: all 0.3s ease;
 }
 
 /* 用户菜单样式 */
@@ -175,4 +281,114 @@ main {
   margin-left: 8px;
   vertical-align: middle;
   height: 20px;
+}
+
+/* 导航栏响应式设计 */
+@media (max-width: 1024px) {
+  body #main-nav .nav-buttons {
+    gap: 12px;
+  }
+  
+  body #main-nav .nav-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 768px) {
+  body #main-nav .nav-container {
+    padding: 0 20px;
+  }
+  
+  /* 显示汉堡菜单，隐藏常规导航 */
+  body #main-nav .nav-toggle {
+    display: flex;
+  }
+  
+  body #main-nav .nav-buttons {
+    position: fixed;
+    top: 70px;
+    left: -100%;
+    width: 100%;
+    height: calc(100vh - 70px);
+    background: linear-gradient(180deg, #1d4ed8, #3b82f6);
+    flex-direction: column;
+    gap: 0;
+    align-items: stretch;
+    padding: 20px 0;
+    transition: left 0.3s ease;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+  }
+  
+  body #main-nav .nav-buttons.active {
+    left: 0;
+  }
+  
+  body #main-nav .nav-btn {
+    display: block;
+    padding: 16px 30px;
+    border-radius: 0;
+    font-size: 16px;
+    border: none;
+    text-align: left;
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  body #main-nav .nav-btn:last-child {
+    border-bottom: none;
+  }
+  
+  body #main-nav .nav-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: none;
+  }
+  
+  body #main-nav .nav-btn-light {
+    background: transparent;
+    border-color: transparent;
+  }
+  
+  body #main-nav .nav-btn-light:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: transparent;
+  }
+  
+  body #main-nav .nav-btn-primary {
+    background: transparent;
+    border-color: transparent;
+  }
+  
+  body #main-nav .nav-btn-primary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    border-color: transparent;
+  }
+  
+  body #main-nav .nav-user-menu {
+    padding: 16px 30px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    justify-content: flex-start;
+  }
+  
+  /* 页脚响应式设计 */
+  .footer-content {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .copyright {
+    margin-right: 0;
+  }
+  
+  .icp-info {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .icp-info img {
+    margin-left: 0;
+    margin-top: 4px;
+  }
 }

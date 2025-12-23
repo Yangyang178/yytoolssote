@@ -18,11 +18,14 @@
         <div class="nav-title">yytoolssite-aipro</div>
         <div class="nav-subtitle">智能文件管理系统 · 轻松上传、存储与管理您的文件</div>
       </div>
-      <div class="nav-buttons">
+      <button class="nav-toggle" id="navToggle" aria-label="Toggle navigation">
+        <span class="nav-toggle-icon"></span>
+      </button>
+      <div class="nav-buttons" id="navButtons">
         <a href="{{ url_for('index') }}" class="nav-btn nav-btn-light">首页</a>
-        <a href="{{ url_for('blog_page') }}" class="nav-btn nav-btn-primary">yytoolssite博客</a>
         <a href="{{ url_for('upload_page') }}" class="nav-btn nav-btn-primary">上传发布</a>
         <a href="{{ url_for('ai_page') }}" class="nav-btn nav-btn-primary">AI对话</a>
+        <a href="{{ url_for('blog_page') }}" class="nav-btn nav-btn-primary">yytoolssite博客</a>
         <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
         {% if session.user_id %}
           <div class="nav-user-menu">

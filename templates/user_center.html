@@ -78,16 +78,25 @@
                 <section class="content-section">
                     <div class="section-header">
                         <h2 class="section-title">我的文件</h2>
+                        <div class="search-container">
+                            <div class="search-input-wrapper">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="file-search" placeholder="搜索文件..." class="search-input">
+                                <button class="search-clear-btn" id="search-clear-btn">&times;</button>
+                            </div>
+                            <button class="search-btn">搜索</button>
+                        </div>
                         <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
                             <i class="icon-upload">📤</i> 上传新文件
                         </a>
                     </div>
+                    <div class="search-results-info" id="search-results-info"></div>
                     
                     {% if files %}
                         <div class="files-grid">
                             {% for f in files %}
                             {% set d = (f.dkfile or {}).get('data') %}
-                            <div class="user-file-card">
+                            <div class="user-file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories %}{{ category.name }} {% endfor %} {% for tag in f.tags %}{{ tag.name }} {% endfor %}">
                                 <div class="file-name-large">{{ f.filename }}</div>
                                 <div class="file-size-info">{{ (f.size or 0) | int }} B</div>
                                 <div class="file-metadata">
@@ -107,10 +116,32 @@
                                         <span class="metadata-label">创建时间：</span>
                                         <span class="metadata-value">{{ d and d.created_at or '-' }}</span>
                                     </div>
+                                    {% if f.categories %}
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">分类：</span>
+                                        <div class="categories-list">
+                                            {% for category in f.categories %}
+                                            <span class="category-tag">{{ category.name }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% if f.tags %}
+                                    <div class="metadata-item">
+                                        <span class="metadata-label">标签：</span>
+                                        <div class="tags-list">
+                                            {% for tag in f.tags %}
+                                            <span class="tag">{{ tag.name }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 <div class="file-card-actions">
                                     <a class="file-action-btn action-detail" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
                                     <a class="file-action-btn action-download" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
+                                    <!-- 替换文件按钮 -->
+                                    <button class="file-action-btn action-replace" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}">替换</button>
                                     <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
                                         <button class="file-action-btn action-delete" type="submit">删除</button>
                                     </form>
@@ -284,6 +315,42 @@
 </div>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='user_center.css') }}">
+
+<!-- 替换文件模态框 -->
+<div id="replaceModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">替换文件</h3>
+            <button class="modal-close" onclick="closeReplaceModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="replaceFileForm" action="{{ url_for('file_replace') }}" method="post" enctype="multipart/form-data">
+                <input type="hidden" id="replaceFileId" name="file_id">
+                <div class="form-group">
+                    <label for="replaceFile" class="form-label">选择新文件</label>
+                    <div class="file-upload">
+                        <input type="file" id="replaceFile" name="file" required class="file-input">
+                        <label for="replaceFile" class="file-label">
+                            <span class="file-icon">📁</span>
+                            <div class="file-info">
+                                <span class="file-text">点击选择文件或拖拽文件到此处</span>
+                                <span class="file-size"></span>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="versionComment" class="form-label">版本备注（可选）</label>
+                    <textarea id="versionComment" name="comment" rows="3" placeholder="请输入版本更新说明" class="form-textarea"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-cancel" onclick="closeReplaceModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">替换文件</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <div id="app-data" data-is-logged-in="{{ user is not none | tojson | safe }}" class="hidden"></div>
 

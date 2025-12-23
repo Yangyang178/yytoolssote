@@ -2,6 +2,50 @@
 let isLoggedIn = false;
 let searchTimeout = null;
 
+// 导航栏汉堡菜单交互
+function initNavBar() {
+  const navToggle = document.getElementById('navToggle');
+  const navButtons = document.getElementById('navButtons');
+  
+  if (navToggle && navButtons) {
+    navToggle.addEventListener('click', () => {
+      navToggle.classList.toggle('active');
+      navButtons.classList.toggle('active');
+      
+      // 阻止页面滚动当菜单打开时
+      document.body.style.overflow = navButtons.classList.contains('active') ? 'hidden' : '';
+    });
+    
+    // 点击菜单外部关闭菜单
+    document.addEventListener('click', (e) => {
+      if (!navToggle.contains(e.target) && !navButtons.contains(e.target)) {
+        navToggle.classList.remove('active');
+        navButtons.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    });
+    
+    // 点击链接后关闭菜单
+    const navLinks = navButtons.querySelectorAll('a');
+    navLinks.forEach(link => {
+      link.addEventListener('click', () => {
+        navToggle.classList.remove('active');
+        navButtons.classList.remove('active');
+        document.body.style.overflow = '';
+      });
+    });
+    
+    // 监听窗口大小变化，在大屏幕上自动关闭菜单
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        navToggle.classList.remove('active');
+        navButtons.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+    });
+  }
+}
+
 // 初始化登录状态
 function initLoginStatus() {
   const appData = document.getElementById('app-data');
@@ -66,6 +110,10 @@ async function initFileInteractions() {
       continue;
     }
     
+    // 添加加载状态
+    likeBtn.classList.add('loading');
+    favoriteBtn.classList.add('loading');
+    
     try {
       const response = await fetch(`/api/files/${fileId}/interactions`);
       const data = await response.json();
@@ -91,6 +139,11 @@ async function initFileInteractions() {
       }
     } catch (error) {
       console.error(`初始化文件 ${fileId} 互动状态失败：`, error);
+      showStatusMessage(`初始化文件互动状态失败: ${error.message}`, 'error');
+    } finally {
+      // 移除加载状态
+      likeBtn.classList.remove('loading');
+      favoriteBtn.classList.remove('loading');
     }
   }
 }
@@ -98,14 +151,18 @@ async function initFileInteractions() {
 // 处理点赞按钮点击事件
 async function handleLike(fileId, btn) {
   if (!isLoggedIn) {
-    alert('请先登录，才能执行此操作');
+    showStatusMessage('请先登录，才能执行此操作', 'error');
     return;
   }
   
   if (!fileId || !btn) {
     console.error('点赞失败：缺少必要参数');
+    showStatusMessage('点赞失败：缺少必要参数', 'error');
     return;
   }
+  
+  // 添加加载状态
+  btn.classList.add('loading');
   
   try {
     const response = await fetch(`/api/files/${fileId}/like`, {
@@ -121,8 +178,10 @@ async function handleLike(fileId, btn) {
       // 更新按钮状态
       if (data.liked) {
         btn.classList.add('active');
+        showStatusMessage('点赞成功', 'success');
       } else {
         btn.classList.remove('active');
+        showStatusMessage('取消点赞成功', 'success');
       }
       
       // 更新点赞数
@@ -130,24 +189,33 @@ async function handleLike(fileId, btn) {
       if (countElement) {
         countElement.textContent = data.count;
       }
+    } else {
+      showStatusMessage(`点赞失败: ${data.message || '未知错误'}`, 'error');
     }
   } catch (error) {
     console.error(`点赞失败：`, error);
-    alert('点赞失败，请稍后重试');
+    showStatusMessage(`点赞失败: ${error.message}`, 'error');
+  } finally {
+    // 移除加载状态
+    btn.classList.remove('loading');
   }
 }
 
 // 处理收藏按钮点击事件
 async function handleFavorite(fileId, btn) {
   if (!isLoggedIn) {
-    alert('请先登录，才能执行此操作');
+    showStatusMessage('请先登录，才能执行此操作', 'error');
     return;
   }
   
   if (!fileId || !btn) {
     console.error('收藏失败：缺少必要参数');
+    showStatusMessage('收藏失败：缺少必要参数', 'error');
     return;
   }
+  
+  // 添加加载状态
+  btn.classList.add('loading');
   
   try {
     const response = await fetch(`/api/files/${fileId}/favorite`, {
@@ -163,8 +231,10 @@ async function handleFavorite(fileId, btn) {
       // 更新按钮状态
       if (data.favorited) {
         btn.classList.add('active');
+        showStatusMessage('收藏成功', 'success');
       } else {
         btn.classList.remove('active');
+        showStatusMessage('取消收藏成功', 'success');
       }
       
       // 更新收藏数
@@ -172,10 +242,15 @@ async function handleFavorite(fileId, btn) {
       if (countElement) {
         countElement.textContent = data.count;
       }
+    } else {
+      showStatusMessage(`收藏失败: ${data.message || '未知错误'}`, 'error');
     }
   } catch (error) {
     console.error(`收藏失败：`, error);
-    alert('收藏失败，请稍后重试');
+    showStatusMessage(`收藏失败: ${error.message}`, 'error');
+  } finally {
+    // 移除加载状态
+    btn.classList.remove('loading');
   }
 }
 
@@ -361,8 +436,34 @@ function clearSearch() {
   searchFiles();
 }
 
+// 状态消息管理
+function showStatusMessage(message, type = 'info', duration = 3000) {
+  // 创建状态消息元素
+  let statusMessage = document.getElementById('statusMessage');
+  if (!statusMessage) {
+    statusMessage = document.createElement('div');
+    statusMessage.id = 'statusMessage';
+    document.body.appendChild(statusMessage);
+  }
+  
+  // 设置消息内容和样式
+  statusMessage.textContent = message;
+  statusMessage.className = `status-message ${type}`;
+  
+  // 显示消息
+  statusMessage.classList.add('show');
+  
+  // 自动隐藏消息
+  setTimeout(() => {
+    statusMessage.classList.remove('show');
+  }, duration);
+}
+
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
+  // 初始化导航栏汉堡菜单
+  initNavBar();
+  
   // 初始化登录状态
   initLoginStatus();
   

@@ -74,7 +74,7 @@
       <div class="files-grid">
         {% for f in files %}
         {% set d = (f.dkfile or {}).get('data') %}
-        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }}" data-size="{{ f.size }}" data-date="{{ d and d.created_at or '' }}">
+        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {{ f.categories | map(attribute='name') | join(' ') }} {{ f.tags | map(attribute='name') | join(' ') }}" data-size="{{ f.size }}" data-date="{{ d and d.created_at or '' }}">
           <div class="file-card-header">
             <div class="file-icon-container">
               <div class="file-icon">
@@ -123,6 +123,26 @@
                 <span class="label">远端链接：</span>
                 <span class="value">{% if d and d.url %}<a href="{{ d.url }}" target="_blank">打开</a>{% else %}-{% endif %}</span>
               </div>
+              {% if f.categories %}
+              <div class="file-categories">
+                <span class="label">分类：</span>
+                <div class="categories-list">
+                  {% for category in f.categories %}
+                  <span class="category-tag">{{ category.name }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
+              {% if f.tags %}
+              <div class="file-tags">
+                <span class="label">标签：</span>
+                <div class="tags-list">
+                  {% for tag in f.tags %}
+                  <span class="tag">{{ tag.name }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              {% endif %}
             </div>
           </div>
           <div class="file-card-footer">

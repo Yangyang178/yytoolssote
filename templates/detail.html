@@ -81,7 +81,295 @@
           <div class="empty">暂无 DKFile 响应</div>
         {% endif %}
       </div>
+
+      <!-- 文件分类和标签管理 -->
+      <div class="detail-section">
+        <h2>分类和标签</h2>
+        
+        <!-- 分类管理 -->
+        <div class="category-tag-section">
+          <h3>分类</h3>
+          <div class="current-categories">
+            {% if item.categories %}
+              {% for category in item.categories %}
+                <span class="category-tag">
+                  {{ category.name }}
+                  <button class="remove-tag-btn" onclick="removeCategory('{{ item.id }}', {{ category.id }})">×</button>
+                </span>
+              {% endfor %}
+            {% else %}
+              <span class="empty-text">暂无分类</span>
+            {% endif %}
+          </div>
+          
+          <div class="add-category-form">
+            <select id="category-select" class="form-select">
+              <option value="">选择分类</option>
+              <!-- 动态加载分类列表 -->
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="addCategory('{{ item.id }}')">添加分类</button>
+            <button class="btn btn-sm btn-secondary" onclick="showAddCategoryModal()">创建新分类</button>
+          </div>
+        </div>
+        
+        <!-- 标签管理 -->
+        <div class="category-tag-section">
+          <h3>标签</h3>
+          <div class="current-tags">
+            {% if item.tags %}
+              {% for tag in item.tags %}
+                <span class="tag">
+                  {{ tag.name }}
+                  <button class="remove-tag-btn" onclick="removeTag('{{ item.id }}', {{ tag.id }})">×</button>
+                </span>
+              {% endfor %}
+            {% else %}
+              <span class="empty-text">暂无标签</span>
+            {% endif %}
+          </div>
+          
+          <div class="add-tag-form">
+            <select id="tag-select" class="form-select">
+              <option value="">选择标签</option>
+              <!-- 动态加载标签列表 -->
+            </select>
+            <button class="btn btn-sm btn-primary" onclick="addTag('{{ item.id }}')">添加标签</button>
+            <button class="btn btn-sm btn-secondary" onclick="showAddTagModal()">创建新标签</button>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
+
+  <!-- 创建分类模态框 -->
+  <div id="add-category-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>创建新分类</h3>
+        <span class="close" onclick="closeModal('add-category-modal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <form id="create-category-form">
+          <div class="form-group">
+            <label for="new-category-name">分类名称</label>
+            <input type="text" id="new-category-name" name="name" required class="form-input">
+          </div>
+          <div class="form-group">
+            <label for="new-category-desc">分类描述</label>
+            <textarea id="new-category-desc" name="description" class="form-textarea"></textarea>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('add-category-modal')">取消</button>
+            <button type="submit" class="btn btn-primary">创建</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 创建标签模态框 -->
+  <div id="add-tag-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>创建新标签</h3>
+        <span class="close" onclick="closeModal('add-tag-modal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <form id="create-tag-form">
+          <div class="form-group">
+            <label for="new-tag-name">标签名称</label>
+            <input type="text" id="new-tag-name" name="name" required class="form-input">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('add-tag-modal')">取消</button>
+            <button type="submit" class="btn btn-primary">创建</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+<script>
+// 加载分类和标签列表
+function loadCategoriesAndTags() {
+  // 加载分类列表
+  fetch('/api/categories')
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const select = document.getElementById('category-select');
+        select.innerHTML = '<option value="">选择分类</option>';
+        data.categories.forEach(category => {
+          const option = document.createElement('option');
+          option.value = category.id;
+          option.textContent = category.name;
+          select.appendChild(option);
+        });
+      }
+    });
+  
+  // 加载标签列表
+  fetch('/api/tags')
+    .then(response => response.json())
+    .then(data => {
+      if (data.success) {
+        const select = document.getElementById('tag-select');
+        select.innerHTML = '<option value="">选择标签</option>';
+        data.tags.forEach(tag => {
+          const option = document.createElement('option');
+          option.value = tag.id;
+          option.textContent = tag.name;
+          select.appendChild(option);
+        });
+      }
+    });
+}
+
+// 添加分类
+function addCategory(fileId) {
+  const categoryId = document.getElementById('category-select').value;
+  if (!categoryId) return;
+  
+  fetch(`/api/files/${fileId}/categories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ category_id: parseInt(categoryId) })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  });
+}
+
+// 移除分类
+function removeCategory(fileId, categoryId) {
+  fetch(`/api/files/${fileId}/categories/${categoryId}`, {
+    method: 'DELETE'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  });
+}
+
+// 添加标签
+function addTag(fileId) {
+  const tagId = document.getElementById('tag-select').value;
+  if (!tagId) return;
+  
+  fetch(`/api/files/${fileId}/tags`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ tag_id: parseInt(tagId) })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  });
+}
+
+// 移除标签
+function removeTag(fileId, tagId) {
+  fetch(`/api/files/${fileId}/tags/${tagId}`, {
+    method: 'DELETE'
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message);
+    }
+  });
+}
+
+// 显示创建分类模态框
+function showAddCategoryModal() {
+  document.getElementById('add-category-modal').style.display = 'block';
+}
+
+// 显示创建标签模态框
+function showAddTagModal() {
+  document.getElementById('add-tag-modal').style.display = 'block';
+}
+
+// 关闭模态框
+function closeModal(modalId) {
+  document.getElementById(modalId).style.display = 'none';
+}
+
+// 点击模态框外部关闭
+window.onclick = function(event) {
+  if (event.target.classList.contains('modal')) {
+    event.target.style.display = 'none';
+  }
+}
+
+// 创建分类表单提交
+document.getElementById('create-category-form')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-category-name').value;
+  const description = document.getElementById('new-category-desc').value;
+  
+  fetch('/api/categories', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name, description })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      closeModal('add-category-modal');
+      loadCategoriesAndTags();
+    } else {
+      alert(data.message);
+    }
+  });
+});
+
+// 创建标签表单提交
+document.getElementById('create-tag-form')?.addEventListener('submit', function(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-tag-name').value;
+  
+  fetch('/api/tags', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ name })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      closeModal('add-tag-modal');
+      loadCategoriesAndTags();
+    } else {
+      alert(data.message);
+    }
+  });
+});
+
+// 页面加载时加载分类和标签列表
+loadCategoriesAndTags();
+</script>
 {% endif %}
 {% endblock %}

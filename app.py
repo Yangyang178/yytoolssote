@@ -6,6 +6,7 @@ import smtplib
 import random
 import time
 import re
+import hashlib
 from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory, jsonify, session
@@ -14,6 +15,15 @@ from email.mime.multipart import MIMEMultipart
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+
+# 计算文件的MD5哈希值
+def calculate_file_hash(file_path):
+    """计算文件的MD5哈希值"""
+    hasher = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b''):
+            hasher.update(chunk)
+    return hasher.hexdigest()
 
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
@@ -155,6 +165,82 @@ def init_db():
                         FOREIGN KEY (user_id) REFERENCES users (id),
                         UNIQUE(file_id, user_id)
                     )''')
+        
+        # 创建文件分类表
+        conn.execute('''CREATE TABLE IF NOT EXISTS categories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL UNIQUE,
+                        description TEXT,
+                        user_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )''')
+        
+        # 创建文件标签表
+        conn.execute('''CREATE TABLE IF NOT EXISTS tags (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        UNIQUE(name, user_id)
+                    )''')
+        
+        # 创建文件分类关联表
+        conn.execute('''CREATE TABLE IF NOT EXISTS file_categories (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        category_id INTEGER NOT NULL,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
+                        FOREIGN KEY (category_id) REFERENCES categories (id),
+                        UNIQUE(file_id, category_id)
+                    )''')
+        
+        # 创建文件标签关联表
+        conn.execute('''CREATE TABLE IF NOT EXISTS file_tags (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        tag_id INTEGER NOT NULL,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
+                        FOREIGN KEY (tag_id) REFERENCES tags (id),
+                        UNIQUE(file_id, tag_id)
+                    )''')
+        
+        # 创建文件版本表
+        conn.execute('''CREATE TABLE IF NOT EXISTS file_versions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT NOT NULL,
+                        version_name TEXT NOT NULL,
+                        version_number INTEGER NOT NULL,
+                        filename TEXT NOT NULL,
+                        stored_name TEXT NOT NULL,
+                        path TEXT NOT NULL,
+                        size INTEGER NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_by TEXT NOT NULL,
+                        comment TEXT,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
+                        FOREIGN KEY (created_by) REFERENCES users (id)
+                    )''')
+        
+        # 为files表添加created_at列
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+        except sqlite3.OperationalError:
+            pass
+        
+        # 为files表添加preview_available列
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN preview_available BOOLEAN DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        # 为files表添加hash列，用于存储文件的MD5哈希值
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN hash TEXT')
+        except sqlite3.OperationalError:
+            pass
+        
         conn.commit()
     finally:
         conn.close()
@@ -319,6 +405,31 @@ def get_all_files(user_id=None):
             like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
             favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
             
+            # 获取文件分类
+            categories = []
+            category_rows = conn.execute('''SELECT c.* FROM categories c 
+                                           JOIN file_categories fc ON c.id = fc.category_id 
+                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
+            for category_row in category_rows:
+                categories.append({
+                    "id": category_row["id"],
+                    "name": category_row["name"],
+                    "description": category_row["description"]
+                })
+            
+            # 获取文件标签
+            tags = []
+            tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                     JOIN file_tags ft ON t.id = ft.tag_id 
+                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
+            for tag_row in tag_rows:
+                tags.append({
+                    "id": tag_row["id"],
+                    "name": tag_row["name"]
+                })
+            
+            # 检查 created_at 字段是否存在
+            created_at = row["created_at"] if "created_at" in row.keys() else ""
             result.append({
                 "id": file_id, 
                 "filename": row["filename"], 
@@ -329,7 +440,10 @@ def get_all_files(user_id=None):
                 "project_name": row["project_name"], 
                 "project_desc": row["project_desc"],
                 "like_count": like_count,
-                "favorite_count": favorite_count
+                "favorite_count": favorite_count,
+                "categories": categories,
+                "tags": tags,
+                "created_at": row["created_at"] if "created_at" in row.keys() else ""
             })
         return result
     finally:
@@ -348,6 +462,31 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
             like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
             favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
             
+            # 获取文件分类
+            categories = []
+            category_rows = conn.execute('''SELECT c.* FROM categories c 
+                                           JOIN file_categories fc ON c.id = fc.category_id 
+                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
+            for category_row in category_rows:
+                categories.append({
+                    "id": category_row["id"],
+                    "name": category_row["name"],
+                    "description": category_row["description"]
+                })
+            
+            # 获取文件标签
+            tags = []
+            tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                     JOIN file_tags ft ON t.id = ft.tag_id 
+                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
+            for tag_row in tag_rows:
+                tags.append({
+                    "id": tag_row["id"],
+                    "name": tag_row["name"]
+                })
+            
+            # 检查 created_at 字段是否存在
+            created_at = row["created_at"] if "created_at" in row.keys() else ""
             return {
                 "id": row["id"], 
                 "filename": row["filename"], 
@@ -359,7 +498,10 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
                 "project_desc": row["project_desc"],
                 "user_id": row["user_id"],
                 "like_count": like_count,
-                "favorite_count": favorite_count
+                "favorite_count": favorite_count,
+                "categories": categories,
+                "tags": tags,
+                "created_at": created_at
             }
         return None
     finally:
@@ -369,13 +511,47 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
 def add_file(item):
     conn = get_db()
     try:
-        conn.execute('''INSERT INTO files (
-                        id, user_id, filename, stored_name, path, size, 
-                        dkfile, project_name, project_desc
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                    (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                    item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                    item.get("project_name"), item.get("project_desc")))
+        # 检查files表的列
+        cursor = conn.execute("PRAGMA table_info(files)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        # 准备插入语句
+        if "created_at" in columns and "hash" in columns:
+            # 如果有created_at和hash列
+            conn.execute('''INSERT INTO files (
+                            id, user_id, filename, stored_name, path, size, 
+                            dkfile, project_name, project_desc, created_at, hash
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''', 
+                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
+                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                        item.get("project_name"), item.get("project_desc"), item.get("hash")))
+        elif "created_at" in columns:
+            # 如果只有created_at列
+            conn.execute('''INSERT INTO files (
+                            id, user_id, filename, stored_name, path, size, 
+                            dkfile, project_name, project_desc, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
+                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
+                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                        item.get("project_name"), item.get("project_desc")))
+        elif "hash" in columns:
+            # 如果只有hash列
+            conn.execute('''INSERT INTO files (
+                            id, user_id, filename, stored_name, path, size, 
+                            dkfile, project_name, project_desc, hash
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
+                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                        item.get("project_name"), item.get("project_desc"), item.get("hash")))
+        else:
+            # 如果都没有
+            conn.execute('''INSERT INTO files (
+                            id, user_id, filename, stored_name, path, size, 
+                            dkfile, project_name, project_desc
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
+                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
+                        item.get("project_name"), item.get("project_desc")))
         conn.commit()
     finally:
         conn.close()
@@ -561,6 +737,31 @@ def get_favorite_files(user_id):
             like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
             favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
             
+            # 获取文件分类
+            categories = []
+            category_rows = conn.execute('''SELECT c.* FROM categories c 
+                                           JOIN file_categories fc ON c.id = fc.category_id 
+                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
+            for category_row in category_rows:
+                categories.append({
+                    "id": category_row["id"],
+                    "name": category_row["name"],
+                    "description": category_row["description"]
+                })
+            
+            # 获取文件标签
+            tags = []
+            tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                     JOIN file_tags ft ON t.id = ft.tag_id 
+                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
+            for tag_row in tag_rows:
+                tags.append({
+                    "id": tag_row["id"],
+                    "name": tag_row["name"]
+                })
+            
+            # 检查 created_at 字段是否存在
+            created_at = row["created_at"] if "created_at" in row.keys() else ""
             result.append({
                 "id": file_id, 
                 "filename": row["filename"], 
@@ -571,7 +772,10 @@ def get_favorite_files(user_id):
                 "project_name": row["project_name"], 
                 "project_desc": row["project_desc"],
                 "like_count": like_count,
-                "favorite_count": favorite_count
+                "favorite_count": favorite_count,
+                "categories": categories,
+                "tags": tags,
+                "created_at": row["created_at"] if "created_at" in row else ""
             })
         return result
     finally:
@@ -694,10 +898,17 @@ def ai_page():
 @app.post("/upload")
 @login_required
 def upload():
-    f = request.files.get("file")
-    if not f or f.filename == "":
+    files = request.files.getlist("file")
+    if not files or len(files) == 0:
         flash("请选择文件")
-        return redirect(url_for("index"))
+        return redirect(url_for("upload_page"))
+    
+    # 先检查项目名称和项目描述是否填写
+    project_name = request.form.get("project_name")
+    project_desc = request.form.get("project_desc")
+    if not project_name or not project_desc:
+        flash("项目名称和项目描述不能为空")
+        return redirect(url_for("upload_page"))
     
     # 服务器端文件验证
     # 允许的文件类型
@@ -709,54 +920,84 @@ def upload():
                          'mp3', 'wav', 'ogg', 'wma', 'aac']
     MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
     
-    # 验证文件类型
-    file_mimetype = f.mimetype
-    file_extension = f.filename.rsplit('.', 1)[-1].lower()
-    is_allowed_type = any(file_mimetype.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES) or \
-                     file_extension in ALLOWED_EXTENSIONS
+    uploaded_count = 0
+    for f in files:
+        if not f or f.filename == "":
+            continue
+        
+        # 验证文件类型
+        file_mimetype = f.mimetype
+        file_extension = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+        is_allowed_type = any(file_mimetype.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES) or \
+                         file_extension in ALLOWED_EXTENSIONS
+        
+        if not is_allowed_type:
+            flash(f"不支持的文件类型：{f.filename}，请上传图片、文档、视频或音频文件")
+            continue
+        
+        # 验证文件大小
+        if f.content_length > MAX_FILE_SIZE:
+            flash(f"文件大小超过限制：{f.filename}，单个文件不超过200MB")
+            continue
+        
+        filename = f.filename
+        local_id = uuid.uuid4().hex
+        local_name = f"{local_id}__{filename}"
+        dest = UPLOAD_DIR / local_name
+        f.save(dest)
+        
+        # 计算文件哈希值
+        file_hash = calculate_file_hash(dest)
+        
+        # 检查当前用户是否已经上传过相同的文件
+        conn = get_db()
+        try:
+            # 先检查files表是否有hash列
+            cursor = conn.execute("PRAGMA table_info(files)")
+            columns = [row[1] for row in cursor.fetchall()]
+            
+            if "hash" in columns:
+                # 如果有hash列，使用hash检测重复
+                existing_file = conn.execute('SELECT id FROM files WHERE user_id = ? AND hash = ?', 
+                                          (session['user_id'], file_hash)).fetchone()
+                if existing_file:
+                    # 文件已存在，删除刚保存的临时文件并跳过上传
+                    os.remove(dest)
+                    flash(f"文件 '{filename}' 已存在，无需重复上传")
+                    continue
+            else:
+                # 如果没有hash列，使用文件名和大小检测重复
+                existing_file = conn.execute('SELECT id FROM files WHERE user_id = ? AND filename = ? AND size = ?', 
+                                          (session['user_id'], filename, dest.stat().st_size)).fetchone()
+                if existing_file:
+                    # 文件已存在，删除刚保存的临时文件并跳过上传
+                    os.remove(dest)
+                    flash(f"文件 '{filename}' 已存在，无需重复上传")
+                    continue
+        finally:
+            conn.close()
+        
+        dk_resp = None
+        try:
+            dk_resp = dkfile_upload(dest, filename, project_name=project_name, description=project_desc)
+        except Exception as e:
+            dk_resp = {"error": str(e)}
+        item = {
+            "id": local_id,
+            "user_id": session['user_id'],
+            "filename": filename,
+            "stored_name": local_name,
+            "path": str(dest),
+            "size": dest.stat().st_size,
+            "dkfile": dk_resp,
+            "project_name": project_name,
+            "project_desc": project_desc,
+            "hash": file_hash  # 添加文件哈希值
+        }
+        add_file(item)
+        uploaded_count += 1
     
-    if not is_allowed_type:
-        flash("不支持的文件类型，请上传图片、文档、视频或音频文件")
-        return redirect(url_for("index"))
-    
-    # 验证文件大小
-    if f.content_length > MAX_FILE_SIZE:
-        flash("文件大小超过限制，单个文件不超过200MB")
-        return redirect(url_for("index"))
-    
-    filename = f.filename
-    local_id = uuid.uuid4().hex
-    local_name = f"{local_id}__{filename}"
-    dest = UPLOAD_DIR / local_name
-    f.save(dest)
-    dk_resp = None
-    try:
-        dk_resp = dkfile_upload(dest, filename, project_name=request.form.get("project_name"), description=request.form.get("project_desc"))
-    except Exception as e:
-        dk_resp = {"error": str(e)}
-    project_name = request.form.get("project_name")
-    project_desc = request.form.get("project_desc")
-    item = {
-        "id": local_id,
-        "user_id": session['user_id'],
-        "filename": filename,
-        "stored_name": local_name,
-        "path": str(dest),
-        "size": dest.stat().st_size,
-        "dkfile": dk_resp,
-        "project_name": project_name,
-        "project_desc": project_desc,
-    }
-    add_file(item)
-    try:
-        if isinstance(dk_resp, dict) and dk_resp.get("success"):
-            url = (dk_resp.get("data") or {}).get("url")
-            flash(f"已上传到 DKFile：{url or '成功'}")
-        else:
-            msg = dk_resp.get("message") if isinstance(dk_resp, dict) else None
-            flash(f"DKFile 上传失败：{msg or '未知错误'}")
-    except Exception:
-        pass
+    flash(f"成功上传 {uploaded_count} 个文件")
     return redirect(url_for("index"))
 
 @app.get("/files/<file_id>")
@@ -791,6 +1032,221 @@ def file_delete(file_id):
     delete_file(file_id, session['user_id'])
     return redirect(url_for("index"))
 
+
+@app.post("/file_replace")
+@login_required
+def file_replace():
+    """替换文件"""
+    file_id = request.form.get("file_id")
+    if not file_id:
+        flash("缺少文件ID")
+        return redirect(url_for("user_center"))
+    
+    # 获取要替换的文件信息
+    item = get_file_by_id(file_id, session['user_id'])
+    if not item:
+        flash("文件不存在或无权限访问")
+        return redirect(url_for("user_center"))
+    
+    # 获取新文件
+    new_file = request.files.get("file")
+    if not new_file or new_file.filename == "":
+        flash("请选择要上传的文件")
+        return redirect(url_for("user_center"))
+    
+    try:
+        # 保存新文件，覆盖旧文件
+        local_name = item["stored_name"]
+        dest = UPLOAD_DIR / local_name
+        new_file.save(dest)
+        
+        # 计算新文件哈希值
+        file_hash = calculate_file_hash(dest)
+        
+        # 检查当前用户是否已经上传过相同的文件
+        conn = get_db()
+        try:
+            # 更新文件大小和哈希值
+            conn.execute('''UPDATE files SET size = ?, hash = ? WHERE id = ?''',
+                        (dest.stat().st_size, file_hash, file_id))
+            conn.commit()
+        finally:
+            conn.close()
+        
+        # 更新远程文件（如果有）
+        try:
+            dk = item.get("dkfile") or {}
+            did = dk.get("id") or dk.get("file_id") or dk.get("data", {}).get("id")
+            if did:
+                # 重新上传文件到远程存储
+                project_name = item.get("project_name")
+                project_desc = item.get("project_desc")
+                dk_resp = dkfile_upload(dest, item["filename"], project_name=project_name, description=project_desc)
+                
+                # 更新数据库中的远程文件信息
+                conn = get_db()
+                try:
+                    conn.execute('''UPDATE files SET dkfile = ? WHERE id = ?''',
+                                (json.dumps(dk_resp), file_id))
+                    conn.commit()
+                finally:
+                    conn.close()
+        except Exception as remote_error:
+            # 远程文件更新失败，不影响本地文件替换
+            flash(f"本地文件替换成功，但远程文件更新失败: {str(remote_error)}")
+        else:
+            flash("文件替换成功")
+        
+        # 重定向到用户中心页面
+        return redirect(url_for("user_center"))
+    except Exception as e:
+        # 处理错误
+        flash(f"文件替换失败: {str(e)}")
+        return redirect(url_for("user_center"))
+
+
+@app.post("/api/files/batch-delete")
+@login_required
+def api_batch_delete():
+    """批量删除文件"""
+    file_ids = request.json.get("file_ids")
+    if not file_ids or not isinstance(file_ids, list):
+        return jsonify({"success": False, "message": "请提供要删除的文件ID列表"}), 400
+    
+    conn = get_db()
+    try:
+        deleted_count = 0
+        for file_id in file_ids:
+            # 获取文件信息
+            item = get_file_by_id(file_id, session['user_id'])
+            if not item:
+                continue
+            
+            # 删除本地文件
+            try:
+                p = Path(item["path"])
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+            
+            # 删除远程文件
+            try:
+                dk = item.get("dkfile") or {}
+                did = dk.get("id") or dk.get("file_id") or dk.get("data", {}).get("id")
+                if did:
+                    dkfile_delete(did)
+            except Exception:
+                pass
+            
+            # 删除文件记录
+            conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id']))
+            deleted_count += 1
+        
+        conn.commit()
+        return jsonify({"success": True, "message": f"成功删除 {deleted_count} 个文件", "deleted_count": deleted_count})
+    finally:
+        conn.close()
+
+
+
+
+
+@app.post("/api/files/batch-download")
+@login_required
+def api_batch_download_files():
+    """批量下载文件"""
+    try:
+        import zipfile
+        import io
+        
+        file_ids = request.json.get('file_ids', [])
+        if not isinstance(file_ids, list) or not file_ids:
+            return jsonify({'success': False, 'message': '请提供有效的文件ID列表'}), 400
+        
+        conn = get_db()
+        files_to_download = []
+        
+        try:
+            # 验证文件是否存在且属于当前用户
+            for file_id in file_ids:
+                item = get_file_by_id(file_id, session['user_id'])
+                if item:
+                    files_to_download.append(item)
+            
+            if not files_to_download:
+                return jsonify({'success': False, 'message': '没有可下载的文件'}), 404
+            
+            # 创建内存中的ZIP文件
+            memory_file = io.BytesIO()
+            with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for file_item in files_to_download:
+                    file_path = file_item["path"]
+                    filename = file_item["filename"]
+                    zipf.write(file_path, filename)
+            
+            # 重置文件指针到开头
+            memory_file.seek(0)
+            
+            conn.close()
+            
+            # 返回ZIP文件
+            from flask import send_file
+            return send_file(
+                memory_file,
+                mimetype='application/zip',
+                as_attachment=True,
+                download_name='files.zip'
+            )
+        except Exception as e:
+            conn.close()
+            return jsonify({'success': False, 'message': f'批量下载失败: {str(e)}'}), 500
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'请求处理失败: {str(e)}'}), 400
+def batch_delete_files():
+    """批量删除文件"""
+    file_ids = request.json.get("file_ids")
+    if not file_ids or not isinstance(file_ids, list):
+        return jsonify({"success": False, "message": "请提供要删除的文件ID列表"}), 400
+    
+    deleted_count = 0
+    conn = get_db()
+    try:
+        for file_id in file_ids:
+            # 验证文件属于当前用户
+            item = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id'])).fetchone()
+            if not item:
+                continue
+            
+            # 删除本地文件
+            try:
+                p = Path(item["path"])
+                if p.exists():
+                    p.unlink()
+            except Exception:
+                pass
+            
+            # 删除远程文件
+            try:
+                dk = json.loads(item["dkfile"] if item["dkfile"] else "{}")
+                did = dk.get("id") or dk.get("file_id") or dk.get("data", {}).get("id")
+                if did:
+                    dkfile_delete(did)
+            except Exception:
+                pass
+            
+            # 删除文件记录
+            conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id']))
+            deleted_count += 1
+        
+        conn.commit()
+        return jsonify({"success": True, "message": f"成功删除 {deleted_count} 个文件"})
+    finally:
+        conn.close()
+
+import zipfile
+import io
+
 @app.get("/download/<stored_name>")
 @login_required
 def download_local(stored_name):
@@ -806,19 +1262,85 @@ def download_local(stored_name):
     return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=True)
 
 
+
+
+
 @app.get("/open/<stored_name>")
 @login_required
 def open_local(stored_name):
-    # 查找文件ID
+    # 查找文件ID和信息
     conn = get_db()
     try:
-        row = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        row = conn.execute('SELECT id, filename, stored_name, path FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
         if row:
             # 记录访问日志
             log_access(row['id'], 'open', request)
+            
+            # 直接使用数据库中存储的完整路径
+            file_path = row['path']
+            
+            # 首先检查文件是否存在
+            if not os.path.exists(file_path):
+                return "File not found", 404
+            
+            # 获取文件扩展名
+            filename = row['filename']
+            ext = ''
+            if '.' in filename:
+                ext = filename.rsplit('.', 1)[-1].lower()
+            
+            # 直接检测文件内容，确保正确识别HTML文件
+            with open(file_path, 'rb') as f:
+                first_bytes = f.read(100)
+            
+            # 强制检查HTML文件，不管扩展名是什么
+            if first_bytes.startswith(b'<!DOCTYPE html') or first_bytes.startswith(b'<html'):
+                ext = 'html'
+            
+            # 直接返回HTML文件，设置正确的MIME类型
+            if ext in ['html', 'htm']:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                return content, 200, {'Content-Type': 'text/html; charset=utf-8'}
+            
+            # 根据扩展名返回正确的MIME类型
+            mime_types = {
+                'jpg': 'image/jpeg',
+                'jpeg': 'image/jpeg',
+                'png': 'image/png',
+                'gif': 'image/gif',
+                'bmp': 'image/bmp',
+                'svg': 'image/svg+xml',
+                'webp': 'image/webp',
+                'txt': 'text/plain',
+                'md': 'text/plain',
+                'css': 'text/css',
+                'js': 'application/javascript',
+                'ts': 'text/typescript',
+                'py': 'text/plain',
+                'java': 'text/plain',
+                'c': 'text/plain',
+                'cpp': 'text/plain',
+                'json': 'application/json',
+                'xml': 'application/xml',
+                'yaml': 'text/yaml',
+                'yml': 'text/yaml',
+                'pdf': 'application/pdf'
+            }
+            
+            # 获取对应的MIME类型
+            mimetype = mime_types.get(ext, None)
+            
+            if mimetype:
+                # 如果能确定MIME类型，直接返回
+                return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=False, mimetype=mimetype)
+            else:
+                # 对于无法确定类型的文件，作为附件下载
+                return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=True)
     finally:
         conn.close()
-    return send_from_directory(app.config["UPLOAD_FOLDER"], stored_name, as_attachment=False)
+    # 如果文件不存在，返回404
+    return "File not found", 404
 
 @app.get("/api/files")
 @login_required
@@ -826,6 +1348,8 @@ def api_files():
     files = get_all_files(session['user_id'])
     return jsonify({"files": files})
 
+
+# 分类相关API
 @app.get("/dkfile/status")
 @login_required
 def dk_status():
@@ -1229,25 +1753,22 @@ def change_password():
         return render_template('account_settings.html', error=msg, user={'email': session.get('email'), 'username': session.get('username')})
     
     # 验证当前密码是否正确
-    engine = get_db()
-    with app.app_context():
-        with engine.begin() as conn:
-            row = conn.execute(text('SELECT * FROM users WHERE id = :user_id'), {
-                'user_id': session['user_id']
-            }).fetchone()
-            if not row:
-                return render_template('account_settings.html', error='用户不存在', user={'email': session.get('email'), 'username': session.get('username')})
-            
-            if not check_password_hash(row.password, current_password):
-                return render_template('account_settings.html', error='当前密码错误', user={'email': session.get('email'), 'username': session.get('username')})
-            
-            # 更新密码
-            hashed_password = generate_password_hash(new_password)
-            conn.execute(text('UPDATE users SET password = :password WHERE id = :user_id'), {
-                'password': hashed_password,
-                'user_id': session['user_id']
-            })
-            return render_template('account_settings.html', success='密码修改成功', user={'email': session.get('email'), 'username': session.get('username')})
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not row:
+            return render_template('account_settings.html', error='用户不存在', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        if not check_password_hash(row['password'], current_password):
+            return render_template('account_settings.html', error='当前密码错误', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        # 更新密码
+        hashed_password = generate_password_hash(new_password)
+        conn.execute('UPDATE users SET password = ? WHERE id = ?', (hashed_password, session['user_id']))
+        conn.commit()
+        return render_template('account_settings.html', success='密码修改成功', user={'email': session.get('email'), 'username': session.get('username')})
+    finally:
+        conn.close()
 
 
 @app.route('/send-email-code', methods=['POST'])
@@ -1260,15 +1781,14 @@ def send_email_code():
         return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
     
     # 验证邮箱是否已被使用
-    engine = get_db()
-    with app.app_context():
-        with engine.connect() as conn:
-            existing_user = conn.execute(text('SELECT * FROM users WHERE email = :new_email AND id != :user_id'), {
-                'new_email': new_email,
-                'user_id': session['user_id']
-            }).fetchone()
-            if existing_user:
-                return jsonify({'success': False, 'message': '该邮箱已被使用'}), 400
+    conn = get_db()
+    try:
+        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', 
+                                   (new_email, session['user_id'])).fetchone()
+        if existing_user:
+            return jsonify({'success': False, 'message': '该邮箱已被使用'}), 400
+    finally:
+        conn.close()
     
     try:
         code = generate_verification_code()
@@ -1298,21 +1818,20 @@ def change_email():
         return render_template('account_settings.html', error='验证码无效或已过期', user={'email': session.get('email'), 'username': session.get('username')})
     
     # 验证邮箱是否已被使用
-    engine = get_db()
-    with app.app_context():
-        with engine.begin() as conn:
-            existing_user = conn.execute(text('SELECT * FROM users WHERE email = :new_email AND id != :user_id'), {
-                'new_email': new_email,
-                'user_id': session['user_id']
-            }).fetchone()
-            if existing_user:
-                return render_template('account_settings.html', error='该邮箱已被使用', user={'email': session.get('email'), 'username': session.get('username')})
-            
-            # 更新邮箱
-            conn.execute(text('UPDATE users SET email = :new_email WHERE id = :user_id'), {
-                'new_email': new_email,
-                'user_id': session['user_id']
-            })
+    conn = get_db()
+    try:
+        existing_user = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', 
+                                   (new_email, session['user_id'])).fetchone()
+        if existing_user:
+            return render_template('account_settings.html', error='该邮箱已被使用', user={'email': session.get('email'), 'username': session.get('username')})
+        
+        # 更新邮箱
+        conn.execute('UPDATE users SET email = ? WHERE id = ?', 
+                   (new_email, session['user_id']))
+        conn.commit()
+    finally:
+        conn.close()
+    
     # 更新session中的邮箱
     session['email'] = new_email
     return render_template('account_settings.html', success='邮箱修改成功', user={'email': new_email, 'username': session.get('username')})
@@ -1334,24 +1853,274 @@ def service_terms():
     return render_template('service_terms.html')
 
 
-# API路由：处理点赞请求
-@app.post('/api/files/<file_id>/like')
+@app.get('/api/categories')
 @login_required
-def api_toggle_like(file_id):
-    """切换文件的点赞状态"""
-    user_id = session['user_id']
-    liked, count = toggle_like(file_id, user_id)
-    return jsonify({'success': True, 'liked': liked, 'count': count})
+def api_get_categories():
+    """获取用户的所有分类"""
+    conn = get_db()
+    try:
+        rows = conn.execute('SELECT * FROM categories WHERE user_id = ? ORDER BY name', (session['user_id'],)).fetchall()
+        return jsonify({
+            'success': True,
+            'categories': [{
+                'id': row['id'],
+                'name': row['name'],
+                'description': row['description'],
+                'created_at': row['created_at']
+            } for row in rows]
+        })
+    finally:
+        conn.close()
+
+@app.post('/api/categories')
+@login_required
+def api_create_category():
+    """创建新分类"""
+    data = request.json
+    name = data.get('name')
+    description = data.get('description', '')
+    
+    if not name:
+        return jsonify({'success': False, 'message': '分类名称不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        conn.execute('INSERT INTO categories (name, description, user_id) VALUES (?, ?, ?)',
+                    (name, description, session['user_id']))
+        conn.commit()
+        return jsonify({'success': True, 'message': '分类创建成功'})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': '分类名称已存在'}), 400
+    finally:
+        conn.close()
+
+@app.put('/api/categories/<int:category_id>')
+@login_required
+def api_update_category(category_id):
+    """更新分类"""
+    data = request.json
+    name = data.get('name')
+    description = data.get('description', '')
+    
+    if not name:
+        return jsonify({'success': False, 'message': '分类名称不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        result = conn.execute('UPDATE categories SET name = ?, description = ? WHERE id = ? AND user_id = ?',
+                            (name, description, category_id, session['user_id']))
+        if result.rowcount == 0:
+            return jsonify({'success': False, 'message': '分类不存在或无权限'}), 404
+        conn.commit()
+        return jsonify({'success': True, 'message': '分类更新成功'})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': '分类名称已存在'}), 400
+    finally:
+        conn.close()
+
+@app.delete('/api/categories/<int:category_id>')
+@login_required
+def api_delete_category(category_id):
+    """删除分类"""
+    conn = get_db()
+    try:
+        # 先删除分类关联
+        conn.execute('DELETE FROM file_categories WHERE category_id = ?', (category_id,))
+        # 再删除分类
+        result = conn.execute('DELETE FROM categories WHERE id = ? AND user_id = ?',
+                            (category_id, session['user_id']))
+        if result.rowcount == 0:
+            return jsonify({'success': False, 'message': '分类不存在或无权限'}), 404
+        conn.commit()
+        return jsonify({'success': True, 'message': '分类删除成功'})
+    finally:
+        conn.close()
+
+@app.post('/api/files/<file_id>/categories')
+@login_required
+def api_add_file_category(file_id):
+    """为文件添加分类"""
+    data = request.json
+    category_id = data.get('category_id')
+    
+    if not category_id:
+        return jsonify({'success': False, 'message': '分类ID不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        # 检查文件是否存在且属于当前用户
+        file = conn.execute('SELECT id FROM files WHERE id = ? AND user_id = ?',
+                          (file_id, session['user_id'])).fetchone()
+        if not file:
+            return jsonify({'success': False, 'message': '文件不存在或无权限'}), 404
+        
+        # 检查分类是否存在且属于当前用户
+        category = conn.execute('SELECT id FROM categories WHERE id = ? AND user_id = ?',
+                              (category_id, session['user_id'])).fetchone()
+        if not category:
+            return jsonify({'success': False, 'message': '分类不存在或无权限'}), 404
+        
+        # 添加分类关联
+        conn.execute('INSERT OR IGNORE INTO file_categories (file_id, category_id) VALUES (?, ?)',
+                    (file_id, category_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': '分类添加成功'})
+    finally:
+        conn.close()
+
+@app.delete('/api/files/<file_id>/categories/<int:category_id>')
+@login_required
+def api_remove_file_category(file_id, category_id):
+    """从文件中删除分类"""
+    conn = get_db()
+    try:
+        # 检查文件是否存在且属于当前用户
+        file = conn.execute('SELECT id FROM files WHERE id = ? AND user_id = ?',
+                          (file_id, session['user_id'])).fetchone()
+        if not file:
+            return jsonify({'success': False, 'message': '文件不存在或无权限'}), 404
+        
+        # 删除分类关联
+        conn.execute('DELETE FROM file_categories WHERE file_id = ? AND category_id = ?',
+                    (file_id, category_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': '分类删除成功'})
+    finally:
+        conn.close()
 
 
-# API路由：处理收藏请求
-@app.post('/api/files/<file_id>/favorite')
+# 标签管理 API
+@app.get('/api/tags')
 @login_required
-def api_toggle_favorite(file_id):
-    """切换文件的收藏状态"""
-    user_id = session['user_id']
-    favorited, count = toggle_favorite(file_id, user_id)
-    return jsonify({'success': True, 'favorited': favorited, 'count': count})
+def api_get_tags():
+    """获取用户的所有标签"""
+    conn = get_db()
+    try:
+        rows = conn.execute('SELECT * FROM tags WHERE user_id = ? ORDER BY name', (session['user_id'],)).fetchall()
+        return jsonify({
+            'success': True,
+            'tags': [{
+                'id': row['id'],
+                'name': row['name'],
+                'created_at': row['created_at']
+            } for row in rows]
+        })
+    finally:
+        conn.close()
+
+@app.post('/api/tags')
+@login_required
+def api_create_tag():
+    """创建新标签"""
+    data = request.json
+    name = data.get('name')
+    
+    if not name:
+        return jsonify({'success': False, 'message': '标签名称不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        conn.execute('INSERT INTO tags (name, user_id) VALUES (?, ?)',
+                    (name, session['user_id']))
+        conn.commit()
+        return jsonify({'success': True, 'message': '标签创建成功'})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': '标签名称已存在'}), 400
+    finally:
+        conn.close()
+
+@app.put('/api/tags/<int:tag_id>')
+@login_required
+def api_update_tag(tag_id):
+    """更新标签"""
+    data = request.json
+    name = data.get('name')
+    
+    if not name:
+        return jsonify({'success': False, 'message': '标签名称不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        result = conn.execute('UPDATE tags SET name = ? WHERE id = ? AND user_id = ?',
+                            (name, tag_id, session['user_id']))
+        if result.rowcount == 0:
+            return jsonify({'success': False, 'message': '标签不存在或无权限'}), 404
+        conn.commit()
+        return jsonify({'success': True, 'message': '标签更新成功'})
+    except sqlite3.IntegrityError:
+        return jsonify({'success': False, 'message': '标签名称已存在'}), 400
+    finally:
+        conn.close()
+
+@app.delete('/api/tags/<int:tag_id>')
+@login_required
+def api_delete_tag(tag_id):
+    """删除标签"""
+    conn = get_db()
+    try:
+        # 先删除标签关联
+        conn.execute('DELETE FROM file_tags WHERE tag_id = ?', (tag_id,))
+        # 再删除标签
+        result = conn.execute('DELETE FROM tags WHERE id = ? AND user_id = ?',
+                            (tag_id, session['user_id']))
+        if result.rowcount == 0:
+            return jsonify({'success': False, 'message': '标签不存在或无权限'}), 404
+        conn.commit()
+        return jsonify({'success': True, 'message': '标签删除成功'})
+    finally:
+        conn.close()
+
+@app.post('/api/files/<file_id>/tags')
+@login_required
+def api_add_file_tag(file_id):
+    """为文件添加标签"""
+    data = request.json
+    tag_id = data.get('tag_id')
+    
+    if not tag_id:
+        return jsonify({'success': False, 'message': '标签ID不能为空'}), 400
+    
+    conn = get_db()
+    try:
+        # 检查文件是否存在且属于当前用户
+        file = conn.execute('SELECT id FROM files WHERE id = ? AND user_id = ?',
+                          (file_id, session['user_id'])).fetchone()
+        if not file:
+            return jsonify({'success': False, 'message': '文件不存在或无权限'}), 404
+        
+        # 检查标签是否存在且属于当前用户
+        tag = conn.execute('SELECT id FROM tags WHERE id = ? AND user_id = ?',
+                              (tag_id, session['user_id'])).fetchone()
+        if not tag:
+            return jsonify({'success': False, 'message': '标签不存在或无权限'}), 404
+        
+        # 添加标签关联
+        conn.execute('INSERT OR IGNORE INTO file_tags (file_id, tag_id) VALUES (?, ?)',
+                    (file_id, tag_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': '标签添加成功'})
+    finally:
+        conn.close()
+
+@app.delete('/api/files/<file_id>/tags/<int:tag_id>')
+@login_required
+def api_remove_file_tag(file_id, tag_id):
+    """从文件中删除标签"""
+    conn = get_db()
+    try:
+        # 检查文件是否存在且属于当前用户
+        file = conn.execute('SELECT id FROM files WHERE id = ? AND user_id = ?',
+                          (file_id, session['user_id'])).fetchone()
+        if not file:
+            return jsonify({'success': False, 'message': '文件不存在或无权限'}), 404
+        
+        # 删除标签关联
+        conn.execute('DELETE FROM file_tags WHERE file_id = ? AND tag_id = ?',
+                    (file_id, tag_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': '标签删除成功'})
+    finally:
+        conn.close()
 
 
 # API路由：获取文件的点赞和收藏状态
@@ -1370,8 +2139,11 @@ def api_get_interactions(file_id):
         is_favorited = False
         
         if user_id:
-            is_liked = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
-            is_favorited = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone() is not None
+            # 只有登录用户才检查点赞和收藏状态
+            liked_result = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone()
+            favorited_result = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', (file_id, user_id)).fetchone()
+            is_liked = bool(liked_result)
+            is_favorited = bool(favorited_result)
         
         conn.close()
         
@@ -1384,6 +2156,164 @@ def api_get_interactions(file_id):
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.post('/api/files/<file_id>/like')
+@login_required
+def api_toggle_like(file_id):
+    """切换文件点赞状态"""
+    try:
+        user_id = session['user_id']
+        conn = get_db()
+        
+        # 检查是否已经点赞
+        row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        if row:
+            # 已经点赞，取消点赞
+            conn.execute('DELETE FROM likes WHERE file_id = ? AND user_id = ?', 
+                        (file_id, user_id))
+            liked = False
+        else:
+            # 未点赞，添加点赞
+            conn.execute('INSERT INTO likes (file_id, user_id) VALUES (?, ?)', 
+                        (file_id, user_id))
+            liked = True
+        conn.commit()
+        
+        # 获取最新点赞数
+        count_row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', 
+                               (file_id,)).fetchone()
+        count = count_row['count']
+        conn.close()
+        
+        return jsonify({'success': True, 'liked': liked, 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.post('/api/files/<file_id>/favorite')
+@login_required
+def api_toggle_favorite(file_id):
+    """切换文件收藏状态"""
+    try:
+        user_id = session['user_id']
+        conn = get_db()
+        
+        # 检查是否已经收藏
+        row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', 
+                          (file_id, user_id)).fetchone()
+        if row:
+            # 已经收藏，取消收藏
+            conn.execute('DELETE FROM favorites WHERE file_id = ? AND user_id = ?', 
+                        (file_id, user_id))
+            favorited = False
+        else:
+            # 未收藏，添加收藏
+            conn.execute('INSERT INTO favorites (file_id, user_id) VALUES (?, ?)', 
+                        (file_id, user_id))
+            favorited = True
+        conn.commit()
+        
+        # 获取最新收藏数
+        count_row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', 
+                               (file_id,)).fetchone()
+        count = count_row['count']
+        conn.close()
+        
+        return jsonify({'success': True, 'favorited': favorited, 'count': count})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# 文件版本控制API
+
+
+
+@app.get('/api/files/<file_id>/versions')
+@login_required
+def get_file_versions(file_id):
+    """获取文件的所有版本"""
+    conn = get_db()
+    try:
+        rows = conn.execute('''SELECT * FROM file_versions WHERE file_id = ? ORDER BY version_number DESC''', 
+                          (file_id,)).fetchall()
+        versions = [dict(row) for row in rows]
+        return jsonify({'success': True, 'versions': versions})
+    finally:
+        conn.close()
+
+
+@app.get('/api/files/<file_id>/versions/<int:version_id>')
+@login_required
+def get_file_version(file_id, version_id):
+    """获取特定版本的文件"""
+    conn = get_db()
+    try:
+        version = conn.execute('''SELECT * FROM file_versions WHERE id = ? AND file_id = ?''', 
+                              (version_id, file_id)).fetchone()
+        if not version:
+            return jsonify({'success': False, 'message': '版本不存在'}), 404
+        return jsonify({'success': True, 'version': dict(version)})
+    finally:
+        conn.close()
+
+
+@app.post('/api/files/<file_id>/versions/<int:version_id>/restore')
+@login_required
+def restore_file_version(file_id, version_id):
+    """恢复文件到指定版本"""
+    conn = get_db()
+    try:
+        # 验证版本存在且属于当前用户
+        version = conn.execute('''SELECT * FROM file_versions 
+                               WHERE id = ? AND file_id = ?''', 
+                             (version_id, file_id)).fetchone()
+        
+        file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id'])).fetchone()
+        
+        if not version or not file:
+            return jsonify({'success': False, 'message': '版本不存在或无权限操作'}), 404
+        
+        # 更新主文件为指定版本
+        conn.execute('''UPDATE files SET filename = ?, stored_name = ?, path = ?, size = ? 
+                        WHERE id = ?''', 
+                    (version['filename'], version['stored_name'], version['path'], version['size'], file_id))
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': '文件已恢复到指定版本'})
+    finally:
+        conn.close()
+
+
+@app.delete('/api/files/<file_id>/versions/<int:version_id>')
+@login_required
+def delete_file_version(file_id, version_id):
+    """删除文件版本"""
+    conn = get_db()
+    try:
+        # 获取版本信息
+        version = conn.execute('''SELECT * FROM file_versions 
+                               WHERE id = ? AND file_id = ?''', 
+                             (version_id, file_id)).fetchone()
+        
+        # 验证文件属于当前用户
+        file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id'])).fetchone()
+        
+        if not version or not file:
+            return jsonify({'success': False, 'message': '版本不存在或无权限操作'}), 404
+        
+        # 删除版本记录
+        conn.execute('DELETE FROM file_versions WHERE id = ?', (version_id,))
+        
+        # 删除版本文件
+        if Path(version['path']).exists():
+            Path(version['path']).unlink()
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': '文件版本已删除'})
+    finally:
+        conn.close()
 
 
 @app.before_request
@@ -1402,8 +2332,8 @@ def add_security_headers(response):
         response.headers['Expires'] = '0'
     
     # 添加内容安全策略（CSP）头
-    # 对于打开的文件，允许内联脚本和样式，以便HTML文件中的功能可以正常使用
-    if request.path.startswith('/open/'):
+    # 对于打开的文件和文件详情页面，允许内联脚本和样式，以便HTML文件中的功能可以正常使用
+    if request.path.startswith('/open/') or request.path.startswith('/files/'):
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
     else:
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://beian.miit.gov.cn; font-src 'self' data:; connect-src 'self'; frame-src 'none'"
