@@ -221,7 +221,8 @@ function setupFileSearch() {
 // 模态框功能
 function toggleEditModal() {
   const modal = document.getElementById('edit-modal');
-  if (modal.style.display === 'flex') {
+  if (modal.classList.contains('show')) {
+    modal.classList.remove('show');
     modal.style.display = 'none';
   } else {
     modal.style.display = 'flex';
@@ -275,6 +276,61 @@ window.addEventListener('DOMContentLoaded', () => {
       toggleEditModal();
     }
   });
+
+  // 头像上传功能
+  const avatarInput = document.getElementById('avatar');
+  const avatarFileSize = document.getElementById('avatar-file-size');
+  const avatarPreviewImg = document.getElementById('avatar-preview-img');
+  const avatarPreviewPlaceholder = document.getElementById('avatar-preview-placeholder');
+
+  if (avatarInput) {
+    avatarInput.addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (file) {
+        // 显示文件大小
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        avatarFileSize.textContent = `已选择文件: ${file.name} (${fileSizeMB} MB)`;
+        
+        // 预览头像
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          if (avatarPreviewImg) {
+            avatarPreviewImg.src = e.target.result;
+            avatarPreviewImg.style.display = 'block';
+          } else {
+            // 如果没有预览元素，创建一个
+            const newPreviewImg = document.createElement('img');
+            newPreviewImg.id = 'avatar-preview-img';
+            newPreviewImg.src = e.target.result;
+            newPreviewImg.alt = '预览头像';
+            newPreviewImg.style.display = 'block';
+            newPreviewImg.style.width = '100%';
+            newPreviewImg.style.height = '100%';
+            newPreviewImg.style.objectFit = 'cover';
+            newPreviewImg.style.borderRadius = '50%';
+            
+            // 移除占位符
+            if (avatarPreviewPlaceholder) {
+              avatarPreviewPlaceholder.remove();
+            }
+            
+            // 添加预览图片
+            const avatarPreview = document.querySelector('.avatar-preview');
+            avatarPreview.appendChild(newPreviewImg);
+          }
+          
+          // 隐藏占位符
+          if (avatarPreviewPlaceholder) {
+            avatarPreviewPlaceholder.style.display = 'none';
+          }
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // 清除文件大小显示
+        avatarFileSize.textContent = '';
+      }
+    });
+  }
 });
 
 // 折叠/展开访问记录

@@ -887,7 +887,136 @@ def upload_page():
 @app.get("/blog_page")
 def blog_page():
     """博客页面"""
-    return render_template("blog_page.html", username=session.get('username'))
+    # 博客数据
+    posts = [
+        {
+            "id": 1,
+            "title": "Flask框架入门教程",
+            "date": "2025-12-01",
+            "category": "技术教程",
+            "summary": "Flask是一个基于Werkzeug和Jinja2的轻量级Python Web框架，以简单、灵活和可扩展著称。本文将介绍Flask的基本概念、安装方法、路由系统、模板引擎、表单处理、数据库集成、蓝图以及部署等方面的内容。"
+        },
+        {
+            "id": 2,
+            "title": "AI技术在文件管理中的应用",
+            "date": "2025-11-25",
+            "category": "AI技术",
+            "summary": "传统的文件管理系统依赖用户手动分类和命名文件，效率低下且容易出错。AI技术可以自动化这些过程，提高管理效率，减少人为错误，并提供更智能的文件检索和分析功能。"
+        },
+        {
+            "id": 3,
+            "title": "前端开发最佳实践",
+            "date": "2025-11-20",
+            "category": "前端开发",
+            "summary": "良好的前端开发实践可以提高代码的可维护性、性能和安全性。本文将介绍代码组织与结构、性能优化、响应式设计、可访问性、安全性、测试策略等方面的最佳实践。"
+        }
+    ]
+    return render_template("blog_page.html", posts=posts, username=session.get('username'))
+
+
+@app.get("/blog_detail/<int:post_id>")
+def blog_detail(post_id):
+    """博客详情页面"""
+    # 根据post_id获取博客内容
+    posts = {
+        1: {
+            "id": 1,
+            "title": "Flask框架入门教程",
+            "subtitle": "分享技术、生活和思考",
+            "date": "2025-12-01",
+            "category": "技术教程",
+            "content": '''<h3>1. Flask简介</h3><p>Flask是一个基于Werkzeug和Jinja2的轻量级Python Web框架，由Armin Ronacher开发。它以简单、灵活和可扩展著称，适合从简单的个人网站到复杂的Web应用。</p><h3>2. 安装Flask</h3><p>首先，确保你已经安装了Python 3.6或更高版本。然后使用pip安装Flask：</p><pre><code>pip install flask</code></pre><h3>3. 创建第一个Flask应用</h3><p>创建一个名为<code>app.py</code>的文件，内容如下：</p><pre><code>from flask import Flask
+
+app = Flask(__name__)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, Flask!'
+
+if __name__ == '__main__':
+    app.run(debug=True)</code></pre><p>运行应用：</p><pre><code>python app.py</code></pre><p>访问 <code>http://127.0.0.1:5000/</code>，你将看到 "Hello, Flask!"。</p><h3>4. 路由系统</h3><p>Flask使用装饰器来定义路由：</p><pre><code>@app.route('/about')
+def about():
+    return 'About Page'
+
+@app.route('/user/<username>')
+def show_user_profile(username):
+    return f'User {username}'
+
+@app.route('/post/<int:post_id>')
+def show_post(post_id):
+    return f'Post {post_id}'</code></pre><h3>5. 模板系统</h3><p>Flask使用Jinja2模板引擎。创建一个<code>templates</code>文件夹，并在其中创建<code>index.html</code>：</p><pre><code>&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;{{ title }}&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;h1&gt;Hello, {{ name }}!&lt;/h1&gt;
+&lt;/body&gt;
+&lt;/html&gt;</code></pre><p>在路由中使用模板：</p><pre><code>from flask import render_template
+
+@app.route('/hello/<name>')
+def hello(name):
+    return render_template('index.html', title='Home Page', name=name)</code></pre><h3>6. 表单处理</h3><p>使用Flask-WTF扩展来处理表单：</p><pre><code>pip install flask-wtf</code></pre><p>创建表单类：</p><pre><code>from flask_wtf import FlaskForm
+from wtforms import StringField, SubmitField
+from wtforms.validators import DataRequired
+
+class NameForm(FlaskForm):
+    name = StringField('What is your name?', validators=[DataRequired()])
+    submit = SubmitField('Submit')</code></pre><p>在路由中处理表单：</p><pre><code>@app.route('/form', methods=['GET', 'POST'])
+def form():
+    form = NameForm()
+    if form.validate_on_submit():
+        name = form.name.data
+        return render_template('result.html', name=name)
+    return render_template('form.html', form=form)</code></pre><h3>7. 数据库集成</h3><p>Flask可以与多种数据库集成，最常用的是SQLite：</p><pre><code>pip install flask-sqlalchemy</code></pre><p>配置数据库：</p><pre><code>app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+db = SQLAlchemy(app)</code></pre><p>创建模型：</p><pre><code>class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(20), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(60), nullable=False)
+    
+    def __repr__(self):
+        return f"&lt;User '{self.username}'&gt;"</code></pre><h3>8. 蓝图（Blueprints）</h3><p>使用蓝图组织大型应用：</p><pre><code>from flask import Blueprint
+
+main = Blueprint('main', __name__)
+
+@main.route('/')
+def home():
+    return 'Home Page'
+
+@main.route('/about')
+def about():
+    return 'About Page'</code></pre><p>注册蓝图：</p><pre><code>from flask import Flask
+from main import main as main_blueprint
+
+app = Flask(__name__)
+app.register_blueprint(main_blueprint)</code></pre><h3>9. 部署Flask应用</h3><p>对于生产环境，建议使用WSGI服务器如Gunicorn：</p><pre><code>pip install gunicorn
+gunicorn app:app</code></pre><p>或使用uWSGI：</p><pre><code>pip install uwsgi
+uwsgi --http 0.0.0.0:8000 --module app:app</code></pre><h3>10. 最佳实践</h3><ul><li>使用虚拟环境管理依赖</li><li>设置环境变量管理配置</li><li>使用蓝图组织代码</li><li>实现适当的错误处理</li><li>使用Flask-Login处理用户认证</li><li>使用Flask-Migrate进行数据库迁移</li></ul>'''
+        },
+        2: {
+            "id": 2,
+            "title": "AI技术在文件管理中的应用",
+            "subtitle": "分享技术、生活和思考",
+            "date": "2025-11-25",
+            "category": "AI技术",
+            "content": '''<h3>1. AI在文件管理中的价值</h3><p>传统的文件管理系统依赖用户手动分类和命名文件，效率低下且容易出错。AI技术可以自动化这些过程，提高管理效率，减少人为错误，并提供更智能的文件检索和分析功能。</p><h3>2. 智能文件分类</h3><p>AI可以根据文件内容自动将文件分类到相应的文件夹中：</p><ul><li><strong>图像分类</strong>：使用卷积神经网络（CNN）识别图像内容，如文档、照片、图表等。</li><li><strong>文档分类</strong>：利用自然语言处理（NLP）技术分析文本内容，区分合同、报告、简历等。</li><li><strong>音频分类</strong>：通过音频分析区分会议录音、音乐、语音笔记等。</li></ul><h3>3. 内容提取与分析</h3><p>AI可以从各种文件中提取关键信息：</p><ul><li><strong>OCR技术</strong>：从扫描文档中提取文本内容，支持多种语言。</li><li><strong>文本摘要</strong>：自动生成文档摘要，方便快速了解文件内容。</li><li><strong>实体识别</strong>：从文本中提取人名、日期、地点、金额等关键实体。</li><li><strong>表格提取</strong>：从PDF和图像中提取表格数据，转换为可编辑格式。</li></ul><h3>4. 自动标签生成</h3><p>AI可以根据文件内容自动生成相关标签：</p><ul><li><strong>关键词提取</strong>：使用TF-IDF或BERT模型从文本中提取关键词。</li><li><strong>语义标签</strong>：基于文件内容的语义理解生成更准确的标签。</li><li><strong>自定义标签规则</strong>：结合用户定义的规则生成符合特定需求的标签。</li></ul><h3>5. 智能搜索功能</h3><p>AI增强的搜索功能提供更准确的结果：</p><ul><li><strong>语义搜索</strong>：理解搜索查询的意图，返回相关度更高的结果。</li><li><strong>多模态搜索</strong>：支持通过文本描述搜索图像、视频等多媒体文件。</li><li><strong>自动补全</strong>：根据用户输入提供智能补全建议。</li><li><strong>搜索历史分析</strong>：根据用户的搜索历史优化搜索结果。</li></ul><h3>6. 文件去重与清理</h3><p>AI可以帮助识别和清理重复文件：</p><ul><li><strong>内容相似性检测</strong>：比较文件内容，识别重复或高度相似的文件。</li><li><strong>重复文件合并</strong>：智能合并重复文件，保留最新版本或最完整版本。</li><li><strong>过期文件识别</strong>：根据文件类型和使用频率识别过期文件，建议清理。</li></ul><h3>7. 安全性增强</h3><p>AI可以提高文件管理系统的安全性：</p><ul><li><strong>恶意文件检测</strong>：使用机器学习模型检测病毒、木马等恶意文件。</li><li><strong>敏感信息识别</strong>：自动识别和标记包含敏感信息的文件，如身份证号、银行账户等。</li><li><strong>访问权限智能控制</strong>：根据用户角色和文件内容智能调整访问权限。</li></ul><h3>8. 推荐系统</h3><p>AI可以根据用户行为推荐相关文件：</p><ul><li><strong>相关文件推荐</strong>：根据当前查看的文件推荐相关文件。</li><li><strong>使用模式分析</strong>：分析用户的文件使用模式，预测用户可能需要的文件。</li><li><strong>团队协作推荐</strong>：基于团队成员的文件共享行为推荐相关资源。</li></ul><h3>9. 实现技术</h3><p>实现AI文件管理系统的关键技术：</p><ul><li><strong>机器学习框架</strong>：TensorFlow、PyTorch等用于构建和训练模型。</li><li><strong>预训练模型</strong>：BERT、GPT、ResNet等预训练模型用于文本和图像分析。</li><li><strong>向量数据库</strong>：如Pinecone、Milvus等用于高效存储和检索向量表示的文件。</li><li><strong>API集成</strong>：集成第三方AI服务，如OpenAI、Google Cloud Vision等。</li></ul><h3>10. 未来发展趋势</h3><p>AI在文件管理领域的未来发展方向：</p><ul><li><strong>更智能的上下文理解</strong>：AI将能够更好地理解文件之间的关系和上下文。</li><li><strong>更强的个性化推荐</strong>：基于用户行为和偏好提供更精准的推荐。</li><li><strong>更好的多模态融合</strong>：将文本、图像、音频等多种模态的信息融合处理。</li><li><strong>更强的隐私保护</strong>：在AI处理过程中更好地保护用户隐私。</li></ul>'''
+        },
+        3: {
+            "id": 3,
+            "title": "前端开发最佳实践",
+            "subtitle": "分享技术、生活和思考",
+            "date": "2025-11-20",
+            "category": "前端开发",
+            "content": '''<h3>1. 代码组织与结构</h3><p>良好的代码组织是可维护性的基础：</p><ul><li><strong>模块化开发</strong>：将代码拆分为独立的模块，便于复用和维护。</li><li><strong>组件化设计</strong>：使用组件化框架（React、Vue、Angular）构建UI，提高复用性。</li><li><strong>清晰的文件结构</strong>：按功能或类型组织文件，如components、utils、hooks等。</li><li><strong>命名规范</strong>：采用一致的命名规范，如BEM（Block, Element, Modifier）或CSS Modules。</li></ul><h3>2. 性能优化</h3><p>性能是前端开发的关键指标：</p><ul><li><strong>减少HTTP请求</strong>：合并文件、使用CSS Sprites、字体图标等。</li><li><strong>代码分割</strong>：使用动态导入（Dynamic Import）按需加载代码。</li><li><strong>懒加载</strong>：延迟加载非首屏资源，如图片、视频等。</li><li><strong>缓存策略</strong>：合理设置HTTP缓存头，使用Service Worker实现离线缓存。</li><li><strong>压缩资源</strong>：压缩HTML、CSS、JavaScript和图像文件。</li><li><strong>使用CDN</strong>：通过CDN分发静态资源，提高加载速度。</li></ul><h3>3. 响应式设计</h3><p>确保在不同设备上都有良好的显示效果：</p><ul><li><strong>移动优先设计</strong>：从移动设备开始设计，逐步扩展到桌面设备。</li><li><strong>Flexbox和Grid布局</strong>：使用现代CSS布局技术实现灵活的响应式设计。</li><li><strong>媒体查询</strong>：根据不同屏幕尺寸调整样式。</li><li><strong>响应式图像</strong>：使用srcset和sizes属性提供不同尺寸的图像。</li><li><strong>流体字体</strong>：使用相对单位（rem、em、vw）实现字体大小的响应式调整。</li></ul><h3>4. 可访问性（Accessibility）</h3><p>确保所有用户都能访问你的应用：</p><ul><li><strong>语义化HTML</strong>：使用适当的HTML标签，如header、nav、main、footer等。</li><li><strong>ARIA属性</strong>：为交互式元素添加适当的ARIA属性。</li><li><strong>键盘导航</strong>：确保应用可以完全通过键盘操作。</li><li><strong>颜色对比度</strong>：确保文本与背景有足够的对比度（WCAG AA标准：至少4.5:1）。</li><li><strong>替代文本</strong>：为图像添加alt属性，为视频提供字幕。</li></ul><h3>5. 安全性</h3><p>保护用户数据和应用安全：</p><ul><li><strong>防止XSS攻击</strong>：对用户输入进行转义，使用CSP（Content Security Policy）。</li><li><strong>防止CSRF攻击</strong>：使用CSRF令牌保护表单提交。</li><li><strong>安全的身份验证</strong>：使用现代身份验证方案，如JWT或OAuth 2.0。</li><li><strong>数据加密</strong>：确保敏感数据在传输和存储时都经过加密。</li><li><strong>依赖管理</strong>：定期更新依赖，修复安全漏洞。</li></ul><h3>6. 测试策略</h3><p>确保代码质量和功能正确性：</p><ul><li><strong>单元测试</strong>：测试独立的函数和组件。</li><li><strong>集成测试</strong>：测试组件之间的交互。</li><li><strong>端到端测试</strong>：测试完整的用户流程。</li><li><strong>测试覆盖率</strong>：目标达到至少80%的测试覆盖率。</li><li><strong>持续集成</strong>：在代码提交时自动运行测试。</li></ul><h3>7. 开发工具链</h3><p>选择合适的开发工具：</p><ul><li><strong>代码编辑器</strong>：VS Code、Sublime Text等。</li><li><strong>构建工具</strong>：Webpack、Vite、Rollup等。</li><li><strong>版本控制</strong>：Git、GitHub、GitLab等。</li><li><strong>调试工具</strong>：Chrome DevTools、Firefox Developer Tools等。</li><li><strong>代码质量工具</strong>：ESLint、Prettier、Stylelint等。</li></ul><h3>8. 团队协作</h3><p>提高团队开发效率：</p><ul><li><strong>代码规范</strong>：制定统一的代码规范和最佳实践。</li><li><strong>文档</strong>：编写清晰的文档，包括API文档、组件文档等。</li><li><strong>代码审查</strong>：进行代码审查，提高代码质量。</li><li><strong>自动化流程</strong>：使用CI/CD工具自动化构建、测试和部署流程。</li></ul><h3>9. 持续学习</h3><p>前端技术发展迅速，需要持续学习：</p><ul><li><strong>关注技术趋势</strong>：定期阅读技术博客、参加技术会议等。</li><li><strong>实践新项目</strong>：通过实践新项目学习新技术。</li><li><strong>参与开源项目</strong>：参与开源项目，学习优秀的代码和实践。</li><li><strong>社区交流</strong>：加入技术社区，与其他开发者交流学习。</li></ul><h3>10. 性能监控与优化</h3><p>持续监控和优化应用性能：</p><ul><li><strong>性能监控工具</strong>：使用Lighthouse、WebPageTest、New Relic等工具监控性能。</li><li><strong>性能分析</strong>：定期分析性能数据，找出瓶颈。</li><li><strong>持续优化</strong>：根据性能分析结果持续优化应用。</li></ul>'''
+        }
+    }
+    
+    post = posts.get(post_id)
+    if not post:
+        return redirect(url_for("blog_page"))
+    
+    return render_template("blog_detail.html", post=post, username=session.get('username'))
 
 
 @app.get("/ai_page")

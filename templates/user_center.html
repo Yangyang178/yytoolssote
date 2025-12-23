@@ -49,23 +49,55 @@
             <div id="edit-modal" class="modal">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h3>编辑个人资料</h3>
-                        <span class="close" id="close-modal-btn">&times;</span>
+                        <h3 class="modal-title">
+                            <span class="modal-icon">👤</span>
+                            编辑个人资料
+                        </h3>
+                        <button class="modal-close" id="close-modal-btn">&times;</button>
                     </div>
                     <div class="modal-body">
                         <form action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
-                            <div class="form-group">
-                                <label for="username">昵称</label>
-                                <input type="text" id="username" name="username" value="{{ user.username }}" required>
+                            <div class="form-section">
+                                <!-- 昵称输入 -->
+                                <div class="form-group">
+                                    <label for="username" class="form-label">昵称</label>
+                                    <input type="text" id="username" name="username" value="{{ user.username }}" 
+                                           class="form-input" required placeholder="请输入您的昵称">
+                                </div>
+                                
+                                <!-- 头像上传 -->
+                                <div class="form-group">
+                                    <label for="avatar" class="form-label">头像</label>
+                                    <div class="avatar-upload-section">
+                                        <div class="avatar-preview">
+                                            {% if user.avatar_url %}
+                                                <img id="avatar-preview-img" src="{{ user.avatar_url }}" alt="当前头像">
+                                            {% else %}
+                                                <div id="avatar-preview-placeholder" class="avatar-preview-placeholder">
+                                                    <span class="placeholder-icon">👤</span>
+                                                    <span class="placeholder-text">暂无头像</span>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="modern-file-upload">
+                                            <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png" 
+                                                   class="file-input">
+                                            <label for="avatar" class="file-label">
+                                                <div class="upload-icon">📁</div>
+                                                <div class="upload-info">
+                                                    <span class="upload-text">点击选择文件或拖拽文件到此处</span>
+                                                    <span class="upload-hint">支持JPG、PNG格式，大小不超过2MB</span>
+                                                    <span class="file-size" id="avatar-file-size"></span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="avatar">头像</label>
-                                <input type="file" id="avatar" name="avatar" accept="image/*">
-                                <p class="form-hint">支持JPG、PNG格式，大小不超过2MB</p>
-                            </div>
+                            
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-cancel" id="cancel-edit-btn">取消</button>
-                                <button type="submit" class="btn btn-submit">保存修改</button>
+                                <button type="submit" class="btn btn-primary">保存修改</button>
                             </div>
                         </form>
                     </div>
@@ -320,32 +352,52 @@
 <div id="replaceModal" class="modal hidden">
     <div class="modal-content">
         <div class="modal-header">
-            <h3 class="modal-title">替换文件</h3>
+            <h3 class="modal-title">
+                <span class="modal-icon">🔄</span>
+                替换文件
+            </h3>
             <button class="modal-close" onclick="closeReplaceModal()">&times;</button>
         </div>
         <div class="modal-body">
             <form id="replaceFileForm" action="{{ url_for('file_replace') }}" method="post" enctype="multipart/form-data">
                 <input type="hidden" id="replaceFileId" name="file_id">
-                <div class="form-group">
-                    <label for="replaceFile" class="form-label">选择新文件</label>
-                    <div class="file-upload">
-                        <input type="file" id="replaceFile" name="file" required class="file-input">
-                        <label for="replaceFile" class="file-label">
-                            <span class="file-icon">📁</span>
-                            <div class="file-info">
-                                <span class="file-text">点击选择文件或拖拽文件到此处</span>
-                                <span class="file-size"></span>
-                            </div>
-                        </label>
+                <div class="form-section">
+                    <div class="form-group">
+                        <label for="replaceFile" class="form-label">选择新文件</label>
+                        <div class="modern-file-upload">
+                            <input type="file" id="replaceFile" name="file" required class="file-input">
+                            <label for="replaceFile" class="file-label">
+                                <div class="upload-icon">📁</div>
+                                <div class="upload-info">
+                                    <span class="upload-text">点击选择文件或拖拽文件到此处</span>
+                                    <span class="upload-hint">支持多种文件格式，单个文件不超过200MB</span>
+                                    <span class="file-size"></span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="versionComment" class="form-label">版本备注（可选）</label>
+                        <textarea 
+                            id="versionComment" 
+                            name="comment" 
+                            rows="3" 
+                            placeholder="请输入版本更新说明，例如：修复了某些功能或添加了新特性" 
+                            class="form-textarea"
+                        ></textarea>
                     </div>
                 </div>
-                <div class="form-group">
-                    <label for="versionComment" class="form-label">版本备注（可选）</label>
-                    <textarea id="versionComment" name="comment" rows="3" placeholder="请输入版本更新说明" class="form-textarea"></textarea>
-                </div>
+                
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-cancel" onclick="closeReplaceModal()">取消</button>
-                    <button type="submit" class="btn btn-primary">替换文件</button>
+                    <button type="button" class="btn btn-cancel" onclick="closeReplaceModal()">
+                        <span class="btn-icon">✕</span>
+                        取消
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-submit">
+                        <span class="btn-icon">🚀</span>
+                        替换文件
+                    </button>
                 </div>
             </form>
         </div>

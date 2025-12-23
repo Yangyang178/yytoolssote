@@ -251,14 +251,30 @@ function generateFilePreview(file) {
         
         actionText = '查看完整内容';
         actionHandler = function() {
+            // 对于HTML文件，创建一个完整的HTML页面
             const reader = new FileReader();
             reader.onload = function(e) {
-                // 创建Blob对象
-                const blob = new Blob([e.target.result], { type: fileExtension === 'html' ? 'text/html' : 'text/plain' });
-                // 创建URL
-                const url = URL.createObjectURL(blob);
-                // 在新窗口打开
-                window.open(url, '_blank');
+                const content = e.target.result;
+                
+                // 检测是否为HTML文件
+                const isHtml = fileExtension === 'html' || mimeType.startsWith('text/html') || 
+                    content.startsWith('<!DOCTYPE html') || content.startsWith('<html');
+                
+                if (isHtml) {
+                    // 创建一个临时HTML文件，直接在新窗口中写入内容
+                    const newWindow = window.open('', '_blank');
+                    if (newWindow) {
+                        // 直接写入完整的HTML内容
+                        newWindow.document.open();
+                        newWindow.document.write(content);
+                        newWindow.document.close();
+                    }
+                } else {
+                    // 对于非HTML文件，使用原始方式
+                    const blob = new Blob([content], { type: 'text/plain' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank');
+                }
             };
             reader.readAsText(file);
         };

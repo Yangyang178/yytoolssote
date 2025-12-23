@@ -10,56 +10,23 @@
         
         <!-- 博客文章列表 -->
         <div class="blog-posts">
-            <!-- 示例文章1 -->
+            {% for post in posts %}
             <article class="blog-post">
                 <div class="post-header">
-                    <h2 class="post-title">Flask框架入门教程</h2>
+                    <h2 class="post-title">{{ post.title }}</h2>
                     <div class="post-meta">
-                        <span class="post-date">2025-12-01</span>
-                        <span class="post-category">技术教程</span>
+                        <span class="post-date">{{ post.date }}</span>
+                        <span class="post-category">{{ post.category }}</span>
                     </div>
                 </div>
                 <div class="post-excerpt">
-                    <p>Flask是一个轻量级的Python Web框架，适合快速开发Web应用。本文将介绍Flask的基本概念和使用方法，包括路由、模板、表单处理等...</p>
+                    <p>{{ post.summary }}</p>
                 </div>
                 <div class="post-footer">
-                    <a href="#" class="btn-read-more">阅读全文</a>
+                    <a href="{{ url_for('blog_detail', post_id=post.id) }}" class="btn-read-more">阅读全文</a>
                 </div>
             </article>
-            
-            <!-- 示例文章2 -->
-            <article class="blog-post">
-                <div class="post-header">
-                    <h2 class="post-title">AI技术在文件管理中的应用</h2>
-                    <div class="post-meta">
-                        <span class="post-date">2025-11-25</span>
-                        <span class="post-category">AI技术</span>
-                    </div>
-                </div>
-                <div class="post-excerpt">
-                    <p>随着AI技术的发展，越来越多的应用开始集成AI功能。本文将探讨AI技术在文件管理系统中的应用，包括智能分类、内容提取、自动标签等...</p>
-                </div>
-                <div class="post-footer">
-                    <a href="#" class="btn-read-more">阅读全文</a>
-                </div>
-            </article>
-            
-            <!-- 示例文章3 -->
-            <article class="blog-post">
-                <div class="post-header">
-                    <h2 class="post-title">前端开发最佳实践</h2>
-                    <div class="post-meta">
-                        <span class="post-date">2025-11-20</span>
-                        <span class="post-category">前端开发</span>
-                    </div>
-                </div>
-                <div class="post-excerpt">
-                    <p>前端开发是Web应用的重要组成部分，良好的前端实践可以提高开发效率和用户体验。本文将分享一些前端开发的最佳实践，包括代码组织、性能优化、响应式设计等...</p>
-                </div>
-                <div class="post-footer">
-                    <a href="#" class="btn-read-more">阅读全文</a>
-                </div>
-            </article>
+            {% endfor %}
         </div>
         
         <!-- 分页 -->
