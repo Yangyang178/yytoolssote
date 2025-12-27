@@ -61,6 +61,23 @@
                         </div>
                         <p class="form-hint">公开的文件可以被其他用户访问</p>
                     </div>
+                    
+                    {% if session.role == 'developer' %}
+                    <div class="form-group">
+                        <label for="upload_target" class="form-label">上传位置</label>
+                        <div class="radio-group">
+                            <div class="radio-item">
+                                <input type="radio" id="target_home" name="upload_target" value="home" checked class="radio-input">
+                                <label for="target_home" class="radio-label">上传到首页文件列表</label>
+                            </div>
+                            <div class="radio-item">
+                                <input type="radio" id="target_user" name="upload_target" value="user" class="radio-input">
+                                <label for="target_user" class="radio-label">上传到用户中心</label>
+                            </div>
+                        </div>
+                        <p class="form-hint">选择文件上传的目标位置</p>
+                    </div>
+                    {% endif %}
                 </div>
                 
                 <div class="form-actions">

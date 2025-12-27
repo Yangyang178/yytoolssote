@@ -85,12 +85,20 @@ def init_db():
                         email TEXT NOT NULL UNIQUE,
                         username TEXT NOT NULL,
                         password TEXT NOT NULL,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        role TEXT DEFAULT "user"
                     )''')
         
         # 检查并添加password字段到现有users表
         try:
             conn.execute('ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ""')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
+        
+        # 检查并添加role字段到现有users表
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN role TEXT DEFAULT "user"')
         except sqlite3.OperationalError:
             # 字段已经存在，跳过
             pass
@@ -169,11 +177,12 @@ def init_db():
         # 创建文件分类表
         conn.execute('''CREATE TABLE IF NOT EXISTS categories (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        name TEXT NOT NULL UNIQUE,
+                        name TEXT NOT NULL,
                         description TEXT,
                         user_id TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
+                        FOREIGN KEY (user_id) REFERENCES users (id),
+                        UNIQUE(name, user_id)
                     )''')
         
         # 创建文件标签表
@@ -508,9 +517,106 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
         conn.close()
 
 
+def ensure_categories_exist():
+    """确保系统中存在所需的分类"""
+    conn = get_db()
+    try:
+        # 定义所需的分类
+        required_categories = [
+            {"name": "图片处理", "description": "图片编辑、处理相关工具"},
+            {"name": "娱乐游戏", "description": "游戏、娱乐相关工具"},
+            {"name": "通用工具", "description": "通用型工具"},
+            {"name": "生活工具", "description": "生活相关工具"},
+            {"name": "文件处理", "description": "文件编辑、转换相关工具"},
+            {"name": "开发工具", "description": "编程、开发相关工具"}
+        ]
+        
+        # 获取现有的分类
+        existing_categories = conn.execute('SELECT name FROM categories WHERE user_id = ?', ('default_user',)).fetchall()
+        existing_names = {row[0] for row in existing_categories}
+        
+        # 添加缺失的分类
+        for category in required_categories:
+            if category["name"] not in existing_names:
+                try:
+                    conn.execute('''INSERT INTO categories (name, description, user_id) 
+                                VALUES (?, ?, ?)''', 
+                                (category["name"], category["description"], "default_user"))
+                except sqlite3.IntegrityError:
+                    # 分类已存在，跳过
+                    pass
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_category_id(category_name):
+    """根据分类名称获取分类ID"""
+    conn = get_db()
+    try:
+        result = conn.execute('SELECT id FROM categories WHERE name = ? AND user_id = ?', 
+                           (category_name, "default_user")).fetchone()
+        return result[0] if result else None
+    finally:
+        conn.close()
+
+
+def auto_categorize_file(file_info):
+    """根据文件信息自动分类"""
+    # 确保分类存在
+    ensure_categories_exist()
+    
+    # 提取文件信息
+    filename = file_info.get("filename", "").lower()
+    project_name = file_info.get("project_name", "").lower()
+    project_desc = file_info.get("project_desc", "").lower()
+    
+    # 合并所有文本信息
+    all_text = f"{filename} {project_name} {project_desc}"
+    
+    # 优化后的分类关键词映射，增加更多娱乐游戏相关关键词
+    # 调整顺序：优先匹配更具体的类别
+    category_keywords = {
+        "图片处理": ["图片", "图像处理", "去水印", "滤镜", "裁剪", "修图", "美颜", "相册", "照片", "图像", "美化"],
+        "娱乐游戏": ["游戏", "娱乐", "休闲", "有趣", "好玩", "粒子", "流体", "模拟", "动画", 
+                     "万花筒", "小游戏", "互动", "交互式", "视觉", "效果", "创意", "彩色", 
+                     "绘图", "画板", "光影", "娱乐", "休闲", "趣味"],
+        "生活工具": ["生活", "日常", "健康", "饮食", "出行", "天气", "日历", "记账", "工具"],
+        "文件处理": ["文件", "文档", "转换", "格式", "编辑", "压缩", "解压", "pdf", "word", "excel"],
+        "通用工具": ["工具", "助手", "管理", "系统", "服务", "平台", "助手", "工具集"],
+        "开发工具": ["开发", "编程", "代码", "编辑器", "调试", "字体", "配色", "设计"],
+        # 注意：html, css, js等技术关键词不再作为开发工具的唯一判断依据
+    }
+    
+    # 匹配分类 - 优先匹配更具体的类别
+    for category_name, keywords in category_keywords.items():
+        for keyword in keywords:
+            if keyword in all_text:
+                return category_name
+    
+    # 特殊处理：如果包含技术关键词但也包含娱乐元素，优先归类为娱乐游戏
+    tech_keywords = ["html", "css", "js", "javascript", "web", "网页"]
+    has_tech = any(tech in all_text for tech in tech_keywords)
+    
+    # 检查是否有娱乐相关内容
+    entertainment_keywords = ["游戏", "娱乐", "休闲", "有趣", "好玩", "互动", "动画", "视觉", "效果"]
+    has_entertainment = any(ent in all_text for ent in entertainment_keywords)
+    
+    if has_tech and has_entertainment:
+        return "娱乐游戏"
+    elif has_tech:
+        return "开发工具"
+    
+    # 默认分类
+    return "通用工具"
+
+
 def add_file(item):
     conn = get_db()
     try:
+        # 确保所需分类存在
+        ensure_categories_exist()
+        
         # 检查files表的列
         cursor = conn.execute("PRAGMA table_info(files)")
         columns = [row[1] for row in cursor.fetchall()]
@@ -552,6 +658,15 @@ def add_file(item):
                         (item["id"], item["user_id"], item["filename"], item["stored_name"], 
                         item["path"], item["size"], json.dumps(item.get("dkfile")), 
                         item.get("project_name"), item.get("project_desc")))
+        
+        # 自动分类并添加到文件分类关联表
+        category_name = auto_categorize_file(item)
+        category_id = get_category_id(category_name)
+        if category_id:
+            conn.execute('''INSERT INTO file_categories (file_id, category_id) 
+                        VALUES (?, ?)''', 
+                        (item["id"], category_id))
+        
         conn.commit()
     finally:
         conn.close()
@@ -585,7 +700,17 @@ def get_user_by_email(email):
     try:
         row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         if row:
-            return {"id": row["id"], "email": row["email"], "username": row["username"], "avatar": row["avatar"] if "avatar" in row and row["avatar"] else ""}
+            # 直接使用索引访问字段，避免字典键访问问题
+            role = "user"  # 默认值
+            if len(row) > 6:  # role字段在索引6位置
+                role = row[6]
+            return {
+                "id": row[0], 
+                "email": row[1], 
+                "username": row[2], 
+                "avatar": row[4] if len(row) > 4 and row[4] else "",
+                "role": role
+            }
         return None
     finally:
         conn.close()
@@ -1111,9 +1236,13 @@ def upload():
             dk_resp = dkfile_upload(dest, filename, project_name=project_name, description=project_desc)
         except Exception as e:
             dk_resp = {"error": str(e)}
+        # 根据上传位置决定user_id
+        upload_target = request.form.get('upload_target', 'user')
+        user_id = "default_user" if (upload_target == 'home' and session.get('role') == 'developer') else session['user_id']
+        
         item = {
             "id": local_id,
-            "user_id": session['user_id'],
+            "user_id": user_id,
             "filename": filename,
             "stored_name": local_name,
             "path": str(dest),
@@ -1142,15 +1271,22 @@ def file_detail(file_id):
 @app.post("/files/<file_id>/delete")
 @login_required
 def file_delete(file_id):
-    item = get_file_by_id(file_id, session['user_id'])
+    # 对于开发者，允许删除所有文件（包括default_user的文件）
+    if session.get('role') == 'developer':
+        item = get_file_by_id(file_id, check_owner=False)
+    else:
+        item = get_file_by_id(file_id, session['user_id'])
+    
     if not item:
         return redirect(url_for("index"))
+    
     try:
         p = Path(item["path"])
         if p.exists():
             p.unlink()
     except Exception:
         pass
+    
     try:
         dk = item.get("dkfile") or {}
         did = dk.get("id") or dk.get("file_id") or dk.get("data", {}).get("id")
@@ -1158,7 +1294,13 @@ def file_delete(file_id):
             dkfile_delete(did)
     except Exception:
         pass
-    delete_file(file_id, session['user_id'])
+    
+    # 对于开发者，允许删除所有文件
+    if session.get('role') == 'developer':
+        delete_file(file_id, item['user_id'])
+    else:
+        delete_file(file_id, session['user_id'])
+    
     return redirect(url_for("index"))
 
 
@@ -1563,6 +1705,7 @@ def register():
             session['user_id'] = user_id
             session['email'] = email
             session['username'] = username
+            session['role'] = 'user'
             
             return redirect(url_for('index'))
         else:
@@ -1649,6 +1792,8 @@ def login():
                 session['user_id'] = row['id']
                 session['email'] = row['email']
                 session['username'] = row['username']
+                # 修复角色检测逻辑，直接从row对象获取role字段，不需要'role' in row检测
+                session['role'] = row['role'] if row['role'] else 'user'
                 
                 return redirect(url_for('index'))
             finally:
@@ -1679,15 +1824,23 @@ def verify_login():
     if not verify_code(email, code, 'login'):
         return render_template('auth.html', mode='login', page_title='登录', error='验证码无效或已过期', step='verify', login_method=login_method)
     
-    user = get_user_by_email(email)
-    if not user:
-        return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', step='verify', login_method=login_method)
-    
-    session['user_id'] = user['id']
-    session['email'] = user['email']
-    session['username'] = user['username']
-    
-    return redirect(url_for('index'))
+    # 直接从数据库获取用户信息，避免get_user_by_email函数的问题
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+        if not row:
+            return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', step='verify', login_method=login_method)
+        
+        # 登录成功，直接使用索引访问字段
+        session['user_id'] = row[0]
+        session['email'] = row[1]
+        session['username'] = row[2]
+        # 获取role字段，索引6
+        session['role'] = row[6] if len(row) > 6 else 'user'
+        
+        return redirect(url_for('index'))
+    finally:
+        conn.close()
 
 
 @app.route('/forgot_password', methods=['GET', 'POST'])
@@ -1779,12 +1932,19 @@ def user_center():
         try:
             row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
             if row:
+                # 使用索引访问字段，避免字典键访问问题
+                role = "user"  # 默认值
+                if len(row) > 6:  # role字段在索引6位置
+                    role = row[6]
                 user = {
-                    'id': row['id'],
-                    'email': row['email'],
-                    'username': row['username'],
-                    'avatar': row['avatar'] if 'avatar' in row else None
+                    'id': row[0],
+                    'email': row[1],
+                    'username': row[2],
+                    'avatar': row[4] if len(row) > 4 and row[4] else None,
+                    'role': role
                 }
+                # 更新session中的角色信息
+                session['role'] = role
             else:
                 user = {
                     'email': session.get('email'),
@@ -1848,12 +2008,19 @@ def account_settings():
     try:
         row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         if row:
+            # 使用索引访问字段，避免字典键访问问题
+            role = "user"  # 默认值
+            if len(row) > 6:  # role字段在索引6位置
+                role = row[6]
             user = {
-                'id': row['id'],
-                'email': row['email'],
-                'username': row['username'],
-                'avatar': row['avatar'] if 'avatar' in row else None
+                'id': row[0],
+                'email': row[1],
+                'username': row[2],
+                'avatar': row[4] if len(row) > 4 and row[4] else None,
+                'role': role
             }
+            # 更新session中的角色信息
+            session['role'] = role
         else:
             user = {
                 'email': session.get('email'),
@@ -1964,6 +2131,22 @@ def change_email():
     # 更新session中的邮箱
     session['email'] = new_email
     return render_template('account_settings.html', success='邮箱修改成功', user={'email': new_email, 'username': session.get('username')})
+
+
+@app.route('/set-developer-role')
+@login_required
+def set_developer_role():
+    """临时路由：将当前用户设置为developer角色"""
+    conn = get_db()
+    try:
+        # 使用email字段来更新角色，确保能正确更新开发者账号的角色信息
+        conn.execute('UPDATE users SET role = "developer" WHERE email = ?', (session['email'],))
+        conn.commit()
+        # 同时更新session中的角色信息
+        session['role'] = 'developer'
+        return redirect(url_for('user_center', message='已成功设置为开发者角色'))
+    finally:
+        conn.close()
 
 
 @app.route('/logout')

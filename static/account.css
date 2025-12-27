@@ -15,12 +15,10 @@
 
 /* 修复导航栏遮挡问题 */
 .account-settings-container {
-  min-height: 100vh;
   padding: 120px 20px 80px;
   margin: 0;
   background: var(--account-bg);
   position: relative;
-  overflow: hidden;
   box-sizing: border-box;
 }
 

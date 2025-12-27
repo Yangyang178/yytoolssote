@@ -94,7 +94,7 @@
               {% for category in item.categories %}
                 <span class="category-tag">
                   {{ category.name }}
-                  <button class="remove-tag-btn" onclick="removeCategory('{{ item.id }}', {{ category.id }})">×</button>
+                  <button class="remove-tag-btn" onclick='removeCategory("{{ item.id }}", {{ category.id }})'>×</button>
                 </span>
               {% endfor %}
             {% else %}
@@ -107,7 +107,7 @@
               <option value="">选择分类</option>
               <!-- 动态加载分类列表 -->
             </select>
-            <button class="btn btn-sm btn-primary" onclick="addCategory('{{ item.id }}')">添加分类</button>
+            <button class="btn btn-sm btn-primary" onclick='addCategory("{{ item.id }}")'>添加分类</button>
             <button class="btn btn-sm btn-secondary" onclick="showAddCategoryModal()">创建新分类</button>
           </div>
         </div>
@@ -120,7 +120,7 @@
               {% for tag in item.tags %}
                 <span class="tag">
                   {{ tag.name }}
-                  <button class="remove-tag-btn" onclick="removeTag('{{ item.id }}', {{ tag.id }})">×</button>
+                  <button class="remove-tag-btn" onclick='removeTag("{{ item.id }}", {{ tag.id }})'>×</button>
                 </span>
               {% endfor %}
             {% else %}
@@ -133,7 +133,7 @@
               <option value="">选择标签</option>
               <!-- 动态加载标签列表 -->
             </select>
-            <button class="btn btn-sm btn-primary" onclick="addTag('{{ item.id }}')">添加标签</button>
+            <button class="btn btn-sm btn-primary" onclick='addTag("{{ item.id }}")'>添加标签</button>
             <button class="btn btn-sm btn-secondary" onclick="showAddTagModal()">创建新标签</button>
           </div>
         </div>

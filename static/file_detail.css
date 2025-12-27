@@ -16,12 +16,10 @@
 
 /* 修复导航栏遮挡问题 */
 .file-detail-container {
-  min-height: 100vh;
   padding: 120px 20px 80px;
   margin: 0;
   background: var(--detail-bg);
   position: relative;
-  overflow: hidden;
   box-sizing: border-box;
 }
 

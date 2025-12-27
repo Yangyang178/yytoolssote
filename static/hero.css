@@ -20,13 +20,24 @@
   --transition: all 0.3s ease;
 }
 
+/* 重置body和html的默认样式，移除导航栏下方的白边 */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+
 /* 英雄区域样式 */
 .hero-section {
   background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%);
   color: white;
-  padding: 160px 0 80px 0;
+  padding: 120px 0 80px 0; /* 增加顶部padding，让首页网站名称离导航栏更远一些 */
   margin-bottom: 40px;
-  margin-top: 0;
+  margin-top: 0; /* 移除顶部margin，确保与导航栏无缝连接 */
+  position: relative;
+  z-index: 1;
 }
 
 .hero-container {

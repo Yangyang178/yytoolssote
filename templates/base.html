@@ -29,7 +29,10 @@
         <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
         {% if session.user_id %}
           <div class="nav-user-menu">
-            <span class="nav-username">欢迎，{{ session.username }}</span>
+            <span class="nav-username">欢迎，{{ session.username }} (角色: {{ session.get('role', '未设置') }})</span>
+            {% if session.get('role') == 'developer' %}
+              <a href="#" class="nav-btn nav-btn-admin">开发者管理</a>
+            {% endif %}
           </div>
         {% else %}
           <a href="{{ url_for('login') }}" class="nav-btn nav-btn-light">登录</a>

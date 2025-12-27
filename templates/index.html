@@ -51,9 +51,11 @@
     <div class="section-header-wrapper">
       <h2 class="section-header">文件列表</h2>
       <div class="section-actions">
+        {% if session.role == 'developer' %}
         <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
           <i class="icon-upload">📤</i> 上传新文件
         </a>
+        {% endif %}
       </div>
     </div>
     
@@ -70,11 +72,22 @@
       </div>
     </div>
     
+    <!-- 分类筛选功能 -->
+    <div class="category-filter">
+      <button class="category-btn active" data-category="all">全部</button>
+      <button class="category-btn" data-category="图片处理">图片处理</button>
+      <button class="category-btn" data-category="娱乐游戏">娱乐游戏</button>
+      <button class="category-btn" data-category="通用工具">通用工具</button>
+      <button class="category-btn" data-category="生活工具">生活工具</button>
+      <button class="category-btn" data-category="文件处理">文件处理</button>
+      <button class="category-btn" data-category="开发工具">开发工具</button>
+    </div>
+    
     {% if files %}
       <div class="files-grid">
         {% for f in files %}
         {% set d = (f.dkfile or {}).get('data') %}
-        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {{ f.categories | map(attribute='name') | join(' ') }} {{ f.tags | map(attribute='name') | join(' ') }}" data-size="{{ f.size }}" data-date="{{ d and d.created_at or '' }}">
+        <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {{ f.categories | map(attribute='name') | join(' ') }} {{ f.tags | map(attribute='name') | join(' ') }}" data-categories="{{ f.categories | map(attribute='name') | join(',') }}" data-size="{{ f.size }}" data-date="{{ d and d.created_at or '' }}">
           <div class="file-card-header">
             <div class="file-icon-container">
               <div class="file-icon">
@@ -152,6 +165,11 @@
             <div class="file-actions">
               <a class="btn btn-detail file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
               <a class="btn btn-download file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
+              {% if session.role == 'developer' %}
+              <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post" onsubmit="return confirm('确定要删除这个文件吗？此操作不可恢复。')">
+                <button class="btn btn-delete file-action" type="submit">删除</button>
+              </form>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -215,5 +233,92 @@
 {% endif %}
 
 <div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" class="hidden"></div>
+
+<style>
+/* 分类筛选按钮样式 */
+.category-filter {
+  display: flex;
+  gap: 12px;
+  margin: 20px 0;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+}
+
+.category-btn {
+  padding: 10px 20px;
+  border: 2px solid transparent;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #4F46E5;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+.category-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(79, 70, 229, 0.1), transparent);
+  transition: left 0.5s ease;
+  z-index: 0;
+}
+
+.category-btn:hover::before {
+  left: 100%;
+}
+
+.category-btn span {
+  position: relative;
+  z-index: 1;
+}
+
+.category-btn:hover {
+  background: rgba(79, 70, 229, 0.1);
+  border-color: rgba(79, 70, 229, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.15);
+}
+
+.category-btn.active {
+  background: linear-gradient(135deg, #4F46E5, #3B82F6);
+  color: white;
+  border-color: #4F46E5;
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.3);
+  transform: translateY(-2px);
+}
+
+.category-btn.active:hover {
+  background: linear-gradient(135deg, #4338CA, #2563EB);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.4);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .category-filter {
+    gap: 8px;
+    padding: 12px;
+  }
+  
+  .category-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    border-radius: 20px;
+  }
+}
+</style>
+
+
 
 {% endblock %}

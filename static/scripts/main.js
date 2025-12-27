@@ -459,6 +459,41 @@ function showStatusMessage(message, type = 'info', duration = 3000) {
   }, duration);
 }
 
+// 分类筛选功能
+function initCategoryFilter() {
+  const categoryBtns = document.querySelectorAll('.category-btn');
+  const fileCards = document.querySelectorAll('.file-card');
+  
+  categoryBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      // 移除所有按钮的active类
+      categoryBtns.forEach(b => b.classList.remove('active'));
+      // 添加当前按钮的active类
+      btn.classList.add('active');
+      
+      const selectedCategory = btn.dataset.category;
+      
+      // 过滤文件卡片
+      fileCards.forEach(card => {
+        const cardCategories = card.dataset.categories || '';
+        const categoriesList = cardCategories.split(',').map(cat => cat.trim().toLowerCase());
+        
+        if (selectedCategory === 'all') {
+          // 显示所有文件
+          card.style.display = 'block';
+        } else {
+          // 根据分类过滤
+          if (categoriesList.includes(selectedCategory.toLowerCase())) {
+            card.style.display = 'block';
+          } else {
+            card.style.display = 'none';
+          }
+        }
+      });
+    });
+  });
+}
+
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', () => {
   // 初始化导航栏汉堡菜单
@@ -475,6 +510,9 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // 绑定事件监听
   bindInteractionEvents();
+  
+  // 初始化分类筛选功能
+  initCategoryFilter();
   
   const searchInput = document.getElementById('file-search');
   const clearBtn = document.getElementById('clear-search');

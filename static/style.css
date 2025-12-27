@@ -3,7 +3,7 @@
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 body{padding:0;margin:0}
 .container{max-width:1280px;margin:0 auto;padding:28px}
-.site-footer{padding:24px;color:var(--muted)}
+
 
 /* 表单样式 */
 .upload-form{display:flex;flex-direction:column;gap:16px}
