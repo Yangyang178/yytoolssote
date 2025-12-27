@@ -12,13 +12,12 @@
 
 /* 修复导航栏遮挡问题 */
 .blog-container {
-  min-height: 100vh;
-  padding: 120px 20px 80px;
+  padding: 120px 20px 40px;
   margin: 0;
   background: var(--blog-bg);
   position: relative;
-  overflow: hidden;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 /* 容器居中 */
@@ -367,11 +366,16 @@
 
 /* 博客详情页面容器 */
 .blog-detail-container {
-  min-height: calc(100vh - 200px); /* 确保容器至少占满视口高度减去导航栏和页脚高度 */
   padding: 120px 20px 80px;
   background: var(--blog-bg);
   position: relative;
-  overflow: hidden;
+}
+
+/* 详情页面容器 */
+.detail-container {
+  padding: 120px 20px 80px;
+  background: var(--blog-bg);
+  position: relative;
 }
 
 /* 博客详情页样式 */
