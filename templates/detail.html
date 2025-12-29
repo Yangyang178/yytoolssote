@@ -6,7 +6,12 @@
 {% else %}
   <div class="detail-container">
     <section class="file-detail-panel">
-      <h1>文件详情</h1>
+      <div class="detail-header">
+        <a href="{{ url_for('user_center') }}" class="btn btn-secondary back-btn">
+          ← 返回
+        </a>
+        <h1>文件详情</h1>
+      </div>
       
       <!-- 文件基本信息 -->
       <div class="detail-section">
@@ -190,6 +195,12 @@
   </div>
 
 <script>
+// 返回上一页函数
+function goBack() {
+    console.log('返回按钮被点击');
+    window.history.back();
+}
+
 // 加载分类和标签列表
 function loadCategoriesAndTags() {
   // 加载分类列表

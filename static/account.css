@@ -15,11 +15,14 @@
 
 /* 修复导航栏遮挡问题 */
 .account-settings-container {
-  padding: 120px 20px 80px;
+  padding: 120px 20px 20px;
   margin: 0;
   background: var(--account-bg);
   position: relative;
   box-sizing: border-box;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 页面背景装饰 */
@@ -28,8 +31,8 @@
   position: absolute;
   top: -50%;
   right: -20%;
-  width: 800px;
-  height: 800px;
+  width: 600px;
+  height: 600px;
   background: var(--account-gradient);
   opacity: 0.05;
   border-radius: 50%;
@@ -37,18 +40,16 @@
   z-index: 0;
 }
 
+/* 移除底部装饰伪元素，避免增加页面高度 */
 .account-settings-container::after {
-  content: '';
-  position: absolute;
-  bottom: -40%;
-  left: -10%;
-  width: 600px;
-  height: 600px;
-  background: var(--account-secondary);
-  opacity: 0.05;
-  border-radius: 50%;
-  filter: blur(60px);
-  z-index: 0;
+  display: none;
+}
+
+/* 确保容器内部元素正确布局 */
+.account-settings-container .container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 /* 容器居中 */
@@ -61,11 +62,47 @@
 
 /* 页面标题区域 */
 .page-header {
+  position: relative;
   text-align: center;
   margin-bottom: 60px;
   padding: 0 20px;
 }
 
+/* 头部操作区 */
+.header-actions {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* 返回按钮样式 */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
+.back-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
+}
+
+.back-btn:active {
+  transform: translateY(0);
+}
+
+/* 页面标题 */
 .page-title {
   font-size: 3rem;
   font-weight: 800;

@@ -580,6 +580,44 @@ body {
     overflow: hidden;
 }
 
+/* 文件卡片顶部区域 */
+.file-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+}
+
+/* 所有分享按钮统一样式 */
+.action-share {
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    background: #4F46E5;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 0;
+    width: auto;
+    min-width: auto;
+}
+
+.action-share:hover {
+    background: #4338CA;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(79, 70, 229, 0.2);
+}
+
+/* 覆盖文件卡片底部按钮样式，确保分享按钮统一 */
+.file-card-actions .action-share {
+    width: auto;
+    min-width: auto;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+}
+
 .user-file-card::before {
     content: '';
     position: absolute;

@@ -250,6 +250,17 @@ def init_db():
         except sqlite3.OperationalError:
             pass
         
+        # 创建AI生成内容表
+        conn.execute('''CREATE TABLE IF NOT EXISTS ai_contents (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        ai_function TEXT NOT NULL,
+                        prompt TEXT NOT NULL,
+                        response TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )''')
+        
         conn.commit()
     finally:
         conn.close()
@@ -942,13 +953,18 @@ def deepseek_headers():
         h["Authorization"] = f"Bearer {DEEPSEEK_API_KEY}"
     return h
 
-def deepseek_chat(messages, model="deepseek-chat"):
+def deepseek_chat(messages, model="deepseek-chat", temperature=0.5):
     # 检查是否配置了DEEPSEEK_API_KEY
     if not DEEPSEEK_API_KEY:
         raise Exception("DEEPSEEK_API_KEY not configured")
     
     url = f"{DEEPSEEK_BASE}/chat/completions"
-    payload = {"model": model, "messages": messages, "stream": False}
+    payload = {
+        "model": model, 
+        "messages": messages, 
+        "stream": False,
+        "temperature": float(temperature)
+    }
     r = requests.post(url, headers=deepseek_headers(), json=payload, timeout=60)
     r.raise_for_status()
     return r.json()
@@ -1145,9 +1161,31 @@ uwsgi --http 0.0.0.0:8000 --module app:app</code></pre><h3>10. 最佳实践</h3>
 
 
 @app.get("/ai_page")
+@login_required
 def ai_page():
     """AI对话页面"""
-    return render_template("ai_page.html", username=session.get('username'))
+    # 获取用户保存的AI内容
+    user_id = session.get('user_id')
+    conn = get_db()
+    saved_contents = []
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''SELECT id, ai_function, prompt, response, created_at 
+                          FROM ai_contents 
+                          WHERE user_id = ? 
+                          ORDER BY created_at DESC''', (user_id,))
+        rows = cursor.fetchall()
+        saved_contents = [{
+            'id': row[0],
+            'ai_function': row[1],
+            'prompt': row[2],
+            'response': row[3],
+            'created_at': row[4]
+        } for row in rows]
+    finally:
+        conn.close()
+    
+    return render_template("ai_page.html", username=session.get('username'), saved_contents=saved_contents)
 
 @app.post("/upload")
 @login_required
@@ -1634,35 +1672,109 @@ def dk_status():
 @login_required
 def ai():
     prompt = request.form.get("prompt")
+    ai_function = request.form.get("ai_function", "chat")
+    temperature = request.form.get("temperature", "0.5")
     ai_error = None
     ai_output = None
     try:
-        messages = [{"role": "system", "content": "You are a helpful assistant."}, {"role": "user", "content": prompt or ""}]
-        res = deepseek_chat(messages)
+        # 根据选择的AI功能设置不同的系统提示
+        if ai_function == "file_analysis":
+            system_prompt = "You are an expert file analyzer. Please analyze the provided file content and provide detailed insights, structure analysis, and key information extraction."
+        elif ai_function == "smart_categorization":
+            system_prompt = "You are a smart categorizer. Please analyze the provided content and categorize it into appropriate categories. Explain your reasoning for each category assignment."
+        elif ai_function == "text_summarization":
+            system_prompt = "You are an expert summarizer. Please provide a concise and comprehensive summary of the provided text, highlighting the main points, key arguments, and important conclusions."
+        elif ai_function == "code_explanation":
+            system_prompt = "You are an expert code interpreter. Please explain the provided code in detail, including its purpose, functionality, key components, and how it works. Provide line-by-line explanations for complex parts."
+        else: # chat
+            system_prompt = "You are a helpful assistant. Please provide detailed and accurate responses to the user's questions."
+        
+        messages = [
+            {"role": "system", "content": system_prompt}, 
+            {"role": "user", "content": prompt or ""}
+        ]
+        res = deepseek_chat(messages, temperature=temperature)
         ai_output = (res.get("choices") or [{}])[0].get("message", {}).get("content")
     except Exception as e:
         ai_error = str(e)
-    # AI页面也只显示默认用户的文件，用户上传的文件只显示在用户中心
-    files = get_all_files(user_id="default_user")
-    remote_error = None
-    info = None
+    
+    # 获取用户保存的AI内容
+    user_id = session.get('user_id')
+    conn = get_db()
+    saved_contents = []
     try:
-        info = dkfile_info()
+        cursor = conn.cursor()
+        cursor.execute('''SELECT id, ai_function, prompt, response, created_at 
+                          FROM ai_contents 
+                          WHERE user_id = ? 
+                          ORDER BY created_at DESC''', (user_id,))
+        rows = cursor.fetchall()
+        saved_contents = [{
+            'id': row[0],
+            'ai_function': row[1],
+            'prompt': row[2],
+            'response': row[3],
+            'created_at': row[4]
+        } for row in rows]
+    finally:
+        conn.close()
+    
+    # 返回AI页面，显示结果和保存的内容
+    return render_template("ai_page.html", username=session.get('username'), ai_output=ai_output, ai_error=ai_error, saved_contents=saved_contents)
+
+
+@app.post("/save_ai_content")
+@login_required
+def save_ai_content():
+    """保存AI生成的内容"""
+    user_id = session.get('user_id')
+    ai_function = request.form.get('ai_function', 'chat')
+    prompt = request.form.get('prompt', '')
+    response = request.form.get('response', '')
+    
+    if not prompt or not response:
+        flash('内容不能为空', 'error')
+        return redirect(url_for('ai_page'))
+    
+    conn = get_db()
+    try:
+        # 生成唯一ID
+        content_id = uuid.uuid4().hex
+        
+        # 插入数据
+        conn.execute('''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response) 
+                      VALUES (?, ?, ?, ?, ?)''', 
+                    (content_id, user_id, ai_function, prompt, response))
+        conn.commit()
+        flash('AI内容已成功保存', 'success')
     except Exception as e:
-        remote_error = str(e)
-    remote_table = []
-    for x in files:
-        dk = x.get("dkfile") or {}
-        d = dk.get("data") or {}
-        if dk.get("success") and d:
-            remote_table.append({
-                "file_name": d.get("file_name") or x.get("filename"),
-                "url": d.get("url"),
-                "created_at": d.get("created_at"),
-                "is_update": d.get("is_update"),
-                "updated_at": d.get("updated_at"),
-            })
-    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, ai_output=ai_output, ai_error=ai_error)
+        flash(f'保存失败: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('ai_page'))
+
+
+@app.post("/delete_ai_content")
+@login_required
+def delete_ai_content():
+    """删除保存的AI内容"""
+    content_id = request.form.get('content_id')
+    user_id = session.get('user_id')
+    
+    conn = get_db()
+    try:
+        # 只允许删除自己的内容
+        conn.execute('DELETE FROM ai_contents WHERE id = ? AND user_id = ?', 
+                   (content_id, user_id))
+        conn.commit()
+        flash('AI内容已成功删除', 'success')
+    except Exception as e:
+        flash(f'删除失败: {str(e)}', 'error')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('ai_page'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -1752,6 +1864,7 @@ def verify_register():
     session['user_id'] = user_id
     session['email'] = email
     session['username'] = username
+    session['role'] = 'user'  # 设置默认角色为user
     
     return redirect(url_for('index'))
 
@@ -1785,15 +1898,15 @@ def login():
                 if not row:
                     return render_template('auth.html', mode='login', page_title='登录', error='该邮箱未注册', login_method=login_method)
                 
-                if not check_password_hash(row['password'], password):
+                if not check_password_hash(row[5], password):
                     return render_template('auth.html', mode='login', page_title='登录', error='密码错误', login_method=login_method)
                 
-                # 登录成功
-                session['user_id'] = row['id']
-                session['email'] = row['email']
-                session['username'] = row['username']
-                # 修复角色检测逻辑，直接从row对象获取role字段，不需要'role' in row检测
-                session['role'] = row['role'] if row['role'] else 'user'
+                # 登录成功，使用索引访问字段
+                session['user_id'] = row[0]
+                session['email'] = row[1]
+                session['username'] = row[2]
+                # 获取role字段，索引6
+                session['role'] = row[6] if len(row) > 6 else 'user'
                 
                 return redirect(url_for('index'))
             finally:

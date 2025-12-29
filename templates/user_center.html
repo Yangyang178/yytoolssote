@@ -129,7 +129,12 @@
                             {% for f in files %}
                             {% set d = (f.dkfile or {}).get('data') %}
                             <div class="user-file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories %}{{ category.name }} {% endfor %} {% for tag in f.tags %}{{ tag.name }} {% endfor %}">
-                                <div class="file-name-large">{{ f.filename }}</div>
+                                <div class="file-card-top">
+                                    <div class="file-name-large">{{ f.filename }}</div>
+                                    <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" data-file-url="{{ url_for('open_local', stored_name=f.stored_name, _external=True) }}" title="分享文件链接">
+                                        分享
+                                    </button>
+                                </div>
                                 <div class="file-size-info">{{ (f.size or 0) | int }} B</div>
                                 <div class="file-metadata">
                                     <div class="metadata-item">
@@ -226,6 +231,11 @@
                                     {% endif %}
                                   </h3>
                                   <div class="file-size">{{ (f.size or 0) | int }} B</div>
+                                </div>
+                                <div class="file-card-actions-top">
+                                  <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" data-file-url="{{ url_for('open_local', stored_name=f.stored_name, _external=True) }}" title="分享文件链接">
+                                    分享
+                                  </button>
                                 </div>
                               </div>
                               <div class="file-card-body">
