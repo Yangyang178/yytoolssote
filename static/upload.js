@@ -20,26 +20,19 @@ function formatFileSize(bytes) {
 
 // 定义允许的文件类型和大小限制
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+// 只允许HTML文件
 const ALLOWED_MIME_TYPES = {
-    'image/': ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg'],
-    'application/': ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'json', 'xml'],
-    'text/': ['txt', 'csv', 'html', 'css', 'js', 'ts', 'py', 'java', 'c', 'cpp', 'php'],
-    'video/': ['mp4', 'avi', 'mov', 'wmv', 'flv', 'webm'],
-    'audio/': ['mp3', 'wav', 'ogg', 'wma', 'aac']
+    'text/': ['html'],
+    'application/': ['html']
 };
 
-// 检查文件类型是否允许
+// 检查文件类型是否允许 - 只允许HTML文件
 function isFileTypeAllowed(file) {
     const mimeType = file.type;
     const fileExtension = file.name.split('.').pop().toLowerCase();
     
-    // 检查MIME类型前缀
-    for (const [mimePrefix, extensions] of Object.entries(ALLOWED_MIME_TYPES)) {
-        if (mimeType.startsWith(mimePrefix) || extensions.includes(fileExtension)) {
-            return true;
-        }
-    }
-    return false;
+    // 只允许HTML文件
+    return fileExtension === 'html' || mimeType === 'text/html' || mimeType === 'application/html';
 }
 
 // 检查文件大小是否允许
@@ -330,7 +323,7 @@ fileInput.addEventListener('change', function(e) {
         
         // 验证文件类型
         if (!isFileTypeAllowed(file)) {
-            showError('不支持的文件类型，请上传图片、文档、视频或音频文件');
+            showError('不支持的文件类型，请仅上传HTML文件');
             this.value = '';
             fileText.textContent = '点击选择文件或拖拽文件到此处';
             fileSizeElement.textContent = '';
@@ -384,7 +377,7 @@ fileLabel.addEventListener('drop', function(e) {
         
         // 验证文件类型
         if (!isFileTypeAllowed(file)) {
-            showError('不支持的文件类型，请上传图片、文档、视频或音频文件');
+            showError('不支持的文件类型，请仅上传HTML文件');
             clearPreviewContent();
             return;
         }

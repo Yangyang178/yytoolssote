@@ -1,0 +1,599 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="project-folders-container">
+    <div class="container">
+        <div class="page-header">
+            <div class="header-actions">
+                <a href="{{ url_for('user_center') }}" class="btn btn-secondary back-btn">
+                    ← 返回
+                </a>
+            </div>
+            <h1 class="page-title">项目文件夹</h1>
+            <p class="page-subtitle">管理您的项目文件夹</p>
+        </div>
+        
+        {% if user %}
+            <!-- 创建文件夹按钮 -->
+            <div class="section-actions">
+                <button class="btn btn-create-folder" id="create-folder-btn">
+                    <i class="create-icon">📁</i> 创建新文件夹
+                </button>
+            </div>
+            
+            <!-- 创建文件夹表单 -->
+            <div class="content-section" id="create-folder-form" style="display: none;">
+                <form id="folder-form" action="{{ url_for('create_folder') }}" method="post">
+                    <div class="form-group">
+                        <label for="folder-name" class="form-label">文件夹名称</label>
+                        <input type="text" id="folder-name" name="name" class="form-input" placeholder="请输入文件夹名称" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="folder-purpose" class="form-label">用途</label>
+                        <textarea id="folder-purpose" name="purpose" class="form-textarea" placeholder="请输入文件夹用途" rows="3" required></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancel-create-btn">取消</button>
+                        <button type="submit" class="btn btn-primary">创建文件夹</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 文件夹列表 -->
+            <div class="content-section">
+                {% if folders %}
+                    <div class="folders-grid">
+                        {% for folder in folders %}
+                        <div class="folder-item-wrapper">
+                            <a href="{{ url_for('folder_detail', folder_id=folder.id) }}" class="folder-card-link">
+                                <div class="folder-card">
+                                    <div class="folder-icon-large">📁</div>
+                                    <h3 class="folder-name">{{ folder.name }}</h3>
+                                    <p class="folder-purpose">{{ folder.purpose }}</p>
+                                    <div class="folder-meta">
+                                        <span class="folder-date">{{ folder.created_at }}</span>
+                                    </div>
+                                </div>
+                            </a>
+                            <button class="btn btn-delete" data-folder-id="{{ folder.id }}" data-folder-name="{{ folder.name }}">
+                                <i class="delete-icon">🗑️</i> 删除
+                            </button>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <div class="empty-icon">📁</div>
+                        <h3 class="empty-title">暂无项目文件夹</h3>
+                        <p class="empty-desc">您还没有创建任何项目文件夹</p>
+                    </div>
+                {% endif %}
+            </div>
+            
+            <!-- 删除确认弹窗 -->
+            <div id="delete-confirm-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">确认删除</h2>
+                        <button class="btn btn-close" onclick="closeDeleteModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="delete-message">确定要删除这个文件夹吗？</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-cancel" onclick="closeDeleteModal()">取消</button>
+                        <form id="delete-form" action="" method="post" style="display: inline;">
+                            <button type="submit" class="btn btn-delete-confirm">删除</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        {% else %}
+            <div class="not-logged-in">
+                <div class="login-prompt">
+                    <div class="prompt-icon">👤</div>
+                    <h2 class="prompt-title">您尚未登录</h2>
+                    <p class="prompt-desc">登录后，您可以查看和管理您的项目文件夹</p>
+                    <div class="prompt-actions">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
+                        <a href="{{ url_for('register') }}" class="btn btn-outline">注册</a>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+/* 项目文件夹页面专用样式 */
+.project-folders-container {
+    padding: 120px 20px 60px;
+    margin: 0;
+    background: #f8fafc;
+    position: relative;
+    box-sizing: border-box;
+    min-height: calc(100vh - 120px);
+}
+
+/* 页面背景装饰 */
+.project-folders-container::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 600px;
+    height: 600px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    opacity: 0.05;
+    border-radius: 50%;
+    filter: blur(60px);
+    z-index: 0;
+}
+
+/* 容器居中 */
+.project-folders-container .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+/* 页面标题区域 */
+.page-header {
+    position: relative;
+    text-align: center;
+    margin-bottom: 60px;
+    padding: 0 20px;
+}
+
+/* 头部操作区 */
+.header-actions {
+    position: absolute;
+    left: 0;
+    top: 0;
+}
+
+/* 返回按钮样式 */
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
+.back-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(107, 114, 128, 0.4);
+}
+
+/* 页面标题 */
+.page-title {
+    font-size: 3rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+}
+
+.page-subtitle {
+    font-size: 1.25rem;
+    color: #64748b;
+    margin: 0;
+    font-weight: 400;
+}
+
+/* 内容区域 */
+.content-section {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    padding: 32px;
+    transition: all 0.3s ease;
+}
+
+/* 创建文件夹按钮区域 */
+.section-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 20px;
+}
+
+/* 创建文件夹按钮样式 */
+.btn-create-folder {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-create-folder:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.create-icon {
+    font-size: 1.2rem;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 24px;
+}
+
+.form-label {
+    display: block;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 8px;
+    font-size: 0.9375rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    background: #f8fafc;
+    color: #1e293b;
+    resize: vertical;
+    min-height: 100px;
+    font-family: inherit;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: #667eea;
+    background: white;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
+}
+
+.form-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-top: 32px;
+}
+
+.btn-cancel {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-cancel:hover {
+    background: #e2e8f0;
+    color: #334155;
+    transform: translateY(-1px);
+}
+
+/* 文件夹列表 */
+.folders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 24px;
+}
+
+/* 文件夹卡片链接样式 */
+.folder-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: block;
+}
+
+/* 文件夹卡片样式 */
+.folder-card {
+    background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%);
+    border: 1px solid #E2E8F0;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.folder-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+    border-color: #667eea;
+}
+
+.folder-icon-large {
+    font-size: 3rem;
+    margin-bottom: 8px;
+}
+
+.folder-name {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+    line-height: 1.4;
+}
+
+.folder-purpose {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0;
+    line-height: 1.6;
+    flex: 1;
+}
+
+.folder-meta {
+    display: flex;
+    justify-content: flex-end;
+    font-size: 0.875rem;
+    color: #94a3b8;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 2px dashed #e2e8f0;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 10px;
+}
+
+.empty-desc {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 30px;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 文件夹项目包装器 */
+.folder-item-wrapper {
+    position: relative;
+}
+
+/* 删除按钮样式 */
+.btn-delete {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 10;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
+}
+
+.btn-delete:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+    background: linear-gradient(135deg, #DC2626, #B91C1C);
+}
+
+.delete-icon {
+    font-size: 0.875rem;
+}
+
+/* 删除确认按钮样式 */
+.btn-delete-confirm {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.btn-delete-confirm:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+    background: linear-gradient(135deg, #DC2626, #B91C1C);
+}
+
+/* 弹窗样式 */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    width: 90%;
+    max-width: 500px;
+    overflow: hidden;
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+.btn-close:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-footer {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    padding: 24px;
+    border-top: 1px solid #e2e8f0;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .project-folders-container {
+        padding: 100px 16px 40px;
+    }
+    
+    .page-title {
+        font-size: 2rem;
+    }
+    
+    .page-subtitle {
+        font-size: 1rem;
+    }
+    
+    .content-section {
+        padding: 24px;
+    }
+    
+    .empty-state {
+        padding: 40px 16px;
+    }
+    
+    .header-actions {
+        position: relative;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    
+    .page-header {
+        text-align: center;
+    }
+    
+    .folders-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .modal-content {
+        width: 95%;
+        margin: 20px;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+    }
+}
+</style>
+
+<script src="{{ url_for('static', filename='scripts/project_folders.js') }}"></script>
+{% endblock %}

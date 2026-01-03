@@ -122,8 +122,35 @@ def init_db():
                         size INTEGER NOT NULL,
                         dkfile TEXT,
                         project_name TEXT,
-                        project_desc TEXT
+                        project_desc TEXT,
+                        folder_id TEXT DEFAULT NULL
                     )''')
+        
+        # 检查并添加folder_id字段到现有files表
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN folder_id TEXT DEFAULT NULL')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
+        
+        # 创建folders表
+        conn.execute('''CREATE TABLE IF NOT EXISTS folders (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        purpose TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        parent_id TEXT DEFAULT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(id),
+                        FOREIGN KEY (parent_id) REFERENCES folders(id)
+                    )''')
+        
+        # 检查并添加parent_id列（如果不存在）
+        try:
+            conn.execute('ALTER TABLE folders ADD COLUMN parent_id TEXT DEFAULT NULL')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
         
         # 检查并添加user_id列（如果不存在）
         try:
@@ -637,38 +664,38 @@ def add_file(item):
             # 如果有created_at和hash列
             conn.execute('''INSERT INTO files (
                             id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, created_at, hash
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''', 
+                            dkfile, project_name, project_desc, folder_id, created_at, hash
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''', 
                         (item["id"], item["user_id"], item["filename"], item["stored_name"], 
                         item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("hash")))
+                        item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
         elif "created_at" in columns:
             # 如果只有created_at列
             conn.execute('''INSERT INTO files (
                             id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
+                            dkfile, project_name, project_desc, folder_id, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                         (item["id"], item["user_id"], item["filename"], item["stored_name"], 
                         item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc")))
+                        item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
         elif "hash" in columns:
             # 如果只有hash列
             conn.execute('''INSERT INTO files (
                             id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, hash
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                            dkfile, project_name, project_desc, folder_id, hash
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
                         (item["id"], item["user_id"], item["filename"], item["stored_name"], 
                         item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("hash")))
+                        item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
         else:
             # 如果都没有
             conn.execute('''INSERT INTO files (
                             id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+                            dkfile, project_name, project_desc, folder_id
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
                         (item["id"], item["user_id"], item["filename"], item["stored_name"], 
                         item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc")))
+                        item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
         
         # 自动分类并添加到文件分类关联表
         category_name = auto_categorize_file(item)
@@ -855,7 +882,7 @@ def is_favorited(file_id, user_id):
 
 
 def get_favorite_files(user_id):
-    """获取用户收藏的文件列表"""
+    """获取用户收藏的文件列表，只返回HTML文件且排除项目文件夹中的文件"""
     conn = get_db()
     try:
         rows = conn.execute('''
@@ -863,8 +890,10 @@ def get_favorite_files(user_id):
             FROM files f 
             JOIN favorites fav ON f.id = fav.file_id 
             WHERE fav.user_id = ? 
+            AND f.filename LIKE ? 
+            AND (f.folder_id IS NULL OR f.folder_id = "") 
             ORDER BY fav.created_at DESC
-        ''', (user_id,)).fetchall()
+        ''', (user_id, '%.html')).fetchall()
         
         result = []
         for row in rows:
@@ -1203,13 +1232,9 @@ def upload():
         return redirect(url_for("upload_page"))
     
     # 服务器端文件验证
-    # 允许的文件类型
-    ALLOWED_MIME_PREFIXES = ['image/', 'application/', 'text/', 'video/', 'audio/']
-    ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'svg', 
-                         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'json', 'xml',
-                         'txt', 'csv', 'html', 'css', 'js', 'ts', 'py', 'java', 'c', 'cpp', 'php',
-                         'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
-                         'mp3', 'wav', 'ogg', 'wma', 'aac']
+    # 只允许HTML文件
+    ALLOWED_MIME_PREFIXES = ['text/']
+    ALLOWED_EXTENSIONS = ['html']
     MAX_FILE_SIZE = 200 * 1024 * 1024  # 200MB
     
     uploaded_count = 0
@@ -2034,8 +2059,71 @@ def reset_password():
 @app.route('/user-center')
 def user_center():
     if 'user_id' in session:
-        # 用户中心只显示当前用户的文件列表
-        files = get_all_files(session['user_id'])
+        # 用户中心只显示当前用户的HTML文件，且排除项目文件夹中的文件
+        conn = get_db()
+        try:
+            # 查询只显示HTML文件且不在项目文件夹中的文件
+            rows = conn.execute('''SELECT * FROM files 
+                                   WHERE user_id = ? 
+                                   AND filename LIKE ? 
+                                   AND (folder_id IS NULL OR folder_id = "") 
+                                   ORDER BY id DESC''', 
+                               (session['user_id'], '%.html')).fetchall()
+            
+            # 处理文件数据，与get_all_files函数保持一致
+            files = []
+            for row in rows:
+                file_id = row["id"]
+                # 获取点赞数和收藏数
+                like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+                favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+                
+                # 获取文件分类
+                categories = []
+                category_rows = conn.execute('''SELECT c.* FROM categories c 
+                                               JOIN file_categories fc ON c.id = fc.category_id 
+                                               WHERE fc.file_id = ?''', (file_id,)).fetchall()
+                for category_row in category_rows:
+                    categories.append({
+                        "id": category_row["id"],
+                        "name": category_row["name"],
+                        "description": category_row["description"]
+                    })
+                
+                # 获取文件标签
+                tags = []
+                tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                         JOIN file_tags ft ON t.id = ft.tag_id 
+                                         WHERE ft.file_id = ?''', (file_id,)).fetchall()
+                for tag_row in tag_rows:
+                    tags.append({
+                        "id": tag_row["id"],
+                        "name": tag_row["name"]
+                    })
+                
+                # 检查 created_at 字段是否存在
+                created_at = row["created_at"] if "created_at" in row.keys() else ""
+                files.append({
+                    "id": file_id, 
+                    "filename": row["filename"], 
+                    "stored_name": row["stored_name"],
+                    "path": row["path"], 
+                    "size": row["size"], 
+                    "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
+                    "project_name": row["project_name"], 
+                    "project_desc": row["project_desc"],
+                    "like_count": like_count,
+                    "favorite_count": favorite_count,
+                    "categories": categories,
+                    "tags": tags,
+                    "created_at": row["created_at"] if "created_at" in row.keys() else ""
+                })
+            
+            # 获取项目文件夹数量（只统计顶级文件夹）
+            folder_count = conn.execute('SELECT COUNT(*) FROM folders WHERE user_id = ? AND parent_id IS NULL', (session['user_id'],)).fetchone()[0]
+        finally:
+            conn.close()
+        
         # 获取用户收藏的文件列表
         favorite_files = get_favorite_files(session['user_id'])
         access_logs = get_access_logs(session['user_id'])
@@ -2070,7 +2158,434 @@ def user_center():
         favorite_files = []
         access_logs = []
         user = None
-    return render_template('user_center.html', user=user, files=files, favorite_files=favorite_files, access_logs=access_logs)
+        folder_count = 0
+    return render_template('user_center.html', user=user, files=files, favorite_files=favorite_files, access_logs=access_logs, folder_count=folder_count)
+
+
+@app.route('/project-folders')
+def project_folders():
+    if 'user_id' not in session:
+        # 未登录用户重定向到登录页面
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 获取当前用户信息
+    conn = get_db()
+    try:
+        row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if row:
+            role = "user"  # 默认值
+            if len(row) > 6:  # role字段在索引6位置
+                role = row[6]
+            user = {
+                'id': row[0],
+                'email': row[1],
+                'username': row[2],
+                'avatar': row[4] if len(row) > 4 and row[4] else None,
+                'role': role
+            }
+            # 更新session中的角色信息
+            session['role'] = role
+        else:
+            user = {
+                'email': session.get('email'),
+                'username': session.get('username')
+            }
+        
+        # 获取用户的顶级文件夹列表（只显示顶级文件夹，不显示子文件夹）
+        folders = []
+        folder_rows = conn.execute('SELECT * FROM folders WHERE user_id = ? AND parent_id IS NULL ORDER BY created_at DESC', (session['user_id'],)).fetchall()
+        for folder_row in folder_rows:
+            folder = {
+                'id': folder_row[0],
+                'name': folder_row[2],
+                'purpose': folder_row[3],
+                'created_at': folder_row[4]
+            }
+            folders.append(folder)
+    finally:
+        conn.close()
+    
+    return render_template('project_folders.html', user=user, folders=folders)
+
+
+@app.route('/create-folder', methods=['POST'])
+def create_folder():
+    if 'user_id' not in session:
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 获取表单数据
+    folder_name = request.form.get('name')
+    folder_purpose = request.form.get('purpose')
+    
+    if not folder_name or not folder_purpose:
+        flash('文件夹名称和用途不能为空')
+        return redirect(url_for('project_folders'))
+    
+    # 创建文件夹
+    conn = get_db()
+    try:
+        folder_id = str(uuid.uuid4())
+        conn.execute(
+            'INSERT INTO folders (id, user_id, name, purpose) VALUES (?, ?, ?, ?)',
+            (folder_id, session['user_id'], folder_name, folder_purpose)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    
+    return redirect(url_for('project_folders'))
+
+
+@app.route('/folder/<folder_id>')
+def folder_detail(folder_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 获取文件夹信息
+    conn = get_db()
+    try:
+        # 检查文件夹是否存在且属于当前用户
+        folder_row = conn.execute(
+            'SELECT * FROM folders WHERE id = ? AND user_id = ?',
+            (folder_id, session['user_id'])
+        ).fetchone()
+        
+        if not folder_row:
+            flash('文件夹不存在或您没有权限访问')
+            return redirect(url_for('project_folders'))
+        
+        folder = {
+            'id': folder_row[0],
+            'name': folder_row[2],
+            'purpose': folder_row[3],
+            'created_at': folder_row[4]
+        }
+        
+        # 获取文件夹中的文件
+        files = []
+        try:
+            # 先尝试不带created_at的查询，避免出错
+            file_rows = conn.execute(
+                'SELECT * FROM files WHERE user_id = ? AND folder_id = ?',
+                (session['user_id'], folder_id)
+            ).fetchall()
+            
+            for file_row in file_rows:
+                file = {
+                    'id': file_row[0],
+                    'filename': file_row[1],
+                    'stored_name': file_row[2],
+                    'size': file_row[4],
+                    'project_name': file_row[6] if len(file_row) > 6 else '',
+                    'project_desc': file_row[7] if len(file_row) > 7 else '',
+                    'created_at': '未知'
+                }
+                files.append(file)
+        except sqlite3.OperationalError as e:
+            # 处理其他可能的错误
+            print(f"Error when fetching files: {e}")
+            files = []
+        
+        # 获取文件夹中的子文件夹
+        subfolders = []
+        try:
+            subfolder_rows = conn.execute(
+                'SELECT * FROM folders WHERE user_id = ? AND parent_id = ? ORDER BY created_at DESC',
+                (session['user_id'], folder_id)
+            ).fetchall()
+            
+            for subfolder_row in subfolder_rows:
+                subfolder = {
+                    'id': subfolder_row[0],
+                    'name': subfolder_row[2],
+                    'purpose': subfolder_row[3],
+                    'created_at': subfolder_row[4]
+                }
+                subfolders.append(subfolder)
+        except sqlite3.OperationalError as e:
+            # 处理其他可能的错误
+            print(f"Error when fetching subfolders: {e}")
+            subfolders = []
+        
+        # 获取用户信息
+        user_row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if user_row:
+            role = "user"  # 默认值
+            if len(user_row) > 6:  # role字段在索引6位置
+                role = user_row[6]
+            user = {
+                'id': user_row[0],
+                'email': user_row[1],
+                'username': user_row[2],
+                'avatar': user_row[4] if len(user_row) > 4 and user_row[4] else None,
+                'role': role
+            }
+        else:
+            user = {
+                'email': session.get('email'),
+                'username': session.get('username')
+            }
+    finally:
+        conn.close()
+    
+    return render_template('folder_detail.html', user=user, folder=folder, files=files, subfolders=subfolders)
+
+
+@app.route('/upload-to-folder/<folder_id>', methods=['POST'])
+def upload_to_folder(folder_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 检查文件夹是否存在且属于当前用户
+    conn = get_db()
+    try:
+        folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', (folder_id, session['user_id'])).fetchone()
+        if not folder:
+            flash('文件夹不存在或您没有权限访问')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+    finally:
+        conn.close()
+    
+    # 获取上传的文件
+    file = request.files.get('file')
+    if not file or file.filename == '':
+        flash('请选择文件')
+        return redirect(url_for('folder_detail', folder_id=folder_id))
+    
+    # 保存文件
+    filename = file.filename
+    local_id = uuid.uuid4().hex
+    local_name = f"{local_id}__{filename}"
+    dest = UPLOAD_DIR / local_name
+    file.save(dest)
+    
+    # 准备文件信息
+    item = {
+        "id": local_id,
+        "user_id": session['user_id'],
+        "filename": filename,
+        "stored_name": local_name,
+        "path": str(dest),
+        "size": dest.stat().st_size,
+        "dkfile": None,
+        "project_name": filename,
+        "project_desc": request.form.get('description', ''),
+        "folder_id": folder_id
+    }
+    
+    # 将文件添加到数据库
+    add_file(item)
+    
+    flash(f"文件 '{filename}' 已成功上传到文件夹 '{folder[2]}'")
+    return redirect(url_for('folder_detail', folder_id=folder_id))
+
+
+@app.route('/upload-folder-to-folder/<folder_id>', methods=['POST'])
+def upload_folder_to_folder(folder_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 检查文件夹是否存在且属于当前用户
+    conn = get_db()
+    try:
+        folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', (folder_id, session['user_id'])).fetchone()
+        if not folder:
+            flash('文件夹不存在或您没有权限访问')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+    finally:
+        conn.close()
+    
+    # 获取上传的文件夹中的所有文件
+    files = request.files.getlist('folder')
+    if not files:
+        flash('请选择文件夹')
+        return redirect(url_for('folder_detail', folder_id=folder_id))
+    
+    # 提取文件夹名称
+    first_file_path = files[0].filename
+    # 根据不同操作系统的路径分隔符处理
+    if '/' in first_file_path:
+        folder_name = first_file_path.split('/')[0]
+    elif '\\' in first_file_path:
+        folder_name = first_file_path.split('\\')[0]
+    else:
+        # 如果没有路径分隔符，使用默认名称
+        folder_name = "上传的文件夹"
+    
+    # 创建子文件夹
+    subfolder_id = str(uuid.uuid4())
+    conn = get_db()
+    try:
+        conn.execute('''INSERT INTO folders (
+                        id, user_id, name, purpose, created_at, parent_id
+                    ) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''', 
+                    (subfolder_id, session['user_id'], folder_name, request.form.get('description', '上传的文件夹'), folder_id))
+        conn.commit()
+    finally:
+        conn.close()
+    
+    uploaded_files = []
+    for file in files:
+        if file.filename == '':
+            continue
+        
+        # 保存文件 - 只使用文件名，不包含路径
+        filename = os.path.basename(file.filename)
+        local_id = uuid.uuid4().hex
+        local_name = f"{local_id}__{filename}"
+        dest = UPLOAD_DIR / local_name
+        
+        # 保存文件
+        file.save(str(dest))
+        
+        # 准备文件信息
+        item = {
+            "id": local_id,
+            "user_id": session['user_id'],
+            "filename": filename,
+            "stored_name": local_name,
+            "path": str(dest),
+            "size": dest.stat().st_size,
+            "dkfile": None,
+            "project_name": filename,
+            "project_desc": request.form.get('description', ''),
+            "folder_id": subfolder_id  # 将文件关联到新创建的子文件夹
+        }
+        
+        # 将文件添加到数据库
+        add_file(item)
+        uploaded_files.append(filename)
+    
+    if uploaded_files:
+        flash(f"文件夹 '{folder_name}' 已成功上传到 '{folder[2]}'，共包含 {len(uploaded_files)} 个文件")
+    else:
+        flash('上传失败，文件夹中没有文件')
+    
+    return redirect(url_for('folder_detail', folder_id=folder_id))
+
+
+@app.route('/create-subfolder/<folder_id>', methods=['POST'])
+def create_subfolder(folder_id):
+    if 'user_id' not in session:
+        return redirect(url_for('login', message='请先登录'))
+    
+    # 检查父文件夹是否存在且属于当前用户
+    conn = get_db()
+    try:
+        parent_folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', (folder_id, session['user_id'])).fetchone()
+        if not parent_folder:
+            flash('父文件夹不存在或您没有权限访问')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+        
+        # 获取子文件夹名称和用途
+        subfolder_name = request.form.get('name')
+        subfolder_purpose = request.form.get('purpose')
+        
+        if not subfolder_name or not subfolder_purpose:
+            flash('子文件夹名称和用途不能为空')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+        
+        # 创建子文件夹
+        subfolder_id = str(uuid.uuid4())
+        conn.execute(
+            'INSERT INTO folders (id, user_id, name, purpose, created_at, parent_id) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)',
+            (subfolder_id, session['user_id'], subfolder_name, subfolder_purpose, folder_id)
+        )
+        conn.commit()
+        
+        flash(f"子文件夹 '{subfolder_name}' 已成功创建")
+    finally:
+        conn.close()
+    
+    return redirect(url_for('folder_detail', folder_id=folder_id))
+
+
+@app.route('/delete-folder/<folder_id>', methods=['POST'])
+@login_required
+def delete_folder(folder_id):
+    """删除文件夹及其内容"""
+    conn = get_db()
+    try:
+        # 检查文件夹是否存在且属于当前用户
+        folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', (folder_id, session['user_id'])).fetchone()
+        if not folder:
+            flash('文件夹不存在或您没有权限访问')
+            return redirect(url_for('project_folders'))
+        
+        # 递归获取所有子文件夹ID
+        subfolder_ids = [folder_id]
+        i = 0
+        while i < len(subfolder_ids):
+            current_id = subfolder_ids[i]
+            # 获取当前文件夹的子文件夹
+            subfolders = conn.execute('SELECT id FROM folders WHERE parent_id = ? AND user_id = ?', (current_id, session['user_id'])).fetchall()
+            for subfolder in subfolders:
+                subfolder_ids.append(subfolder[0])
+            i += 1
+        
+        # 删除所有子文件夹内的文件
+        for sub_id in subfolder_ids:
+            # 获取文件夹内的所有文件
+            files = conn.execute('SELECT id, path FROM files WHERE folder_id = ? AND user_id = ?', (sub_id, session['user_id'])).fetchall()
+            for file in files:
+                # 删除本地文件
+                try:
+                    p = Path(file[1])
+                    if p.exists():
+                        p.unlink()
+                except Exception as e:
+                    print(f"删除文件 {file[1]} 失败: {e}")
+            
+            # 删除数据库中的文件记录
+            conn.execute('DELETE FROM files WHERE folder_id = ? AND user_id = ?', (sub_id, session['user_id']))
+        
+        # 删除所有子文件夹
+        conn.execute('DELETE FROM folders WHERE id IN ({}) AND user_id = ?'.format(','.join(['?']*len(subfolder_ids))), subfolder_ids + [session['user_id']])
+        
+        conn.commit()
+        flash(f"文件夹 '{folder[2]}' 及其内容已成功删除")
+    finally:
+        conn.close()
+    
+    # 检查当前请求是否来自文件夹详情页
+    referer = request.headers.get('Referer')
+    if referer and '/folder/' in referer:
+        # 如果是从文件夹详情页来的，重定向到项目文件夹列表
+        return redirect(url_for('project_folders'))
+    else:
+        # 否则返回原页面
+        return redirect(request.referrer or url_for('project_folders'))
+
+
+@app.route('/delete-file/<file_id>', methods=['POST'])
+@login_required
+def delete_file_from_folder(file_id):
+    """从文件夹中删除文件"""
+    conn = get_db()
+    try:
+        # 获取文件信息
+        file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id'])).fetchone()
+        if not file:
+            flash('文件不存在或您没有权限访问')
+            return redirect(request.referrer or url_for('project_folders'))
+        
+        # 删除本地文件
+        try:
+            p = Path(file['path'])
+            if p.exists():
+                p.unlink()
+        except Exception as e:
+            print(f"删除文件 {file['path']} 失败: {e}")
+        
+        # 删除数据库中的文件记录
+        conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id']))
+        conn.commit()
+        flash(f"文件 '{file['filename']}' 已成功删除")
+    finally:
+        conn.close()
+    
+    # 返回原页面
+    return redirect(request.referrer or url_for('project_folders'))
 
 
 @app.route('/update_profile', methods=['POST'])

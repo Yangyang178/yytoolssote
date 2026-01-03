@@ -29,6 +29,10 @@
                                 <span class="stat-number">{{ files | length }}</span>
                                 <span class="stat-label">上传文件</span>
                             </div>
+                            <div class="stat-item">
+                                <span class="stat-number">{{ folder_count }}</span>
+                                <span class="stat-label">项目文件夹</span>
+                            </div>
                         </div>
                     </div>
                     <div class="profile-actions">
@@ -41,6 +45,21 @@
                         <a href="#" class="btn btn-logout" id="logout-btn">
                             <i class="icon-logout">🚪</i> 退出登录
                         </a>
+                    </div>
+                </div>
+                <!-- 项目文件卡片 -->
+                <div class="project-card">
+                    <div class="project-card-header">
+                        <div class="project-icon">
+                            <div class="folder-icon">📁</div>
+                        </div>
+                        <div class="project-info">
+                            <h3 class="project-title">项目文件夹</h3>
+                            <p class="project-desc">多文件项目管理</p>
+                        </div>
+                    </div>
+                    <div class="project-card-actions">
+                        <a href="{{ url_for('project_folders') }}" class="btn btn-manage-projects">管理项目文件夹</a>
                     </div>
                 </div>
             </div>
