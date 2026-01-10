@@ -8,7 +8,8 @@
         </div>
         
         <div class="ai-card">
-            <form action="{{ url_for('ai') }}" method="post" class="ai-form">
+            <form action="{{ url_for('ai_page') }}" method="post" class="ai-form" data-no-loading="true">
+
                 <div class="form-section">
                     <h2 class="section-title">AI功能选择</h2>
                     
@@ -85,6 +86,7 @@
                     <h2 class="section-title">AI回复</h2>
                     <div class="response-header">
                         <form action="{{ url_for('save_ai_content') }}" method="post" class="save-form">
+
                             <input type="hidden" name="ai_function" value="{{ request.form.get('ai_function', 'chat') }}">
                             <input type="hidden" name="prompt" value="{{ request.form.get('prompt') }}">
                             <input type="hidden" name="response" value="{{ ai_output }}">
@@ -124,6 +126,7 @@
                                         查看
                                     </button>
                                     <form action="{{ url_for('delete_ai_content') }}" method="post" style="display: inline;">
+
                                         <input type="hidden" name="content_id" value="{{ content.id }}">
                                         <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要删除这条内容吗？')">
                                             <span class="btn-icon">🗑️</span>
@@ -173,4 +176,35 @@
 
 <div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" class="hidden"></div>
 <link rel="stylesheet" href="{{ url_for('static', filename='ai.css') }}">
+<script>
+  // AI请求表单提交处理
+  document.addEventListener('DOMContentLoaded', function() {
+    const aiForm = document.querySelector('.ai-form');
+    
+    aiForm.addEventListener('submit', function(e) {
+      // 显示加载动画
+      showLoading();
+      
+      // 表单提交成功后隐藏加载动画
+      setTimeout(() => {
+        hideLoading();
+      }, 1000);
+    });
+    
+    // 保存回复表单提交处理
+    const saveForms = document.querySelectorAll('.save-form');
+    saveForms.forEach(form => {
+      form.addEventListener('submit', function(e) {
+        // 显示加载动画
+        showLoading();
+        
+        // 表单提交成功后隐藏加载动画并显示成功提示
+        setTimeout(() => {
+          hideLoading();
+          showToast('回复保存成功', 'success');
+        }, 500);
+      });
+    });
+  });
+</script>
 {% endblock %}

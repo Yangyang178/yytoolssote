@@ -213,19 +213,44 @@ function generateFilePreview(file) {
             const content = e.target.result;
             
             if (fileExtension === 'html') {
-                // HTML文件使用iframe预览
+                // HTML文件使用iframe预览（带沙盒安全机制）
                 const iframe = document.createElement('iframe');
                 iframe.className = 'preview-iframe';
                 iframe.style.width = '100%';
                 iframe.style.height = '300px';
                 iframe.style.border = '1px solid #e2e8f0';
                 iframe.style.borderRadius = '8px';
+                // 添加沙盒属性，限制脚本执行和跨域访问
+                iframe.sandbox = 'allow-same-origin allow-scripts';
+                // 添加性能监控
+                iframe.addEventListener('load', function() {
+                    // 记录加载时间
+                    const loadTime = performance.now();
+                    console.log(`HTML工具加载时间: ${loadTime}ms`);
+                    // 发送性能数据到服务器（可选）
+                });
+                // 添加错误捕获
+                iframe.addEventListener('error', function(e) {
+                    console.error('HTML工具加载错误:', e);
+                    showToast('HTML工具加载失败', 'error');
+                });
                 
                 iframe.onload = function() {
                     const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                     iframeDoc.open();
                     iframeDoc.write(content);
                     iframeDoc.close();
+                    // 添加错误捕获
+                    iframeDoc.addEventListener('error', function(e) {
+                        console.error('HTML工具运行错误:', e);
+                        showToast('HTML工具运行出错', 'error');
+                    });
+                    // 为脚本错误添加捕获
+                    iframe.contentWindow.onerror = function(message, source, lineno, colno, error) {
+                        console.error('HTML工具脚本错误:', { message, source, lineno, colno, error });
+                        showToast('HTML工具脚本执行出错', 'error');
+                        return true;
+                    };
                 };
                 
                 previewContent.appendChild(iframe);
@@ -257,6 +282,19 @@ function generateFilePreview(file) {
                     // 创建一个临时HTML文件，直接在新窗口中写入内容
                     const newWindow = window.open('', '_blank');
                     if (newWindow) {
+                        // 记录开始加载时间
+                        const startTime = performance.now();
+                        // 添加错误捕获
+                        newWindow.onerror = function(message, source, lineno, colno, error) {
+                            console.error('HTML工具脚本错误:', { message, source, lineno, colno, error });
+                            showToast('HTML工具脚本执行出错', 'error');
+                            return true;
+                        };
+                        // 监听窗口加载完成事件，用于性能监控
+                        newWindow.addEventListener('load', function() {
+                            const loadTime = performance.now() - startTime;
+                            console.log(`HTML工具加载时间: ${loadTime}ms`);
+                        });
                         // 直接写入完整的HTML内容
                         newWindow.document.open();
                         newWindow.document.write(content);

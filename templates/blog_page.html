@@ -23,7 +23,7 @@
                     <p>{{ post.summary }}</p>
                 </div>
                 <div class="post-footer">
-                    <a href="{{ url_for('blog_detail', post_id=post.id) }}" class="btn-read-more">阅读全文</a>
+                    <a href="{{ url_for('blog_detail', blog_id=post.id) }}" class="btn-read-more">阅读全文</a>
                 </div>
             </article>
             {% endfor %}

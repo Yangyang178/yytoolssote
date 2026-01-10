@@ -1,0 +1,13 @@
+{
+  "name": "yytoolssite-aipro",
+  "short_name": "yytoolssite",
+  "description": "智能文件管理系统 · 轻松上传、存储与管理您的文件",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#4F46E5",
+
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities"],
+  "prefer_related_applications": false
+}

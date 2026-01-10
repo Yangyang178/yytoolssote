@@ -1,0 +1,877 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="user-center-container">
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">我的反馈</h1>
+        </div>
+        
+        <div class="feedback-container">
+            <!-- 反馈列表卡片 -->
+            <div class="project-card">
+                <div class="project-card-header">
+                    <div class="project-icon" style="background: linear-gradient(135deg, #10B981, #059669);">
+                        <div style="font-size: 2rem; color: white;">💬</div>
+                    </div>
+                    <div class="project-info">
+                        <h3 class="project-title">我的反馈</h3>
+                        <p class="project-desc">查看和管理您的反馈记录</p>
+                    </div>
+                </div>
+                
+                <!-- 反馈列表 -->
+                <div class="feedback-list">
+                    {% if feedbacks and feedbacks|length > 0 %}
+                        <!-- 反馈列表 -->
+                        {% for feedback in feedbacks %}
+                        <div class="feedback-item">
+                            <h3 class="feedback-title">{{ feedback.title }}</h3>
+                            <div class="feedback-meta-info">
+                                <span class="feedback-type">{{ feedback.feedback_type }}</span>
+                                <span class="feedback-status {{ feedback.status }}">{{ feedback.status }}</span>
+                            </div>
+                            
+                            <div class="feedback-meta">
+                                <div class="feedback-date">
+                                    <span>提交于: {{ feedback.created_at }}</span>
+                                </div>
+                                <div class="feedback-actions">
+                                    <button class="btn-delete" data-feedback-id="{{ feedback.id }}">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <!-- 空状态 -->
+                        <div class="empty-state">
+                            <div class="empty-illustration">
+                                <div class="empty-icon">📋</div>
+                            </div>
+                            <h3 class="empty-title">暂无反馈记录</h3>
+                            <p class="empty-desc">您还没有提交任何反馈，点击"新反馈"按钮开始提交反馈</p>
+                            <div class="empty-actions">
+                                <a href="{{ url_for('user_center') }}" class="btn btn-primary">
+                                    <i class="icon-return">⬅️</i> 返回用户中心
+                                </a>
+                                <a href="{{ url_for('new_feedback') }}" class="btn btn-secondary">
+                                    <i class="icon-new">✏️</i> 新反馈
+                                </a>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 重置基本样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #F8FAFC;
+    color: #1E293B;
+    line-height: 1.6;
+}
+
+.user-center-container {
+    min-height: calc(100vh - 120px);
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #FFFFFF 0%, #F0F9FF 50%, #ECFDF5 100%);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* 页面标题 */
+.page-header {
+    text-align: center;
+    margin-bottom: 40px;
+    position: relative;
+}
+
+.page-title {
+    font-size: 2.8rem;
+    font-weight: 900;
+    color: #1E293B;
+    background: linear-gradient(135deg, #10B981 0%, #059669 30%, #4F46E5 70%, #4338CA 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    position: relative;
+    display: inline-block;
+}
+
+.page-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #10B981, #4F46E5);
+    border-radius: 2px;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.6; transform: translateX(-50%) scaleX(1); }
+    50% { opacity: 1; transform: translateX(-50%) scaleX(1.1); }
+}
+
+/* 反馈容器 */
+.feedback-container {
+    max-width: 1000px;
+    margin: 0 auto;
+}
+
+/* 项目卡片 */
+.project-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(16, 185, 129, 0.1);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 253, 244, 0.9) 100%);
+    backdrop-filter: blur(10px);
+}
+
+.project-card:hover {
+    box-shadow: 0 24px 72px rgba(0, 0, 0, 0.15);
+    transform: translateY(-6px);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+/* 项目卡片头部 */
+.project-card-header {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    padding: 40px;
+    background: linear-gradient(135deg, #10B981 0%, #059669 50%, #047857 100%);
+    color: white;
+    position: relative;
+    overflow: hidden;
+}
+
+.project-card-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 6s ease-in-out infinite;
+}
+
+.project-card-header::after {
+    content: '';
+    position: absolute;
+    bottom: -40%;
+    left: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 8s ease-in-out infinite reverse;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(180deg); }
+}
+
+.project-icon {
+    width: 90px;
+    height: 90px;
+    background: rgba(255, 255, 255, 0.25);
+    border: 3px solid rgba(255, 255, 255, 0.4);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    backdrop-filter: blur(15px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+    transition: all 0.3s ease;
+    animation: iconHover 4s ease-in-out infinite;
+}
+
+@keyframes iconHover {
+    0%, 100% { transform: scale(1) rotate(0deg); }
+    25% { transform: scale(1.05) rotate(5deg); }
+    75% { transform: scale(0.95) rotate(-3deg); }
+}
+
+.project-card:hover .project-icon {
+    transform: scale(1.1) rotate(8deg);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35);
+    animation-play-state: paused;
+}
+
+.project-info {
+    flex: 1;
+    position: relative;
+    z-index: 2;
+}
+
+.project-title {
+    font-size: 2.2rem;
+    font-weight: 900;
+    margin: 0;
+    letter-spacing: -0.8px;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.8) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.project-desc {
+    font-size: 1.2rem;
+    margin: 12px 0 0;
+    opacity: 0.95;
+    font-weight: 500;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 反馈列表 */
+.feedback-list {
+    padding: 40px;
+}
+
+/* 空状态 */
+.empty-state {
+    text-align: center;
+    padding: 80px 40px;
+    background: linear-gradient(135deg, #F0FDF4 0%, #EFF6FF 100%);
+    border: 3px dashed rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.empty-state::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #10B981, #4F46E5, #EC4899);
+    animation: gradientShift 6s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.empty-state:hover {
+    box-shadow: 0 16px 48px rgba(16, 185, 129, 0.2);
+    transform: translateY(-4px);
+    border-color: rgba(79, 70, 229, 0.4);
+    background: linear-gradient(135deg, #F0FDF4 0%, #F5F3FF 50%, #EFF6FF 100%);
+}
+
+.empty-illustration {
+    margin-bottom: 32px;
+    position: relative;
+}
+
+.empty-icon {
+    font-size: 8rem;
+    opacity: 0.7;
+    color: #10B981;
+    transition: all 0.3s ease;
+    text-shadow: 0 12px 24px rgba(16, 185, 129, 0.3);
+    animation: bounce 3s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+}
+
+.empty-state:hover .empty-icon {
+    transform: scale(1.1) rotate(8deg);
+    opacity: 0.9;
+    animation-play-state: paused;
+}
+
+.empty-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1E293B;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #1E293B, #475569);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.empty-desc {
+    font-size: 1.2rem;
+    color: #64748B;
+    margin-bottom: 40px;
+    line-height: 1.7;
+    max-width: 550px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.empty-actions {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+/* 按钮样式 */
+.btn {
+    padding: 16px 40px;
+    border-radius: 50px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    border: none;
+    text-decoration: none;
+    outline: none;
+    min-width: 160px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transition: left 0.6s ease;
+    z-index: 1;
+}
+
+.btn:hover::before {
+    left: 100%;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #4F46E5, #4338CA, #7C3AED);
+    color: white;
+    box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #4338CA, #3730A3, #6D28D9);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 36px rgba(79, 70, 229, 0.55);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #10B981, #059669, #047857);
+    color: white;
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #059669, #047857, #065F46);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 36px rgba(16, 185, 129, 0.55);
+}
+
+/* 反馈项样式 */
+.feedback-item {
+    background: white;
+    border: 1px solid #E2E8F0;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    position: relative;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.feedback-item:hover {
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+    border-color: #CBD5E1;
+}
+
+.feedback-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(180deg, #10B981, #4F46E5);
+    border-radius: 0 2px 2px 0;
+}
+
+/* 反馈标题 */
+.feedback-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1E293B;
+    margin: 0;
+    line-height: 1.4;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+/* 反馈元信息 - 类型、状态 */
+.feedback-meta-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+    padding: 8px 0;
+}
+
+.feedback-type {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: #F0FDF4;
+    color: #059669;
+    text-transform: capitalize;
+    border: 1px solid #D1FAE5;
+}
+
+.feedback-status {
+    padding: 5px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.feedback-status.pending {
+    background: #FEF3C7;
+    color: #F59E0B;
+    border: 1px solid #FDE68A;
+}
+
+.feedback-status.resolved {
+    background: #D1FAE5;
+    color: #059669;
+    border: 1px solid #A7F3D0;
+}
+
+.feedback-status.closed {
+    background: #FEE2E2;
+    color: #DC2626;
+    border: 1px solid #FCA5A5;
+}
+
+
+
+/* 反馈图片 */
+.feedback-images {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+}
+
+.feedback-image-item {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border: 1px solid #E2E8F0;
+}
+
+.feedback-image-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.feedback-image-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* 底部元信息 - 提交时间和操作按钮 */
+.feedback-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    color: #64748B;
+    padding-top: 12px;
+    border-top: 1px solid #F1F5F9;
+}
+
+.feedback-date {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 500;
+}
+
+.feedback-date::before {
+    content: '📅';
+    font-size: 1rem;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .user-center-container {
+        padding: 24px 16px;
+    }
+    
+    .page-title {
+        font-size: 2.2rem;
+    }
+    
+    .project-card-header {
+        padding: 32px 24px;
+        flex-direction: column;
+        text-align: center;
+        gap: 20px;
+    }
+    
+    .project-title {
+        font-size: 1.8rem;
+    }
+    
+    .feedback-list {
+        padding: 24px;
+    }
+    
+    .feedback-item {
+        padding: 20px;
+        margin-bottom: 16px;
+    }
+    
+    .feedback-title {
+        font-size: 1.15rem;
+    }
+    
+    .feedback-meta-info {
+        gap: 12px;
+        font-size: 0.85rem;
+    }
+    
+    .feedback-type,
+    .feedback-status {
+        padding: 5px 14px;
+        font-size: 0.8rem;
+    }
+    
+    .feedback-content {
+        padding: 12px;
+        font-size: 0.95rem;
+    }
+    
+    .feedback-image-item {
+        width: 64px;
+        height: 64px;
+    }
+    
+    .feedback-images {
+        gap: 10px;
+    }
+    
+    .empty-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .btn {
+        width: 100%;
+        max-width: 320px;
+    }
+    
+    .empty-state {
+        padding: 60px 24px;
+    }
+    
+    .empty-icon {
+        font-size: 6rem;
+    }
+}
+
+/* 加载动画 */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.feedback-item {
+    animation: fadeInUp 0.6s ease-out forwards;
+}
+
+/* 为每个反馈项添加延迟动画 */
+.feedback-item:nth-child(1) { animation-delay: 0.1s; }
+.feedback-item:nth-child(2) { animation-delay: 0.2s; }
+.feedback-item:nth-child(3) { animation-delay: 0.3s; }
+.feedback-item:nth-child(4) { animation-delay: 0.4s; }
+.feedback-item:nth-child(5) { animation-delay: 0.5s; }
+.feedback-item:nth-child(n+6) { animation-delay: 0.6s; }
+</style>
+
+<!-- 删除确认模态框 -->
+<div id="delete-confirm-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">确认删除</h3>
+            <button class="modal-close" id="close-delete-modal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>您确定要删除这条反馈吗？此操作不可恢复。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-delete-btn">取消</button>
+            <button class="btn btn-danger" id="confirm-delete-btn">确认删除</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 模态框样式 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(5px);
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #E2E8F0;
+    background: #F8FAFC;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1E293B;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748B;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: #EF4444;
+    color: white;
+}
+
+.modal-body {
+    padding: 20px;
+    color: #475569;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 20px;
+    border-top: 1px solid #E2E8F0;
+    background: #F8FAFC;
+}
+
+/* 删除按钮样式 */
+.btn-delete {
+    background: #EF4444;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.btn-delete:hover {
+    background: #DC2626;
+    box-shadow: 0 4px 8px rgba(239, 68, 68, 0.3);
+    transform: translateY(-1px);
+}
+
+/* 反馈操作区域 */
+.feedback-actions {
+    display: flex;
+    gap: 8px;
+}
+</style>
+
+<script>
+// 确保DOM加载完成后执行
+window.addEventListener('DOMContentLoaded', function() {
+    // DOM元素
+    const deleteModal = document.getElementById('delete-confirm-modal');
+    const closeDeleteModal = document.getElementById('close-delete-modal');
+    const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+    const confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+    
+    // 存储当前操作的反馈ID
+    let currentFeedbackId = null;
+    
+    // 关闭删除确认模态框
+    function closeDeleteModalFunc() {
+        deleteModal.classList.remove('active');
+        document.body.style.overflow = '';
+        currentFeedbackId = null;
+    }
+    
+    // 确认删除反馈
+    function confirmDelete() {
+        if (!currentFeedbackId) return;
+        
+        // 发送删除请求
+        fetch(`/api/feedback/${currentFeedbackId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('网络响应错误');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // 刷新页面
+                window.location.reload();
+            } else {
+                alert('删除失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('删除错误：', error);
+            alert('删除失败，请重试');
+        })
+        .finally(() => {
+            closeDeleteModalFunc();
+        });
+    }
+    
+    // 事件委托：监听所有删除按钮的点击
+    document.addEventListener('click', function(event) {
+        if (event.target.classList.contains('btn-delete')) {
+            // 获取反馈ID
+            const feedbackId = event.target.dataset.feedbackId;
+            if (feedbackId) {
+                currentFeedbackId = feedbackId;
+                deleteModal.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+    });
+    
+    // 事件监听
+    if (closeDeleteModal) {
+        closeDeleteModal.addEventListener('click', closeDeleteModalFunc);
+    }
+    
+    if (cancelDeleteBtn) {
+        cancelDeleteBtn.addEventListener('click', closeDeleteModalFunc);
+    }
+    
+    if (confirmDeleteBtn) {
+        confirmDeleteBtn.addEventListener('click', confirmDelete);
+    }
+    
+    // 点击模态框外部关闭
+    if (deleteModal) {
+        deleteModal.addEventListener('click', function(event) {
+            if (event.target === deleteModal) {
+                closeDeleteModalFunc();
+            }
+        });
+    }
+});
+</script>
+
+{% endblock %}

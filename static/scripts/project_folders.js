@@ -1,5 +1,31 @@
 // 项目文件夹页面脚本
 
+// 删除确认弹窗功能
+function confirmDeleteFolder(folderId, folderName) {
+    // 获取弹窗元素
+    const modal = document.getElementById('delete-confirm-modal');
+    const deleteMessage = document.getElementById('delete-message');
+    const deleteForm = document.getElementById('delete-form');
+    
+    // 设置删除消息
+    deleteMessage.textContent = `确定要删除文件夹 "${folderName}" 及其所有内容吗？`;
+    
+    // 设置表单的action
+    deleteForm.action = `/delete-folder/${folderId}`;
+    
+    // 显示弹窗
+    modal.style.display = 'flex';
+}
+
+// 关闭删除弹窗功能
+function closeDeleteModal() {
+    // 获取弹窗元素
+    const modal = document.getElementById('delete-confirm-modal');
+    
+    // 隐藏弹窗
+    modal.style.display = 'none';
+}
+
 // 页面加载完成后添加事件监听器
 document.addEventListener('DOMContentLoaded', function() {
     // 返回按钮事件监听器
@@ -35,28 +61,3 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-
-// 删除确认弹窗功能
-function confirmDeleteFolder(folderId, folderName) {
-    // 获取弹窗元素
-    const modal = document.getElementById('delete-confirm-modal');
-    const deleteMessage = document.getElementById('delete-message');
-    const deleteForm = document.getElementById('delete-form');
-    
-    // 设置删除消息
-    deleteMessage.textContent = `确定要删除文件夹 "${folderName}" 及其所有内容吗？`;
-    
-    // 设置表单的action
-    deleteForm.action = `/delete-folder/${folderId}`;
-    
-    // 显示弹窗
-    modal.style.display = 'flex';
-}
-
-function closeDeleteModal() {
-    // 获取弹窗元素
-    const modal = document.getElementById('delete-confirm-modal');
-    
-    // 隐藏弹窗
-    modal.style.display = 'none';
-}

@@ -94,8 +94,8 @@
                     <h2 class="prompt-title">您尚未登录</h2>
                     <p class="prompt-desc">登录后，您可以查看和管理您的项目文件夹</p>
                     <div class="prompt-actions">
-                        <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-                        <a href="{{ url_for('register') }}" class="btn btn-outline">注册</a>
+                        <a href="{{ url_for('auth') }}?mode=login" class="btn btn-primary">登录</a>
+                        <a href="{{ url_for('auth') }}?mode=register" class="btn btn-outline">注册</a>
                     </div>
                 </div>
             </div>

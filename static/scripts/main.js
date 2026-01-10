@@ -92,59 +92,52 @@ function initFileActions() {
   });
 }
 
-// 初始化文件互动状态
+// 初始化文件互动状态 - 添加错误处理
 async function initFileInteractions() {
-  const fileCards = document.querySelectorAll('.file-card');
-  
-  for (const card of fileCards) {
-    const likeBtn = card.querySelector('.like-btn');
-    const favoriteBtn = card.querySelector('.favorite-btn');
+  try {
+    console.log('开始初始化文件互动状态');
     
-    if (!likeBtn || !favoriteBtn) {
-      continue;
-    }
+    // 获取所有文件卡片
+    const fileCards = document.querySelectorAll('.file-card');
     
-    const fileId = likeBtn.dataset?.fileId;
-    
-    if (!fileId) {
-      continue;
-    }
-    
-    // 添加加载状态
-    likeBtn.classList.add('loading');
-    favoriteBtn.classList.add('loading');
-    
-    try {
-      const response = await fetch(`/api/files/${fileId}/interactions`);
-      const data = await response.json();
-      
-      if (data.success) {
-        // 更新点赞数和状态
-        const likeCount = likeBtn.querySelector('.count');
-        if (likeCount) {
-          likeCount.textContent = data.like_count;
-        }
-        if (data.is_liked) {
-          likeBtn.classList.add('active');
-        }
-        
-        // 更新收藏数和状态
-        const favoriteCount = favoriteBtn.querySelector('.count');
-        if (favoriteCount) {
-          favoriteCount.textContent = data.favorite_count;
-        }
-        if (data.is_favorited) {
-          favoriteBtn.classList.add('active');
+    // 遍历每个文件卡片，初始化互动状态
+    for (const card of fileCards) {
+      const fileId = card.querySelector('.like-btn')?.dataset?.fileId;
+      if (fileId) {
+        try {
+          // 调用API获取互动状态
+          const response = await fetch(`/api/files/${fileId}/interaction-status`);
+          const data = await response.json();
+          
+          if (data.success) {
+            // 更新点赞状态
+            const likeBtn = card.querySelector('.like-btn');
+            const likeCount = likeBtn.querySelector('.count');
+            const likeIcon = likeBtn.querySelector('.icon-like');
+            likeCount.textContent = data.data.like_count;
+            if (data.data.liked) {
+              likeIcon.style.color = '#EF4444'; // 红色表示已点赞
+            }
+            
+            // 更新收藏状态
+            const favoriteBtn = card.querySelector('.favorite-btn');
+            const favoriteCount = favoriteBtn.querySelector('.count');
+            const favoriteIcon = favoriteBtn.querySelector('.icon-favorite');
+            favoriteCount.textContent = data.data.favorite_count;
+            if (data.data.favorited) {
+              favoriteIcon.style.color = '#F59E0B'; // 黄色表示已收藏
+            }
+          }
+        } catch (error) {
+          console.error(`初始化文件 ${fileId} 互动状态失败:`, error);
         }
       }
-    } catch (error) {
-      console.error(`初始化文件 ${fileId} 互动状态失败：`, error);
-      showStatusMessage(`初始化文件互动状态失败: ${error.message}`, 'error');
-    } finally {
-      // 移除加载状态
-      likeBtn.classList.remove('loading');
-      favoriteBtn.classList.remove('loading');
     }
+    
+    console.log('文件互动状态初始化完成');
+  } catch (error) {
+    console.error('初始化文件互动状态时发生错误:', error);
+    showStatusMessage('初始化文件互动状态失败: ' + error.message, 'error');
   }
 }
 
@@ -155,16 +148,8 @@ async function handleLike(fileId, btn) {
     return;
   }
   
-  if (!fileId || !btn) {
-    console.error('点赞失败：缺少必要参数');
-    showStatusMessage('点赞失败：缺少必要参数', 'error');
-    return;
-  }
-  
-  // 添加加载状态
-  btn.classList.add('loading');
-  
   try {
+    // 调用点赞API
     const response = await fetch(`/api/files/${fileId}/like`, {
       method: 'POST',
       headers: {
@@ -175,29 +160,25 @@ async function handleLike(fileId, btn) {
     const data = await response.json();
     
     if (data.success) {
-      // 更新按钮状态
-      if (data.liked) {
-        btn.classList.add('active');
+      // 更新点赞按钮状态和数量
+      const countElement = btn.querySelector('.count');
+      countElement.textContent = data.data.count;
+      
+      // 更新按钮样式
+      const iconElement = btn.querySelector('.icon-like');
+      if (data.data.liked) {
+        iconElement.style.color = '#EF4444'; // 红色表示已点赞
         showStatusMessage('点赞成功', 'success');
       } else {
-        btn.classList.remove('active');
+        iconElement.style.color = ''; // 默认颜色表示未点赞
         showStatusMessage('取消点赞成功', 'success');
       }
-      
-      // 更新点赞数
-      const countElement = btn.querySelector('.count');
-      if (countElement) {
-        countElement.textContent = data.count;
-      }
     } else {
-      showStatusMessage(`点赞失败: ${data.message || '未知错误'}`, 'error');
+      showStatusMessage('操作失败: ' + data.message, 'error');
     }
   } catch (error) {
-    console.error(`点赞失败：`, error);
-    showStatusMessage(`点赞失败: ${error.message}`, 'error');
-  } finally {
-    // 移除加载状态
-    btn.classList.remove('loading');
+    console.error('点赞操作失败:', error);
+    showStatusMessage('点赞操作失败: ' + error.message, 'error');
   }
 }
 
@@ -208,16 +189,8 @@ async function handleFavorite(fileId, btn) {
     return;
   }
   
-  if (!fileId || !btn) {
-    console.error('收藏失败：缺少必要参数');
-    showStatusMessage('收藏失败：缺少必要参数', 'error');
-    return;
-  }
-  
-  // 添加加载状态
-  btn.classList.add('loading');
-  
   try {
+    // 调用收藏API
     const response = await fetch(`/api/files/${fileId}/favorite`, {
       method: 'POST',
       headers: {
@@ -228,33 +201,29 @@ async function handleFavorite(fileId, btn) {
     const data = await response.json();
     
     if (data.success) {
-      // 更新按钮状态
-      if (data.favorited) {
-        btn.classList.add('active');
+      // 更新收藏按钮状态和数量
+      const countElement = btn.querySelector('.count');
+      countElement.textContent = data.data.count;
+      
+      // 更新按钮样式
+      const iconElement = btn.querySelector('.icon-favorite');
+      if (data.data.favorited) {
+        iconElement.style.color = '#F59E0B'; // 黄色表示已收藏
         showStatusMessage('收藏成功', 'success');
       } else {
-        btn.classList.remove('active');
+        iconElement.style.color = ''; // 默认颜色表示未收藏
         showStatusMessage('取消收藏成功', 'success');
       }
-      
-      // 更新收藏数
-      const countElement = btn.querySelector('.count');
-      if (countElement) {
-        countElement.textContent = data.count;
-      }
     } else {
-      showStatusMessage(`收藏失败: ${data.message || '未知错误'}`, 'error');
+      showStatusMessage('操作失败: ' + data.message, 'error');
     }
   } catch (error) {
-    console.error(`收藏失败：`, error);
-    showStatusMessage(`收藏失败: ${error.message}`, 'error');
-  } finally {
-    // 移除加载状态
-    btn.classList.remove('loading');
+    console.error('收藏操作失败:', error);
+    showStatusMessage('收藏操作失败: ' + error.message, 'error');
   }
 }
 
-// 绑定事件监听
+// 绑定事件监听 - 简化版，只显示功能未实现提示
 function bindInteractionEvents() {
   // 处理点赞按钮点击事件
   const likeBtns = document.querySelectorAll('.like-btn');

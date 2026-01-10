@@ -108,16 +108,57 @@
             <!-- 文件列表 -->
             <div class="content-section">
                 {% if files %}
+                    <!-- 批量操作和搜索区域 -->
+                    <div class="file-operations">
+                        <div class="batch-actions">
+                            <input type="checkbox" id="select-all" class="select-all-checkbox">
+                            <label for="select-all" class="select-all-label">全选</label>
+                            <button class="btn btn-batch-delete" id="batch-delete-btn" disabled>
+                                <i class="delete-icon">🗑️</i> 批量删除 (0)
+                            </button>
+                        </div>
+                        <!-- 搜索区域 -->
+                        <div class="search-container">
+                            <input type="text" id="file-search" placeholder="搜索文件名或描述..." class="search-input">
+                            <button class="search-btn" onclick="searchFiles()">
+                                <i class="search-icon">🔍</i> 搜索
+                            </button>
+                            <button class="clear-search-btn" onclick="clearSearch()">
+                                <i class="clear-icon">✕</i> 清除
+                            </button>
+                        </div>
+                    </div>
+                    <!-- 搜索结果统计 -->
+                    <div class="search-results-count" id="search-results-count">
+                        显示 {{ files|length }} 个文件中的 {{ files|length }} 个
+                    </div>
                     <div class="files-grid">
                         {% for file in files %}
                         <div class="file-card">
-                            <div class="file-icon">📄</div>
+                            <div class="file-checkbox-container">
+                                <input type="checkbox" class="file-checkbox" data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}">
+                            </div>
+                            <div class="file-icon">
+                                {% if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp')) %}
+                                    🖼️
+                                {% elif file.filename.lower().endswith('.pdf') %}
+                                    📄
+                                {% else %}
+                                    📄
+                                {% endif %}
+                            </div>
                             <h3 class="file-name">{{ file.filename }}</h3>
                             <p class="file-size">{{ file.size }} B</p>
                             <p class="file-desc">{{ file.project_desc or '无描述' }}</p>
                             <div class="file-actions">
                                 <a href="{{ url_for('file_detail', file_id=file.id) }}" class="btn btn-detail">详情</a>
                                 <a href="{{ url_for('download_local', stored_name=file.stored_name) }}" class="btn btn-download">下载</a>
+                                <!-- 预览按钮 - 仅支持图片和PDF -->
+                                {% if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf')) %}
+                                    <button class="btn btn-preview" onclick="previewFile('{{ file.id }}', '{{ file.filename }}', '{{ url_for('static', filename='uploads/' + file.stored_name) }}')">
+                                        <i class="preview-icon">👁️</i> 预览
+                                    </button>
+                                {% endif %}
                                 <button class="btn btn-delete btn-file-delete" data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}">
                                     <i class="delete-icon">🗑️</i> 删除
                                 </button>
@@ -147,8 +188,48 @@
                     <div class="modal-footer">
                         <button class="btn btn-cancel" onclick="closeDeleteModal()">取消</button>
                         <form id="delete-form" action="" method="post" style="display: inline;">
-                            <button type="submit" class="btn btn-delete-confirm">删除</button>
-                        </form>
+                        <button type="submit" class="btn btn-delete-confirm">删除</button>
+                    </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 批量删除确认弹窗 -->
+            <div id="batch-delete-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">批量删除确认</h2>
+                        <button class="btn btn-close" onclick="closeBatchDeleteModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p id="batch-delete-message">确定要删除选中的 <span id="selected-count">0</span> 个文件吗？</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-cancel" onclick="closeBatchDeleteModal()">取消</button>
+                        <form id="batch-delete-form" action="{{ url_for('batch_delete_files') }}" method="post" style="display: inline;">
+                        <input type="hidden" name="folder_id" value="{{ folder.id }}">
+                        <input type="hidden" name="file_ids" id="batch-delete-file-ids" value="">
+                        <button type="submit" class="btn btn-delete-confirm">批量删除</button>
+                    </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 文件预览弹窗 -->
+            <div id="file-preview-modal" class="modal" style="display: none;">
+                <div class="modal-content modal-preview-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="preview-file-name">文件预览</h2>
+                        <button class="btn btn-close" onclick="closePreviewModal()">&times;</button>
+                    </div>
+                    <div class="modal-body modal-preview-body">
+                        <!-- 预览内容容器 -->
+                        <div id="preview-content">
+                            <!-- 预览内容将通过JavaScript动态加载 -->
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-cancel" onclick="closePreviewModal()">关闭</button>
                     </div>
                 </div>
             </div>
@@ -159,8 +240,8 @@
                     <h2 class="prompt-title">您尚未登录</h2>
                     <p class="prompt-desc">登录后，您可以查看和管理文件夹内容</p>
                     <div class="prompt-actions">
-                        <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-                        <a href="{{ url_for('register') }}" class="btn btn-outline">注册</a>
+                        <a href="{{ url_for('auth') }}?mode=login" class="btn btn-primary">登录</a>
+                        <a href="{{ url_for('auth') }}?mode=register" class="btn btn-outline">注册</a>
                     </div>
                 </div>
             </div>
@@ -648,6 +729,245 @@
     padding: 8px 16px;
 }
 
+/* 批量操作和搜索区域样式 */
+.file-operations {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+/* 全选复选框样式 */
+.select-all-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #4F46E5;
+    cursor: pointer;
+}
+
+.select-all-label {
+    cursor: pointer;
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 0.9375rem;
+}
+
+/* 批量删除按钮样式 */
+.btn-batch-delete {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 24px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.btn-batch-delete:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.35);
+    background: linear-gradient(135deg, #DC2626, #B91C1C);
+}
+
+.btn-batch-delete:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 搜索区域样式 */
+.search-container {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.search-input {
+    padding: 10px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 0.9375rem;
+    width: 300px;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: #4F46E5;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+}
+
+.search-btn,
+.clear-search-btn {
+    background: linear-gradient(135deg, #4F46E5, #4338CA);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 16px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+.clear-search-btn {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.25);
+}
+
+.search-btn:hover,
+.clear-search-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(79, 70, 229, 0.35);
+}
+
+/* 搜索结果统计样式 */
+.search-results-count {
+    font-size: 0.875rem;
+    color: #64748b;
+    margin-bottom: 20px;
+    font-weight: 500;
+}
+
+/* 文件卡片复选框样式 */
+.file-card {
+    position: relative;
+    overflow: visible;
+}
+
+.file-checkbox-container {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    z-index: 10;
+}
+
+.file-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #4F46E5;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 预览按钮样式 */
+.btn-preview {
+    background: linear-gradient(135deg, #06B6D4, #0891B2);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(6, 182, 212, 0.25);
+    flex: 1;
+}
+
+.btn-preview:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(6, 182, 212, 0.35);
+    background: linear-gradient(135deg, #0891B2, #0E7490);
+}
+
+/* 预览弹窗样式 */
+.modal-preview-content {
+    width: 95%;
+    max-width: 900px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-preview-body {
+    overflow: auto;
+    padding: 0;
+    flex: 1;
+}
+
+#preview-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+#preview-content img {
+    max-width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+#preview-content iframe {
+    width: 100%;
+    height: 70vh;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .file-operations {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .batch-actions {
+        justify-content: center;
+    }
+    
+    .search-container {
+        justify-content: center;
+    }
+    
+    .search-input {
+        width: 100%;
+    }
+    
+    .file-checkbox-container {
+        top: 8px;
+        left: 8px;
+    }
+    
+    .file-actions {
+        flex-direction: column;
+    }
+    
+    .btn-preview {
+        margin: 0;
+    }
+}
+
 .delete-icon {
     font-size: 0.875rem;
 }
@@ -793,6 +1113,161 @@
     }
 }
 </style>
+
+<script>
+    // 批量操作功能初始化
+    function initBatchOperations() {
+        const selectAllCheckbox = document.getElementById('select-all');
+        const fileCheckboxes = document.querySelectorAll('.file-checkbox');
+        const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        
+        // 全选/取消全选功能
+        selectAllCheckbox.addEventListener('change', function() {
+            const isChecked = this.checked;
+            fileCheckboxes.forEach(checkbox => {
+                checkbox.checked = isChecked;
+            });
+            updateBatchDeleteButton();
+        });
+        
+        // 文件复选框变化事件
+        fileCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateBatchDeleteButton);
+        });
+        
+        // 批量删除按钮点击事件
+        batchDeleteBtn.addEventListener('click', function() {
+            openBatchDeleteModal();
+        });
+    }
+    
+    // 更新批量删除按钮状态
+    function updateBatchDeleteButton() {
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        const count = checkedCheckboxes.length;
+        const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        
+        batchDeleteBtn.disabled = count === 0;
+        batchDeleteBtn.innerHTML = `<i class="delete-icon">🗑️</i> 批量删除 (${count})`;
+    }
+    
+    // 打开批量删除弹窗
+    function openBatchDeleteModal() {
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        const fileIds = Array.from(checkedCheckboxes).map(checkbox => checkbox.dataset.fileId);
+        
+        if (fileIds.length === 0) {
+            return;
+        }
+        
+        document.getElementById('selected-count').textContent = fileIds.length;
+        document.getElementById('batch-delete-file-ids').value = fileIds.join(',');
+        document.getElementById('batch-delete-modal').style.display = 'flex';
+    }
+    
+    // 关闭批量删除弹窗
+    function closeBatchDeleteModal() {
+        document.getElementById('batch-delete-modal').style.display = 'none';
+    }
+    
+    // 搜索功能初始化
+    function initSearch() {
+        const searchInput = document.getElementById('file-search');
+        searchInput.addEventListener('input', searchFiles);
+        
+        // 回车键触发搜索
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchFiles();
+            }
+        });
+    }
+    
+    // 文件搜索功能
+    function searchFiles() {
+        const searchTerm = document.getElementById('file-search').value.toLowerCase().trim();
+        const fileCards = document.querySelectorAll('.file-card');
+        const originalFilesCount = {{ files|length }};
+        let visibleFilesCount = 0;
+        
+        fileCards.forEach(card => {
+            const fileName = card.querySelector('.file-name').textContent.toLowerCase();
+            const fileDesc = card.querySelector('.file-desc').textContent.toLowerCase();
+            
+            if (searchTerm === '' || fileName.includes(searchTerm) || fileDesc.includes(searchTerm)) {
+                card.style.display = '';
+                visibleFilesCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        // 更新搜索结果统计
+        document.getElementById('search-results-count').textContent = 
+            `显示 ${visibleFilesCount} 个文件中的 ${originalFilesCount} 个`;
+    }
+    
+    // 清除搜索
+    function clearSearch() {
+        const searchInput = document.getElementById('file-search');
+        searchInput.value = '';
+        searchFiles();
+    }
+    
+    // 文件预览功能
+    function previewFile(fileId, fileName, filePath) {
+        document.getElementById('preview-file-name').textContent = fileName;
+        const previewContent = document.getElementById('preview-content');
+        
+        // 清空预览内容
+        previewContent.innerHTML = '';
+        
+        // 根据文件类型显示不同的预览内容
+        if (fileName.toLowerCase().endsWith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))) {
+            // 图片预览
+            const img = document.createElement('img');
+            img.src = filePath;
+            img.alt = fileName;
+            previewContent.appendChild(img);
+        } else if (fileName.toLowerCase().endsWith('.pdf')) {
+            // PDF预览
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(filePath)}&embedded=true`;
+            previewContent.appendChild(iframe);
+        }
+        
+        // 显示预览弹窗
+        document.getElementById('file-preview-modal').style.display = 'flex';
+    }
+    
+    // 关闭预览弹窗
+    function closePreviewModal() {
+        document.getElementById('file-preview-modal').style.display = 'none';
+    }
+    
+    // 辅助函数：获取选中的文件ID
+    function getSelectedFileIds() {
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        return Array.from(checkedCheckboxes).map(checkbox => checkbox.dataset.fileId);
+    }
+    
+    // 页面加载完成后初始化功能
+    document.addEventListener('DOMContentLoaded', function() {
+        // 初始化批量操作功能
+        initBatchOperations();
+        // 初始化搜索功能
+        initSearch();
+        // 点击弹窗外部关闭弹窗
+        window.onclick = function(event) {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        };
+    });
+</script>
 
 <script src="{{ url_for('static', filename='scripts/folder_detail.js') }}"></script>
 {% endblock %}

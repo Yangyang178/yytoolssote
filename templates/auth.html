@@ -19,10 +19,10 @@
         {% elif mode != 'register' %}
             <div class="login-method-switch">
                 <div class="method-tabs">
-                    <a href="{{ url_for(mode, login_method='password') }}" class="method-tab {{ 'active' if login_method == 'password' else '' }}">
+                    <a href="{{ url_for('auth', mode=mode, login_method='password') }}" class="method-tab {{ 'active' if login_method == 'password' else '' }}">
                         <span class="method-icon">🔒</span> 密码登录
                     </a>
-                    <a href="{{ url_for(mode, login_method='code') }}" class="method-tab {{ 'active' if login_method == 'code' else '' }}">
+                    <a href="{{ url_for('auth', mode=mode, login_method='code') }}" class="method-tab {{ 'active' if login_method == 'code' else '' }}">
                         <span class="method-icon">📧</span> 验证码登录
                     </a>
                 </div>
@@ -30,10 +30,10 @@
         {% else %}
             <div class="login-method-switch">
                 <div class="method-tabs">
-                    <a href="{{ url_for(mode, login_method='password') }}" class="method-tab {{ 'active' if login_method == 'password' else '' }}">
+                    <a href="{{ url_for('auth', mode=mode, login_method='password') }}" class="method-tab {{ 'active' if login_method == 'password' else '' }}">
                         <span class="method-icon">🔒</span> 密码注册
                     </a>
-                    <a href="{{ url_for(mode, login_method='code') }}" class="method-tab {{ 'active' if login_method == 'code' else '' }}">
+                    <a href="{{ url_for('auth', mode=mode, login_method='code') }}" class="method-tab {{ 'active' if login_method == 'code' else '' }}">
                         <span class="method-icon">📧</span> 验证码注册
                     </a>
                 </div>
@@ -63,8 +63,10 @@
         {% endif %}
         
         {% if mode == 'register' %}
-            <form action="{{ url_for('register') }}" method="post" class="auth-form">
+            <form action="{{ url_for('auth') }}" method="post" class="auth-form">
+                <input type="hidden" name="mode" value="{{ mode }}">
                 <input type="hidden" name="login_method" value="{{ login_method }}">
+                <input type="hidden" name="action" value="{{ 'send_code' if login_method != 'password' else 'register' }}">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
@@ -113,8 +115,9 @@
             </form>
             
             {% if request.args.get('step') == 'verify' %}
-                <form action="{{ url_for('verify_register') }}" method="post" class="auth-form verify-form">
-                    <input type="hidden" name="login_method" value="{{ login_method }}">
+                <form action="{{ url_for('auth') }}" method="post" class="auth-form verify-form">
+                <input type="hidden" name="login_method" value="{{ login_method }}">
+                <input type="hidden" name="action" value="register">
                     <div class="form-row">
                         <div class="input-wrapper">
                             <label for="email" class="input-label">邮箱</label>
@@ -142,7 +145,8 @@
             {% endif %}
         {% elif mode == 'forgot_password' %}
             <!-- 忘记密码表单 -->
-            <form action="{{ url_for('forgot_password') }}" method="post" class="auth-form">
+            <form action="{{ url_for('auth') }}" method="post" class="auth-form">
+                <input type="hidden" name="mode" value="forgot_password">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
@@ -157,12 +161,13 @@
             </form>
         {% elif mode == 'reset_password' %}
             <!-- 重置密码表单 -->
-            <form action="{{ url_for('reset_password') }}" method="post" class="auth-form">
-                <input type="hidden" name="email" value="{{ email }}">
+            <form action="{{ url_for('auth') }}" method="post" class="auth-form">
+                <input type="hidden" name="email" value="{{ request.args.get('email') }}">
+                <input type="hidden" name="mode" value="reset_password">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
-                        <input type="email" id="email" value="{{ email }}" required readonly>
+                        <input type="email" id="email" value="{{ request.args.get('email') }}" required readonly>
                     </div>
                 </div>
                 <div class="form-row">
@@ -191,8 +196,10 @@
             </form>
         {% else %}
             <!-- 登录表单 -->
-            <form action="{{ url_for('login') }}" method="post" class="auth-form">
+            <form action="{{ url_for('auth') }}" method="post" class="auth-form">
+                <input type="hidden" name="mode" value="{{ mode }}">
                 <input type="hidden" name="login_method" value="{{ login_method }}">
+                <input type="hidden" name="action" value="{{ 'send_code' if login_method != 'password' else 'login' }}">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
@@ -229,8 +236,9 @@
             </form>
             
             {% if request.args.get('step') == 'verify' %}
-                <form action="{{ url_for('verify_login') }}" method="post" class="auth-form verify-form">
-                    <input type="hidden" name="login_method" value="{{ login_method }}">
+                <form action="{{ url_for('auth') }}" method="post" class="auth-form verify-form">
+                <input type="hidden" name="login_method" value="{{ login_method }}">
+                <input type="hidden" name="action" value="login_with_code">
                     <div class="form-row">
                         <div class="input-wrapper">
                             <label for="email" class="input-label">邮箱</label>
@@ -260,18 +268,76 @@
         
         <div class="auth-switch">
             {% if mode == 'register' %}
-                <p>已有账号？ <a href="{{ url_for('login') }}" class="auth-link">登录</a></p>
+                <p>已有账号？ <a href="{{ url_for('auth', mode='login') }}" class="auth-link">登录</a></p>
             {% elif mode == 'forgot_password' %}
-                <p>想起密码了？ <a href="{{ url_for('login') }}" class="auth-link">返回登录</a></p>
+                <p>想起密码了？ <a href="{{ url_for('auth', mode='login') }}" class="auth-link">返回登录</a></p>
             {% elif mode == 'reset_password' %}
-                <p>操作完成？ <a href="{{ url_for('login') }}" class="auth-link">返回登录</a></p>
+                <p>操作完成？ <a href="{{ url_for('auth', mode='login') }}" class="auth-link">返回登录</a></p>
             {% else %}
-                <p>没有账号？ <a href="{{ url_for('register') }}" class="auth-link">注册</a></p>
-                <p class="forgot-password">忘记密码？ <a href="{{ url_for('forgot_password') }}" class="auth-link">重置密码</a></p>
+                <p>没有账号？ <a href="{{ url_for('auth', mode='register') }}" class="auth-link">注册</a></p>
+                <p class="forgot-password">忘记密码？ <a href="{{ url_for('auth', mode='forgot_password') }}" class="auth-link">重置密码</a></p>
             {% endif %}
         </div>
     </div>
 </div>
 
 <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}">
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const forms = document.querySelectorAll('.auth-form');
+    
+    forms.forEach(form => {
+        form.addEventListener('submit', function(e) {
+            const actionInput = form.querySelector('input[name="action"]');
+            if (!actionInput) return;
+            
+            const actionValue = actionInput.value;
+            
+            // Only use AJAX for send_code action
+            if (actionValue === 'send_code') {
+                e.preventDefault();
+                
+                const formData = new FormData(form);
+                const email = formData.get('email');
+                
+                if (!email) {
+                    alert('请输入邮箱地址');
+                    return;
+                }
+                
+                const submitBtn = form.querySelector('button[type="submit"]');
+                submitBtn.disabled = true;
+                submitBtn.textContent = '发送中...';
+                
+                // 使用当前页面的URL作为fetch目标，确保正确
+                const urlParams = new URLSearchParams(window.location.search);
+                const currentMode = urlParams.get('mode') || 'login';
+                const currentLoginMethod = urlParams.get('login_method') || 'code';
+                const formAction = '{{ url_for("auth") }}';
+                fetch(formAction, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Redirect to verification page with mode and login_method
+                        window.location.href = '{{ url_for("auth") }}?mode=' + currentMode + '&login_method=' + currentLoginMethod + '&step=verify&email=' + encodeURIComponent(email) + (data.data && data.data.code ? '&debug_code=' + data.data.code : '');
+                    } else {
+                        alert(data.message || '发送验证码失败');
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = '<span class="btn-text">发送验证码</span>';
+                    }
+                })
+                .catch(error => {
+                    console.error('发送验证码失败:', error);
+                    alert('发送验证码失败，请稍后重试');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<span class="btn-text">发送验证码</span>';
+                });
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

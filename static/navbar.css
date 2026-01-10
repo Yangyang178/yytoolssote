@@ -315,7 +315,7 @@ body {
 /* main元素样式 */
 main {
   flex: 1;
-  padding-top: 0;
+  padding-top: 120px;
   margin-top: 0;
   background: transparent;
 }
@@ -324,7 +324,15 @@ main {
 .flash-container {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 28px;
+  padding: 0;
+}
+
+/* 消息提示样式 */
+.flash {
+  margin: 28px auto;
+  padding: 16px 24px;
+  border-radius: var(--radius-md);
+  max-width: 1200px;
 }
 
 /* 页脚样式 - 位于页面底部 */

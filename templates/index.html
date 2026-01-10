@@ -7,9 +7,9 @@
       <h1 class="hero-title">智能文件管理系统</h1>
       <p class="hero-subtitle">轻松上传、存储与管理您的文件，让工作更高效</p>
       <div class="hero-actions">
-        <a href="{{ url_for('upload_page') }}" class="btn btn-primary btn-large">立即上传文件</a>
+        <a href="{{ url_for('upload') }}" class="btn btn-primary btn-large">立即上传文件</a>
         {% if not session.user_id %}
-          <a href="{{ url_for('register') }}" class="btn btn-light btn-large">免费注册</a>
+          <a href="{{ url_for('auth') }}?mode=register" class="btn btn-light btn-large">免费注册</a>
         {% endif %}
       </div>
     </div>
@@ -52,7 +52,7 @@
       <h2 class="section-header">文件列表</h2>
       <div class="section-actions">
         {% if session.role == 'developer' %}
-        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+        <a href="{{ url_for('upload') }}" class="btn btn-primary">
           <i class="icon-upload">📤</i> 上传新文件
         </a>
         {% endif %}
@@ -182,13 +182,13 @@
         {% if session.user_id %}
           <p class="empty-desc">您还没有上传任何文件，开始上传您的第一个文件吧</p>
           <div class="empty-actions">
-            <a href="{{ url_for('upload_page') }}" class="btn btn-primary">立即上传</a>
+            <a href="{{ url_for('upload') }}" class="btn btn-primary">立即上传</a>
           </div>
         {% else %}
           <p class="empty-desc">请先登录，查看和管理您的文件</p>
           <div class="empty-actions">
-            <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-            <a href="{{ url_for('register') }}" class="btn btn-light">注册</a>
+            <a href="{{ url_for('auth') }}?mode=login" class="btn btn-primary">登录</a>
+            <a href="{{ url_for('auth') }}?mode=register" class="btn btn-light">注册</a>
           </div>
         {% endif %}
       </div>

@@ -4,11 +4,213 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>yytoolssite-aipro</title>
+    <!-- PWA配置 -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="yytoolssite">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='navbar.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='hero.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='unified.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='scripts/main.js') }}"></script>
+    <style>
+        /* 加载动画样式 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        
+        .loading-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #4F46E5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 提示消息样式 */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            padding: 15px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            transform: translateX(100%);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            max-width: 350px;
+            word-wrap: break-word;
+        }
+        
+        .toast.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+        
+        .toast.success {
+            background-color: #10B981;
+        }
+        
+        .toast.error {
+            background-color: #EF4444;
+        }
+        
+        .toast.warning {
+            background-color: #F59E0B;
+        }
+        
+        .toast.info {
+            background-color: #3B82F6;
+        }
+        
+        .toast-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            margin-left: 10px;
+            opacity: 0.8;
+            float: right;
+        }
+        
+        .toast-close:hover {
+            opacity: 1;
+        }
+    </style>
+    <!-- 引入jQuery以支持浏览器扩展 -->
+    <!-- 懒加载脚本 -->
+  <script>
+    // 图片懒加载实现
+    document.addEventListener('DOMContentLoaded', function() {
+      const lazyImages = document.querySelectorAll('img[data-src]');
+      
+      // 初始化IntersectionObserver
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const img = entry.target;
+            img.src = img.dataset.src;
+            img.removeAttribute('data-src');
+            observer.unobserve(img);
+          }
+        });
+      });
+      
+      // 观察所有懒加载图片
+      lazyImages.forEach(img => {
+        observer.observe(img);
+      });
+    });
+  </script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="{{ url_for('static', filename='scripts/main.js') }}?v={{ range(1000000, 9999999) | random }}"></script>
+  <script>
+    // 确保DOM完全加载后再执行脚本
+    document.addEventListener('DOMContentLoaded', function() {
+      // 加载动画控制
+      const loadingOverlay = document.createElement('div');
+      loadingOverlay.className = 'loading-overlay';
+      loadingOverlay.innerHTML = '<div class="loading-spinner"></div>';
+      document.body.appendChild(loadingOverlay);
+      
+      // 提示消息容器
+      const toastContainer = document.createElement('div');
+      toastContainer.className = 'toast-container';
+      document.body.appendChild(toastContainer);
+      
+      // 全局加载控制函数
+      window.showLoading = function() {
+        loadingOverlay.classList.add('active');
+      };
+      
+      window.hideLoading = function() {
+        loadingOverlay.classList.remove('active');
+      };
+      
+      // 提示消息函数
+      window.showToast = function(message, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.innerHTML = `
+          <span>${message}</span>
+          <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        `;
+        
+        toastContainer.appendChild(toast);
+        
+        // 显示提示
+        setTimeout(() => toast.classList.add('show'), 100);
+        
+        // 自动隐藏
+        setTimeout(() => {
+          toast.classList.remove('show');
+          setTimeout(() => toast.remove(), 300);
+        }, duration);
+      };
+      
+      // 页面加载完成后隐藏加载动画
+      window.addEventListener('load', function() {
+        hideLoading();
+      });
+      
+      // 监听表单提交事件，显示加载动画
+      document.addEventListener('submit', function(e) {
+        const form = e.target;
+        // 只对非异步表单提交显示加载动画
+        if (!form.hasAttribute('data-no-loading')) {
+          showLoading();
+        }
+      });
+    });
+    
+    // PWA Service Worker注册 - 这个可以在window.load事件中执行
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function() {
+        navigator.serviceWorker.register('/static/service-worker.js')
+          .then(function(registration) {
+            console.log('Service Worker registered with scope:', registration.scope);
+          })
+          .catch(function(error) {
+            console.error('Service Worker registration failed:', error);
+          });
+      });
+    }
+  </script>
   </head>
 <body>
   <!-- 导航栏 -->
@@ -23,7 +225,7 @@
       </button>
       <div class="nav-buttons" id="navButtons">
         <a href="{{ url_for('index') }}" class="nav-btn nav-btn-light">首页</a>
-        <a href="{{ url_for('upload_page') }}" class="nav-btn nav-btn-primary">上传发布</a>
+        <a href="{{ url_for('upload') }}" class="nav-btn nav-btn-primary">上传发布</a>
         <a href="{{ url_for('ai_page') }}" class="nav-btn nav-btn-primary">AI对话</a>
         <a href="{{ url_for('blog_page') }}" class="nav-btn nav-btn-primary">yytoolssite博客</a>
         <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
@@ -35,8 +237,8 @@
             {% endif %}
           </div>
         {% else %}
-          <a href="{{ url_for('login') }}" class="nav-btn nav-btn-light">登录</a>
-          <a href="{{ url_for('register') }}" class="nav-btn nav-btn-primary">注册</a>
+          <a href="{{ url_for('auth') }}" class="nav-btn nav-btn-light">登录</a>
+          <a href="{{ url_for('auth') }}" class="nav-btn nav-btn-primary">注册</a>
         {% endif %}
       </div>
     </div>
@@ -45,9 +247,12 @@
   <main>
     {% with messages = get_flashed_messages() %}
       {% if messages %}
-        <div class="flash-container">
-          <div class="flash">{{ messages[0] }}</div>
-        </div>
+        <script>
+          // 将flash消息转换为toast提示
+          document.addEventListener('DOMContentLoaded', function() {
+            showToast('{{ messages[0] }}', 'info');
+          });
+        </script>
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
@@ -59,7 +264,7 @@
         <div class="copyright">© 2025 杨扬</div>
         <div class="icp-info">
           <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">蒙ICP备2025033131号-1</a>
-          <img src="https://beian.miit.gov.cn/images/ghs.png" alt="公安备案">
+          <img data-src="https://beian.miit.gov.cn/images/ghs.png" alt="公安备案" loading="lazy">
         </div>
         <div class="powered-by">Powered by Python + HTML · DKFile 集成</div>
       </div>

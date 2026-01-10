@@ -48,6 +48,7 @@
           <a class="btn btn-primary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">打开文件</a>
           <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
+
             <button class="btn btn-danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
           </form>
         </div>
@@ -205,7 +206,12 @@ function goBack() {
 function loadCategoriesAndTags() {
   // 加载分类列表
   fetch('/api/categories')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('网络响应错误: ' + response.status);
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.success) {
         const select = document.getElementById('category-select');
@@ -217,11 +223,19 @@ function loadCategoriesAndTags() {
           select.appendChild(option);
         });
       }
+    })
+    .catch(error => {
+      console.error('加载分类列表失败:', error);
     });
   
   // 加载标签列表
   fetch('/api/tags')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('网络响应错误: ' + response.status);
+      }
+      return response.json();
+    })
     .then(data => {
       if (data.success) {
         const select = document.getElementById('tag-select');
@@ -233,6 +247,9 @@ function loadCategoriesAndTags() {
           select.appendChild(option);
         });
       }
+    })
+    .catch(error => {
+      console.error('加载标签列表失败:', error);
     });
 }
 
@@ -248,13 +265,22 @@ function addCategory(fileId) {
     },
     body: JSON.stringify({ category_id: parseInt(categoryId) })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       location.reload();
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('添加分类失败:', error);
+    alert('添加分类失败: ' + error.message);
   });
 }
 
@@ -263,13 +289,22 @@ function removeCategory(fileId, categoryId) {
   fetch(`/api/files/${fileId}/categories/${categoryId}`, {
     method: 'DELETE'
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       location.reload();
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('移除分类失败:', error);
+    alert('移除分类失败: ' + error.message);
   });
 }
 
@@ -285,13 +320,22 @@ function addTag(fileId) {
     },
     body: JSON.stringify({ tag_id: parseInt(tagId) })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       location.reload();
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('添加标签失败:', error);
+    alert('添加标签失败: ' + error.message);
   });
 }
 
@@ -300,13 +344,22 @@ function removeTag(fileId, tagId) {
   fetch(`/api/files/${fileId}/tags/${tagId}`, {
     method: 'DELETE'
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       location.reload();
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('移除标签失败:', error);
+    alert('移除标签失败: ' + error.message);
   });
 }
 
@@ -345,7 +398,12 @@ document.getElementById('create-category-form')?.addEventListener('submit', func
     },
     body: JSON.stringify({ name, description })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       closeModal('add-category-modal');
@@ -353,6 +411,10 @@ document.getElementById('create-category-form')?.addEventListener('submit', func
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('创建分类失败:', error);
+    alert('创建分类失败: ' + error.message);
   });
 });
 
@@ -368,7 +430,12 @@ document.getElementById('create-tag-form')?.addEventListener('submit', function(
     },
     body: JSON.stringify({ name })
   })
-  .then(response => response.json())
+  .then(response => {
+    if (!response.ok) {
+      throw new Error('网络响应错误: ' + response.status);
+    }
+    return response.json();
+  })
   .then(data => {
     if (data.success) {
       closeModal('add-tag-modal');
@@ -376,6 +443,10 @@ document.getElementById('create-tag-form')?.addEventListener('submit', function(
     } else {
       alert(data.message);
     }
+  })
+  .catch(error => {
+    console.error('创建标签失败:', error);
+    alert('创建标签失败: ' + error.message);
   });
 });
 

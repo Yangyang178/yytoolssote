@@ -33,9 +33,9 @@ html, body {
 .hero-section {
   background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%);
   color: white;
-  padding: 120px 0 80px 0; /* 增加顶部padding，让首页网站名称离导航栏更远一些 */
+  padding: 120px 0 80px 0;
   margin-bottom: 40px;
-  margin-top: 0; /* 移除顶部margin，确保与导航栏无缝连接 */
+  margin-top: -120px; /* 向上移动120px，与导航栏无缝连接 */
   position: relative;
   z-index: 1;
 }

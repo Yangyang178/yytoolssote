@@ -1,0 +1,391 @@
+{% extends 'base.html' %}
+{% block content %}
+<!-- 提交反馈页面 -->
+<div class="feedback-page-container">
+    <div class="feedback-page-wrapper">
+        <!-- 页面标题 -->
+        <h1 class="feedback-page-title">提交反馈</h1>
+        
+        <!-- 反馈表单卡片 -->
+        <div class="feedback-form-card">
+            <!-- 表单头部 -->
+            <div class="feedback-form-header">
+                <div class="feedback-header-banner">
+                    <div class="banner-icon">💬</div>
+                    <div class="banner-content">
+                        <h2 class="banner-title">新反馈</h2>
+                        <p class="banner-desc">请填写您的反馈意见</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 表单内容 -->
+            <form action="{{ url_for('new_feedback') }}" method="post" class="feedback-form">
+
+                <!-- 反馈类型选择 -->
+                <div class="form-section">
+                    <label class="form-label">反馈类型</label>
+                    <div class="feedback-type-buttons">
+                        <button type="button" class="feedback-type-btn active" data-type="问题反馈" style="background-color: #f5222d; color: white;">问题反馈</button>
+                        <button type="button" class="feedback-type-btn" data-type="功能建议/需求" style="background-color: #52c41a; color: white;">功能建议/需求</button>
+                        <button type="button" class="feedback-type-btn" data-type="技术支持" style="background-color: #1890ff; color: white;">技术支持</button>
+                        <button type="button" class="feedback-type-btn" data-type="商务合作" style="background-color: #fa8c16; color: white;">商务合作</button>
+                        <button type="button" class="feedback-type-btn" data-type="其他" style="background-color: #ffffff; color: #666; border: 1px solid #d9d9d9;">其他</button>
+                    </div>
+                    <input type="hidden" name="feedback_type" id="feedback-type-hidden" value="问题反馈">
+                </div>
+                
+                <!-- 反馈标题 -->
+                <div class="form-section">
+                    <label class="form-label">反馈标题</label>
+                    <input type="text" id="title" name="title" class="form-input" placeholder="请输入反馈标题" required>
+                </div>
+                
+                <!-- 反馈内容 -->
+                <div class="form-section">
+                    <label class="form-label">反馈内容</label>
+                    <textarea id="content" name="content" class="form-textarea" rows="8" placeholder="请详细描述您的问题或建议..." required maxlength="1000"></textarea>
+                    <div class="character-count">0/1000</div>
+                </div>
+                
+                <!-- 表单操作按钮 -->
+                <div class="form-actions">
+                    <a href="{{ url_for('my_feedback') }}" class="btn-cancel">取消</a>
+                    <button type="submit" class="btn-submit">提交反馈</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 提交反馈页面样式 */
+.feedback-page-container {
+    min-height: calc(100vh - 120px);
+    background-color: #f8f9fa;
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.feedback-page-wrapper {
+    width: 100%;
+    max-width: 800px;
+    text-align: center;
+}
+
+.feedback-page-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #722ed1;
+    margin-bottom: 30px;
+    text-shadow: 0 2px 4px rgba(114, 46, 209, 0.1);
+}
+
+.feedback-form-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.feedback-form-card:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+.feedback-form-header {
+    margin-bottom: 30px;
+}
+
+.feedback-header-banner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+    padding: 20px;
+    color: white;
+    text-align: left;
+}
+
+.banner-icon {
+    font-size: 2rem;
+    background: rgba(255, 255, 255, 0.2);
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.banner-content {
+    flex: 1;
+}
+
+.banner-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+}
+
+.banner-desc {
+    font-size: 0.95rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.feedback-form {
+    padding: 0 40px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.form-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+}
+
+.form-label {
+    font-weight: 600;
+    font-size: 1rem;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+/* 反馈类型按钮 */
+.feedback-type-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+}
+
+.feedback-type-btn {
+    padding: 12px 24px;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
+    white-space: nowrap;
+    position: relative;
+    overflow: hidden;
+}
+
+.feedback-type-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.feedback-type-btn.active {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+/* 输入框和文本域 */
+.form-input, .form-textarea {
+    padding: 14px 18px;
+    border: 2px solid #e5e5e5;
+    border-radius: 8px;
+    font-size: 1rem;
+    color: #333;
+    background: white;
+    transition: all 0.3s ease;
+    outline: none;
+    font-family: inherit;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.form-input:focus, .form-textarea:focus {
+    outline: none;
+    border-color: #722ed1;
+    box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.1);
+    transform: translateY(-1px);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 180px;
+    line-height: 1.6;
+}
+
+/* 字符计数 */
+.character-count {
+    align-self: flex-end;
+    font-size: 0.85rem;
+    color: #999;
+    margin-top: -8px;
+    font-weight: 500;
+}
+
+/* 表单操作按钮 */
+.form-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: flex-end;
+    margin-top: 8px;
+    flex-wrap: wrap;
+    padding-top: 16px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.btn-cancel, .btn-submit {
+    padding: 12px 28px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    text-decoration: none;
+    outline: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-cancel {
+    background: white;
+    color: #666;
+    border: 2px solid #e5e5e5;
+}
+
+.btn-cancel:hover {
+    background: #fafafa;
+    border-color: #722ed1;
+    color: #722ed1;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(114, 46, 209, 0.15);
+}
+
+.btn-submit {
+    background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+    color: white;
+    box-shadow: 0 4px 16px rgba(114, 46, 209, 0.25);
+}
+
+.btn-submit:hover {
+    background: linear-gradient(135deg, #531dab 0%, #3f1784 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(114, 46, 209, 0.35);
+}
+
+.btn-submit:active {
+    transform: translateY(0);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .feedback-page-container {
+        padding: 24px 16px;
+    }
+    
+    .feedback-page-title {
+        font-size: 2rem;
+    }
+    
+    .feedback-form {
+        padding: 0 20px 20px;
+        gap: 20px;
+    }
+    
+    .feedback-type-buttons {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .feedback-type-btn {
+        width: 100%;
+        text-align: center;
+        padding: 14px 20px;
+    }
+    
+    .form-actions {
+        justify-content: center;
+        gap: 16px;
+    }
+    
+    .btn-cancel, .btn-submit {
+        width: 100%;
+        max-width: 300px;
+    }
+    
+    .feedback-header-banner {
+        padding: 16px;
+        gap: 12px;
+    }
+    
+    .banner-icon {
+        font-size: 1.5rem;
+        width: 40px;
+        height: 40px;
+    }
+    
+    .banner-title {
+        font-size: 1.3rem;
+    }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.feedback-form-card {
+    animation: fadeIn 0.6s ease-out;
+}
+
+.form-section {
+    animation: fadeIn 0.6s ease-out;
+}
+
+.form-section:nth-child(1) { animation-delay: 0.1s; }
+.form-section:nth-child(2) { animation-delay: 0.2s; }
+.form-section:nth-child(3) { animation-delay: 0.3s; }
+</style>
+
+<script>
+// 反馈类型按钮切换
+const typeButtons = document.querySelectorAll('.feedback-type-btn');
+const hiddenInput = document.getElementById('feedback-type-hidden');
+
+typeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // 移除所有按钮的active类
+        typeButtons.forEach(b => {
+            b.classList.remove('active');
+        });
+        // 为当前按钮添加active类
+        btn.classList.add('active');
+        // 更新隐藏输入框的值
+        hiddenInput.value = btn.dataset.type;
+    });
+});
+
+// 字符计数
+const contentTextarea = document.getElementById('content');
+const characterCount = document.querySelector('.character-count');
+
+contentTextarea.addEventListener('input', () => {
+    const count = contentTextarea.value.length;
+    characterCount.textContent = `${count}/1000`;
+});
+</script>
+{% endblock %}

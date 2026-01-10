@@ -14,9 +14,9 @@
                         <div class="avatar-section">
                             <div class="user-avatar">
                                 {% if user.avatar %}
-                                    <img src="{{ url_for('static', filename='avatars/' + user.avatar) }}" alt="用户头像" class="avatar-image">
+                                    <img data-src="{{ url_for('static', filename='avatars/' + (user.avatar or '')) }}" alt="用户头像" class="avatar-image" loading="lazy">
                                 {% else %}
-                                    <div class="avatar-icon">{{ user.username[0] | upper }}</div>
+                                    <div class="avatar-icon">{{ (user.username or '')[0] | upper if user.username else 'U' }}</div>
                                 {% endif %}
                             </div>
                             <div class="profile-details">
@@ -33,6 +33,10 @@
                                 <span class="stat-number">{{ folder_count }}</span>
                                 <span class="stat-label">项目文件夹</span>
                             </div>
+                            <div class="stat-item">
+                                <span class="stat-number">{{ favorite_count }}</span>
+                                <span class="stat-label">收藏文件</span>
+                            </div>
                         </div>
                     </div>
                     <div class="profile-actions">
@@ -47,21 +51,47 @@
                         </a>
                     </div>
                 </div>
-                <!-- 项目文件卡片 -->
-                <div class="project-card">
-                    <div class="project-card-header">
-                        <div class="project-icon">
-                            <div class="folder-icon">📁</div>
+                <!-- 项目卡片容器 -->
+                <div class="project-cards-container">
+                    <!-- 项目文件卡片 -->
+                    <div class="project-card">
+                        <div class="project-card-header">
+                            <div class="project-icon">
+                                <div class="folder-icon">📁</div>
+                            </div>
+                            <div class="project-info">
+                                <h3 class="project-title">项目文件夹</h3>
+                                <p class="project-desc">多文件项目管理</p>
+                            </div>
                         </div>
-                        <div class="project-info">
-                            <h3 class="project-title">项目文件夹</h3>
-                            <p class="project-desc">多文件项目管理</p>
+                        <div class="project-card-actions">
+                            <a href="{{ url_for('project_folders') }}" class="btn btn-manage-projects">管理项目文件夹</a>
                         </div>
                     </div>
-                    <div class="project-card-actions">
-                        <a href="{{ url_for('project_folders') }}" class="btn btn-manage-projects">管理项目文件夹</a>
+                    
+                    <!-- 反馈中心卡片 -->
+                    <div class="project-card">
+                        <div class="project-card-header">
+                            <div class="project-icon" style="background: linear-gradient(135deg, #10B981, #059669);">
+                                <div style="font-size: 2rem; color: white;">💬</div>
+                            </div>
+                            <div class="project-info">
+                                <h3 class="project-title">反馈中心</h3>
+                                <p class="project-desc">意见建议</p>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin: 20px 0;">
+                            <a href="{{ url_for('my_feedback') }}" class="btn btn-outline" style="border-color: #10B981; color: #10B981; display: flex; align-items: center; justify-content: center; text-decoration: none;">
+                                <i>📋</i> 我的反馈
+                            </a>
+                            <a href="{{ url_for('new_feedback') }}" class="btn" style="background: linear-gradient(135deg, #10B981, #059669); color: white; border: none; width: 100%; padding: 12px; font-size: 1rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                                新反馈
+                            </a>
+                        </div>
                     </div>
                 </div>
+                
+
             </div>
             
             <!-- 编辑资料模态框 -->
@@ -74,52 +104,47 @@
                         </h3>
                         <button class="modal-close" id="close-modal-btn">&times;</button>
                     </div>
-                    <div class="modal-body">
-                        <form action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
+                    <form id="edit-profile-form" action="{{ url_for('update_profile') }}" method="post" enctype="multipart/form-data">
+                        <div class="modal-body">
                             <div class="form-section">
-                                <!-- 昵称输入 -->
                                 <div class="form-group">
-                                    <label for="username" class="form-label">昵称</label>
-                                    <input type="text" id="username" name="username" value="{{ user.username }}" 
-                                           class="form-input" required placeholder="请输入您的昵称">
+                                    <label for="edit-username" class="form-label">用户名</label>
+                                    <input type="text" id="edit-username" name="username" value="{{ user.username }}" class="form-input" required>
                                 </div>
                                 
-                                <!-- 头像上传 -->
                                 <div class="form-group">
-                                    <label for="avatar" class="form-label">头像</label>
+                                    <label for="edit-avatar" class="form-label">头像</label>
                                     <div class="avatar-upload-section">
-                                        <div class="avatar-preview">
-                                            {% if user.avatar_url %}
-                                                <img id="avatar-preview-img" src="{{ user.avatar_url }}" alt="当前头像">
+                                        <div class="current-avatar">
+                                            {% if user.avatar %}
+                                                <img src="{{ url_for('static', filename='avatars/' + user.avatar) }}" alt="当前头像" class="avatar-preview">
                                             {% else %}
-                                                <div id="avatar-preview-placeholder" class="avatar-preview-placeholder">
-                                                    <span class="placeholder-icon">👤</span>
-                                                    <span class="placeholder-text">暂无头像</span>
-                                                </div>
+                                                <div class="avatar-icon-large">{{ user.username[0] | upper }}</div>
                                             {% endif %}
                                         </div>
-                                        <div class="modern-file-upload">
-                                            <input type="file" id="avatar" name="avatar" accept="image/jpeg,image/png" 
-                                                   class="file-input">
-                                            <label for="avatar" class="file-label">
-                                                <div class="upload-icon">📁</div>
-                                                <div class="upload-info">
-                                                    <span class="upload-text">点击选择文件或拖拽文件到此处</span>
-                                                    <span class="upload-hint">支持JPG、PNG格式，大小不超过2MB</span>
-                                                    <span class="file-size" id="avatar-file-size"></span>
-                                                </div>
-                                            </label>
+                                        <div class="avatar-upload-controls">
+                                            <input type="file" id="edit-avatar" name="avatar" accept="image/*" class="avatar-input">
+                                            <label for="edit-avatar" class="btn btn-secondary">选择新头像</label>
+                                            {% if user.avatar %}
+                                                <button type="button" class="btn btn-danger" id="remove-avatar-btn">移除头像</button>
+                                            {% endif %}
                                         </div>
                                     </div>
                                 </div>
+                                
+                                <div class="form-group">
+                                    <label for="edit-email" class="form-label">邮箱</label>
+                                    <input type="email" id="edit-email" name="email" value="{{ user.email }}" class="form-input" disabled>
+                                    <p class="form-hint">邮箱地址不可修改</p>
+                                </div>
                             </div>
-                            
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-cancel" id="cancel-edit-btn">取消</button>
-                                <button type="submit" class="btn btn-primary">保存修改</button>
-                            </div>
-                        </form>
-                    </div>
+                        </div>
+                        
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-cancel" id="cancel-edit-btn">取消</button>
+                            <button type="submit" class="btn btn-primary">保存修改</button>
+                        </div>
+                    </form>
                 </div>
             </div>
             
@@ -137,7 +162,7 @@
                             </div>
                             <button class="search-btn">搜索</button>
                         </div>
-                        <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                        <a href="{{ url_for('upload') }}" class="btn btn-primary">
                             <i class="icon-upload">📤</i> 上传新文件
                         </a>
                     </div>
@@ -146,8 +171,11 @@
                     {% if files %}
                         <div class="files-grid">
                             {% for f in files %}
-                            {% set d = (f.dkfile or {}).get('data') %}
-                            <div class="user-file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories %}{{ category.name }} {% endfor %} {% for tag in f.tags %}{{ tag.name }} {% endfor %}">
+                            {% set d = {} %}
+                            {% if f.dkfile is defined and f.dkfile is mapping %}
+                                {% set d = f.dkfile.get('data', {}) %}
+                            {% endif %}
+                            <div class="user-file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories|default([]) %}{{ category.name }} {% endfor %} {% for tag in f.tags|default([]) %}{{ tag.name }} {% endfor %}">
                                 <div class="file-card-top">
                                     <div class="file-name-large">{{ f.filename }}</div>
                                     <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" data-file-url="{{ url_for('open_local', stored_name=f.stored_name, _external=True) }}" title="分享文件链接">
@@ -210,7 +238,7 @@
                             <div class="empty-icon">📁</div>
                             <h3 class="empty-title">暂无文件</h3>
                             <p class="empty-desc">您还没有上传任何文件</p>
-                            <a href="{{ url_for('upload_page') }}" class="btn btn-primary">
+                            <a href="{{ url_for('upload') }}" class="btn btn-primary">
                                 <i class="icon-upload">📤</i> 上传第一个文件
                             </a>
                         </div>
@@ -226,7 +254,10 @@
                     {% if favorite_files %}
                         <div class="files-grid">
                             {% for f in favorite_files %}
-                            {% set d = (f.dkfile or {}).get('data') %}
+                            {% set d = {} %}
+                            {% if f.dkfile is defined and f.dkfile is mapping %}
+                                {% set d = f.dkfile.get('data', {}) %}
+                            {% endif %}
                             <div class="file-card">
                               <div class="file-card-header">
                                 <div class="file-icon-container">
@@ -357,6 +388,59 @@
                         </div>
                     {% endif %}
                 </section>
+                
+                <!-- 操作日志 -->
+                <section class="content-section">
+                    <div class="section-header">
+                        <h2 class="section-title">操作日志</h2>
+                        <button class="toggle-btn" id="toggle-operation-logs-btn">
+                            <span id="toggle-operation-icon">▼</span>
+                        </button>
+                    </div>
+                    
+                    <div id="operation-logs-container" class="logs-container">
+                        {% if operation_logs %}
+                            <table class="logs-table">
+                                <thead>
+                                    <tr>
+                                        <th>操作类型</th>
+                                        <th>目标类型</th>
+                                        <th>操作消息</th>
+                                        <th>详细信息</th>
+                                        <th>操作时间</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for log in operation_logs %}
+                                    <tr class="log-row">
+                                        <td>
+                                            {% if log.action == 'upload' %}
+                                                <span class="action-tag action-upload">上传</span>
+                                            {% elif log.action == 'delete' %}
+                                                <span class="action-tag action-delete">删除</span>
+                                            {% elif log.action == 'edit' %}
+                                                <span class="action-tag action-edit">编辑</span>
+                                            {% else %}
+                                                <span class="action-tag action-other">{{ log.action }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ log.target_type or '未知' }}</td>
+                                        <td>{{ log.message }}</td>
+                                        <td>{{ log.details or '-' }}</td>
+                                        <td>{{ log.created_at }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        {% else %}
+                            <div class="empty-state">
+                                <div class="empty-icon">📝</div>
+                                <h3 class="empty-title">暂无操作日志</h3>
+                                <p class="empty-desc">当您进行上传、删除等操作时，这里会显示操作记录</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </section>
             </div>
         {% else %}
             <!-- 未登录状态 -->
@@ -366,8 +450,8 @@
                     <h2 class="prompt-title">您尚未登录</h2>
                     <p class="prompt-desc">登录后，您可以查看和管理您的文件，享受完整的智能文件管理系统功能</p>
                     <div class="prompt-actions">
-                        <a href="{{ url_for('login') }}" class="btn btn-primary">登录</a>
-                        <a href="{{ url_for('register') }}" class="btn btn-outline">注册</a>
+                        <a href="{{ url_for('auth') }}?mode=login" class="btn btn-primary">登录</a>
+                        <a href="{{ url_for('auth') }}?mode=register" class="btn btn-outline">注册</a>
                     </div>
                 </div>
             </div>
@@ -436,4 +520,5 @@
 <div id="app-data" data-is-logged-in="{{ user is not none | tojson | safe }}" class="hidden"></div>
 
 <script src="{{ url_for('static', filename='user_center.js') }}"></script>
+
 {% endblock %}

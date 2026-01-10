@@ -1,0 +1,288 @@
+{% extends 'base.html' %}
+{% block content %}
+    <style>
+        /* 全局样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        /* 反馈页面容器 */
+        .feedback-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+        
+        /* 页面标题 */
+        .feedback-title {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #722ed1;
+            text-align: center;
+            margin-bottom: 40px;
+            text-shadow: 0 2px 4px rgba(114, 46, 209, 0.1);
+        }
+        
+        /* 反馈卡片 */
+        .feedback-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .feedback-card:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+        
+        /* 头部横幅 */
+        .feedback-header {
+            background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
+            padding: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .header-icon {
+            font-size: 2rem;
+        }
+        
+        .header-content h2 {
+            color: white;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .header-content p {
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 0.95rem;
+        }
+        
+        /* 表单内容 */
+        .feedback-form {
+            padding: 40px;
+        }
+        
+        /* 表单组 */
+        .form-group {
+            margin-bottom: 30px;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            font-size: 1rem;
+            color: #333;
+            margin-bottom: 12px;
+        }
+        
+        /* 反馈类型按钮 */
+        .feedback-types {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .feedback-type-btn {
+            padding: 12px 24px;
+            border: 2px solid transparent;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+            white-space: nowrap;
+        }
+        
+        .feedback-type-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+        
+        .feedback-type-btn.active {
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            transform: translateY(-1px);
+        }
+        
+        /* 输入框和文本域 */
+        .form-input,
+        .form-textarea {
+            width: 100%;
+            padding: 14px 18px;
+            border: 2px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 1rem;
+            color: #333;
+            background: white;
+            transition: all 0.3s ease;
+            outline: none;
+            font-family: inherit;
+        }
+        
+        .form-input:focus,
+        .form-textarea:focus {
+            outline: none;
+            border-color: #722ed1;
+            box-shadow: 0 0 0 4px rgba(114, 46, 209, 0.1);
+            transform: translateY(-1px);
+        }
+        
+        .form-textarea {
+            resize: vertical;
+            min-height: 180px;
+            line-height: 1.6;
+        }
+        
+        /* 按钮样式 */
+        .submit-btn {
+            background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+            color: white;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            outline: none;
+            box-shadow: 0 4px 16px rgba(114, 46, 209, 0.25);
+        }
+        
+        .submit-btn:hover {
+            background: linear-gradient(135deg, #531dab 0%, #3f1784 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(114, 46, 209, 0.35);
+        }
+        
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .feedback-container {
+                padding: 24px 16px;
+            }
+            
+            .feedback-title {
+                font-size: 2rem;
+            }
+            
+            .feedback-form {
+                padding: 20px;
+            }
+            
+            .feedback-types {
+                flex-direction: column;
+            }
+            
+            .feedback-type-btn {
+                width: 100%;
+                text-align: center;
+            }
+        }
+        
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .feedback-card {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        .form-group {
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        .form-group:nth-child(1) { animation-delay: 0.1s; }
+        .form-group:nth-child(2) { animation-delay: 0.2s; }
+        .form-group:nth-child(3) { animation-delay: 0.3s; }
+    </style>
+    <div class="feedback-container">
+        <h1 class="feedback-title">提交反馈</h1>
+        
+        <div class="feedback-card">
+            <div class="feedback-header">
+                <div class="header-icon">💬</div>
+                <div class="header-content">
+                    <h2>新反馈</h2>
+                    <p>请填写您的反馈意见</p>
+                </div>
+            </div>
+            
+            <form class="feedback-form" action="{{ url_for('new_feedback') }}" method="post">
+
+                <!-- 反馈类型 -->
+                <div class="form-group">
+                    <label class="form-label">反馈类型 <span style="color: #f5222d; font-weight: bold;">*</span></label>
+                    <div class="feedback-types">
+                        <button type="button" class="feedback-type-btn active" data-type="问题反馈" style="background-color: #f5222d; color: white;">问题反馈</button>
+                        <button type="button" class="feedback-type-btn" data-type="功能建议/需求" style="background-color: #52c41a; color: white;">功能建议/需求</button>
+                        <button type="button" class="feedback-type-btn" data-type="技术支持" style="background-color: #1890ff; color: white;">技术支持</button>
+                        <button type="button" class="feedback-type-btn" data-type="商务合作" style="background-color: #fa8c16; color: white;">商务合作</button>
+                        <button type="button" class="feedback-type-btn" data-type="其他" style="background-color: #ffffff; color: #666; border: 1px solid #d9d9d9;">其他</button>
+                    </div>
+                    <input type="hidden" name="feedback_type" id="feedback-type" value="问题反馈" required>
+                </div>
+                
+                <!-- 反馈标题 -->
+                <div class="form-group">
+                    <label class="form-label">反馈标题</label>
+                    <input type="text" class="form-input" name="title" placeholder="请输入反馈标题" required>
+                </div>
+                
+                <!-- 反馈内容 -->
+                <div class="form-group">
+                    <label class="form-label">反馈内容</label>
+                    <textarea class="form-textarea" name="content" placeholder="请详细描述您的问题或建议..." required rows="8"></textarea>
+                </div>
+                
+                <!-- 提交按钮 -->
+                <button type="submit" class="submit-btn">提交反馈</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+        // 反馈类型按钮切换
+        const typeButtons = document.querySelectorAll('.feedback-type-btn');
+        const hiddenInput = document.getElementById('feedback-type');
+        
+        typeButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // 移除所有按钮的active类
+                typeButtons.forEach(b => {
+                    b.classList.remove('active');
+                });
+                
+                // 为当前按钮添加active类
+                btn.classList.add('active');
+                
+                // 更新隐藏输入框的值
+                hiddenInput.value = btn.dataset.type;
+            });
+        });
+    </script>
+{% endblock %}

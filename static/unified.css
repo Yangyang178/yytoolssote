@@ -108,6 +108,64 @@ body {
     transition: var(--transition);
     text-decoration: none;
     outline: none;
+    /* 触屏优化 */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    min-height: 44px;
+    min-width: 44px;
+}
+
+/* 触屏反馈效果 */
+.btn:active {
+    transform: scale(0.98);
+    opacity: 0.9;
+}
+
+/* 表单元素触屏优化 */
+.form-input,
+.form-textarea,
+.form-select {
+    /* 触屏优化 */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    min-height: 44px;
+}
+
+/* 链接触屏优化 */
+.card:hover,
+.blog-post:hover,
+.feature-card:hover {
+    /* 触屏优化 */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 移动端按钮优化 */
+@media (max-width: 768px) {
+    /* 增大移动端按钮尺寸，便于触摸 */
+    .btn {
+        min-height: 48px;
+        padding: 12px 24px;
+    }
+    
+    /* 增大表单元素尺寸，便于触摸 */
+    .form-input,
+    .form-textarea,
+    .form-select {
+        min-height: 48px;
+        padding: 12px 16px;
+        font-size: 1rem;
+    }
+    
+    /* 增大链接点击区域 */
+    a {
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
+    
+    /* 增大文章卡片点击区域 */
+    .blog-post {
+        cursor: pointer;
+    }
 }
 
 .btn-primary {
@@ -629,7 +687,24 @@ body {
     border: 1px solid var(--border-color);
 }
 
-/* 响应式设计 */
+/* 响应式设计 - 平板设备 */
+@media (max-width: 1024px) {
+    .blog-posts {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 24px;
+    }
+    
+    .container {
+        padding: 20px;
+    }
+    
+    .features-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+}
+
+/* 响应式设计 - 手机设备 */
 @media (max-width: 768px) {
     .page-container,
     .blog-container,
@@ -638,10 +713,15 @@ body {
         padding: 20px 0;
     }
     
+    .container {
+        padding: 16px;
+    }
+    
     .page-title,
     .upload-title,
     .ai-title {
         font-size: 2rem;
+        line-height: 1.2;
     }
     
     .page-subtitle,
@@ -685,5 +765,90 @@ body {
     .btn {
         width: 100%;
         justify-content: center;
+        padding: 12px 20px;
+        font-size: 1rem;
+        height: auto;
+    }
+    
+    /* 博客文章列表响应式 */
+    .blog-posts {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    /* 表单元素响应式 */
+    .form-input,
+    .form-textarea,
+    .form-select {
+        padding: 12px 16px;
+        font-size: 1rem;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    /* 卡片布局响应式 */
+    .feature-card {
+        padding: 24px;
+    }
+    
+    /* 页脚响应式 */
+    .footer-content {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+    
+    /* 上传表单响应式 */
+    .upload-form-card {
+        padding: 20px;
+    }
+    
+    /* AI表单响应式 */
+    .ai-card {
+        gap: 20px;
+    }
+    
+    /* 文件卡片响应式 */
+    .file-card {
+        margin-bottom: 20px;
+    }
+}
+
+/* 响应式设计 - 小屏手机 */
+@media (max-width: 480px) {
+    .page-title,
+    .upload-title,
+    .ai-title {
+        font-size: 1.75rem;
+    }
+    
+    .card,
+    .blog-post,
+    .upload-form-card,
+    .ai-card {
+        padding: 16px;
+    }
+    
+    .post-title {
+        font-size: 1.25rem;
+    }
+    
+    .btn {
+        padding: 10px 16px;
+        font-size: 0.9rem;
+    }
+    
+    .feature-card {
+        padding: 20px;
+    }
+    
+    .feature-icon {
+        font-size: 2.5rem;
+    }
+    
+    .feature-title {
+        font-size: 1.1rem;
     }
 }
