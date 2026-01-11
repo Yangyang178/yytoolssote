@@ -204,8 +204,7 @@ def auth():
                 send_verification_email(email, code, purpose)
                 save_verification_code(email, code, purpose)
                 
-                # 始终返回验证码，方便用户登录
-                return api_response(success=True, message='验证码已发送', data={'code': code})
+                return api_response(success=True, message='验证码已发送')
             except Exception as e:
                 return api_response(success=False, message=f'发送验证码失败: {str(e)}', code=500)
             finally:

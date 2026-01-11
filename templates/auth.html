@@ -47,40 +47,45 @@
             <div class="success-message">{{ success }}</div>
         {% endif %}
         {% if request.args.get('step') == 'verify' %}
-            {% if not request.args.get('debug_code') %}
-                <div class="info-message">
-                    <strong>验证码已发送：</strong>
-                    请检查您的邮箱 <strong>{{ request.args.get('email') }}</strong>，我们已向该邮箱发送了验证码
-                    <p class="info-note">如果没有收到邮件，请检查垃圾邮件或重新发送验证码</p>
-                </div>
-            {% else %}
-                <div class="debug-code-message">
-                    <strong>调试模式：</strong>
-                    验证码：<span class="debug-code">{{ request.args.get('debug_code') }}</span>
-                    <p class="debug-note">请复制上方验证码进行验证（仅用于调试环境）</p>
-                </div>
-            {% endif %}
+            <div class="info-message">
+                <strong>验证码已发送：</strong>
+                请检查您的邮箱 <strong>{{ request.args.get('email') }}</strong>，我们已向该邮箱发送了验证码
+                <p class="info-note">如果没有收到邮件，请检查垃圾邮件或重新发送验证码</p>
+            </div>
         {% endif %}
         
         {% if mode == 'register' %}
             <form action="{{ url_for('auth') }}" method="post" class="auth-form">
                 <input type="hidden" name="mode" value="{{ mode }}">
                 <input type="hidden" name="login_method" value="{{ login_method }}">
-                <input type="hidden" name="action" value="{{ 'send_code' if login_method != 'password' else 'register' }}">
+                <input type="hidden" name="action" value="{{ 'register' if request.args.get('step') == 'verify' else ('send_code' if login_method != 'password' else 'register') }}">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
-                        <input type="email" id="email" name="email" placeholder="请输入您的邮箱地址" required>
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="input-wrapper">
-                        <label for="username" class="input-label">用户名</label>
-                        <input type="text" id="username" name="username" placeholder="请输入您的用户名" required>
+                        <input type="email" id="email" name="email" value="{{ request.args.get('email') }}" placeholder="请输入您的邮箱地址" required {% if request.args.get('step') == 'verify' %}readonly{% endif %}>
                     </div>
                 </div>
                 
-                {% if login_method == 'password' %}
+                {% if not request.args.get('step') == 'verify' %}
+                    <!-- 用户名输入框（仅在注册步骤显示） -->
+                    <div class="form-row">
+                        <div class="input-wrapper">
+                            <label for="username" class="input-label">用户名</label>
+                            <input type="text" id="username" name="username" placeholder="请输入您的用户名" required>
+                        </div>
+                    </div>
+                {% endif %}
+                
+                {% if request.args.get('step') == 'verify' %}
+                    <!-- 验证码输入框（仅在验证步骤显示） -->
+                    <div class="form-row">
+                        <div class="input-wrapper">
+                            <label for="code" class="input-label">验证码</label>
+                            <input type="text" id="code" name="code" placeholder="请输入6位验证码" required>
+                        </div>
+                    </div>
+                {% elif login_method == 'password' %}
+                    <!-- 密码输入框（仅在密码注册时显示） -->
                     <div class="form-row">
                         <div class="input-wrapper">
                             <label for="password" class="input-label">密码</label>
@@ -104,7 +109,9 @@
                 <div class="actions">
                     <button type="submit" class="btn btn-primary btn-full">
                         <span class="btn-text">
-                            {% if login_method == 'password' %}
+                            {% if request.args.get('step') == 'verify' %}
+                                完成注册
+                            {% elif login_method == 'password' %}
                                 注册
                             {% else %}
                                 发送验证码
@@ -113,36 +120,6 @@
                     </button>
                 </div>
             </form>
-            
-            {% if request.args.get('step') == 'verify' %}
-                <form action="{{ url_for('auth') }}" method="post" class="auth-form verify-form">
-                <input type="hidden" name="login_method" value="{{ login_method }}">
-                <input type="hidden" name="action" value="register">
-                    <div class="form-row">
-                        <div class="input-wrapper">
-                            <label for="email" class="input-label">邮箱</label>
-                            <input type="email" id="email" name="email" value="{{ request.args.get('email') }}" required readonly>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="input-wrapper">
-                            <label for="code" class="input-label">验证码</label>
-                            <input type="text" id="code" name="code" placeholder="请输入6位验证码" required>
-                        </div>
-                    </div>
-                    <div class="terms-checkbox">
-                    <input type="checkbox" id="terms" name="terms" required>
-                    <label for="terms" class="terms-label">
-                        我已阅读并同意<a href="{{ url_for('privacy_policy') }}" class="terms-link" target="_blank">《隐私政策》</a>和<a href="{{ url_for('service_terms') }}" class="terms-link" target="_blank">《服务条款》</a>
-                    </label>
-                </div>
-                <div class="actions">
-                    <button type="submit" class="btn btn-primary btn-full">
-                        <span class="btn-text">完成注册</span>
-                    </button>
-                </div>
-                </form>
-            {% endif %}
         {% elif mode == 'forgot_password' %}
             <!-- 忘记密码表单 -->
             <form action="{{ url_for('auth') }}" method="post" class="auth-form">
@@ -199,15 +176,24 @@
             <form action="{{ url_for('auth') }}" method="post" class="auth-form">
                 <input type="hidden" name="mode" value="{{ mode }}">
                 <input type="hidden" name="login_method" value="{{ login_method }}">
-                <input type="hidden" name="action" value="{{ 'send_code' if login_method != 'password' else 'login' }}">
+                <input type="hidden" name="action" value="{{ 'login_with_code' if request.args.get('step') == 'verify' else ('send_code' if login_method != 'password' else 'login') }}">
                 <div class="form-row">
                     <div class="input-wrapper">
                         <label for="email" class="input-label">邮箱</label>
-                        <input type="email" id="email" name="email" placeholder="请输入您的邮箱地址" required>
+                        <input type="email" id="email" name="email" value="{{ request.args.get('email') }}" placeholder="请输入您的邮箱地址" required {% if request.args.get('step') == 'verify' %}readonly{% endif %}>
                     </div>
                 </div>
                 
-                {% if login_method == 'password' %}
+                {% if request.args.get('step') == 'verify' %}
+                    <!-- 验证码输入框（仅在验证步骤显示） -->
+                    <div class="form-row">
+                        <div class="input-wrapper">
+                            <label for="code" class="input-label">验证码</label>
+                            <input type="text" id="code" name="code" placeholder="请输入6位验证码" required>
+                        </div>
+                    </div>
+                {% elif login_method == 'password' %}
+                    <!-- 密码输入框（仅在密码登录时显示） -->
                     <div class="form-row">
                         <div class="input-wrapper">
                             <label for="password" class="input-label">密码</label>
@@ -225,7 +211,9 @@
                 <div class="actions">
                     <button type="submit" class="btn btn-primary btn-full">
                         <span class="btn-text">
-                            {% if login_method == 'password' %}
+                            {% if request.args.get('step') == 'verify' %}
+                                登录
+                            {% elif login_method == 'password' %}
                                 登录
                             {% else %}
                                 发送验证码
@@ -234,36 +222,6 @@
                     </button>
                 </div>
             </form>
-            
-            {% if request.args.get('step') == 'verify' %}
-                <form action="{{ url_for('auth') }}" method="post" class="auth-form verify-form">
-                <input type="hidden" name="login_method" value="{{ login_method }}">
-                <input type="hidden" name="action" value="login_with_code">
-                    <div class="form-row">
-                        <div class="input-wrapper">
-                            <label for="email" class="input-label">邮箱</label>
-                            <input type="email" id="email" name="email" value="{{ request.args.get('email') }}" required readonly>
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="input-wrapper">
-                            <label for="code" class="input-label">验证码</label>
-                            <input type="text" id="code" name="code" placeholder="请输入6位验证码" required>
-                        </div>
-                    </div>
-                    <div class="terms-checkbox">
-                    <input type="checkbox" id="terms" name="terms" required>
-                    <label for="terms" class="terms-label">
-                        我已阅读并同意<a href="{{ url_for('privacy_policy') }}" class="terms-link" target="_blank">《隐私政策》</a>和<a href="{{ url_for('service_terms') }}" class="terms-link" target="_blank">《服务条款》</a>
-                    </label>
-                </div>
-                <div class="actions">
-                    <button type="submit" class="btn btn-primary btn-full">
-                        <span class="btn-text">登录</span>
-                    </button>
-                </div>
-                </form>
-            {% endif %}
         {% endif %}
         
         <div class="auth-switch">
@@ -322,7 +280,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 .then(data => {
                     if (data.success) {
                         // Redirect to verification page with mode and login_method
-                        window.location.href = '{{ url_for("auth") }}?mode=' + currentMode + '&login_method=' + currentLoginMethod + '&step=verify&email=' + encodeURIComponent(email) + (data.data && data.data.code ? '&debug_code=' + data.data.code : '');
+                        window.location.href = '{{ url_for("auth") }}?mode=' + currentMode + '&login_method=' + currentLoginMethod + '&step=verify&email=' + encodeURIComponent(email);
                     } else {
                         alert(data.message || '发送验证码失败');
                         submitBtn.disabled = false;

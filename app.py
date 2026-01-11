@@ -379,13 +379,9 @@ def generate_verification_code():
 
 
 def send_verification_email(email, code, purpose):
-    # 开发环境下不需要实际发送邮件，直接返回成功
-    print(f"开发模式：验证码 {code} 已发送到邮箱 {email}（用途：{purpose}）")
-    return True, None
-    
-    # 以下是实际发送邮件的代码，仅在生产环境使用
+    # 检查SMTP配置是否完整
     if not all([SMTP_HOST, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM]):
-        # SMTP配置不完整，抛出异常
+        print(f"SMTP配置不完整，无法发送邮件到 {email}")
         raise Exception("SMTP配置不完整，无法发送验证码邮件")
     
     subject = """yytoolssite-aipro 验证码"""
@@ -403,6 +399,7 @@ def send_verification_email(email, code, purpose):
     
     try:
         # 尝试使用TLS连接
+        print(f"正在发送验证码邮件到 {email}，用途：{purpose}，验证码：{code}")
         server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
         server.ehlo()  # 发送EHLO命令
         server.starttls()
@@ -410,18 +407,22 @@ def send_verification_email(email, code, purpose):
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
         server.sendmail(SMTP_FROM, [email], msg.as_string())
         server.quit()
+        print(f"验证码邮件发送成功到 {email}")
         return True, None
     except Exception as e:
         # 如果TLS失败，尝试SSL连接
         try:
+            print(f"TLS连接失败，尝试SSL连接：{str(e)}")
             server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15)
             server.ehlo()  # 发送EHLO命令
             server.login(SMTP_USERNAME, SMTP_PASSWORD)
             server.sendmail(SMTP_FROM, [email], msg.as_string())
             server.quit()
+            print(f"验证码邮件发送成功到 {email}（使用SSL）")
             return True, None
         except Exception as ssl_error:
             # 两种连接方式都失败，抛出异常
+            print(f"发送验证码邮件失败：{str(ssl_error)}")
             raise Exception(f"发送验证码邮件失败：{str(ssl_error)}")
 
 
