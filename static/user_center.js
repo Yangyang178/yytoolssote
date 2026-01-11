@@ -198,6 +198,73 @@ if (logoutBtn) {
     });
 }
 
+// 取消收藏功能
+const unfavoriteButtons = document.querySelectorAll('.btn-unfavorite');
+unfavoriteButtons.forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const fileId = btn.getAttribute('data-file-id');
+        if (confirm('确定要取消收藏该文件吗？')) {
+            try {
+                const response = await fetch(`/api/files/${fileId}/favorite`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success) {
+                        // 更新收藏数显示
+                        const favoriteCountEl = btn.closest('.file-card').querySelector('.favorite-count .value');
+                        if (favoriteCountEl) {
+                            favoriteCountEl.textContent = result.data.count;
+                        }
+                        
+                        // 移除当前文件卡片
+                        btn.closest('.file-card').remove();
+                        
+                        // 显示成功消息
+                        alert('取消收藏成功');
+                        
+                        // 如果没有收藏文件了，更新UI
+                        const remainingCards = document.querySelectorAll('.file-card');
+                        if (remainingCards.length === 0) {
+                            const filesGrid = document.querySelector('.files-grid');
+                            if (filesGrid) {
+                                filesGrid.innerHTML = `
+                                    <div class="empty-state">
+                                        <div class="empty-icon">⭐</div>
+                                        <h3 class="empty-title">暂无收藏文件</h3>
+                                        <p class="empty-desc">您还没有收藏任何文件，去首页探索并收藏感兴趣的文件吧</p>
+                                        <a href="/" class="btn btn-primary">
+                                            <i class="icon-explore">🔍</i> 去首页探索
+                                        </a>
+                                    </div>
+                                `;
+                            }
+                        }
+                    } else {
+                        alert('取消收藏失败：' + (result.message || '未知错误'));
+                    }
+                } else {
+                    // 尝试解析错误响应
+                    try {
+                        const errorResult = await response.json();
+                        alert('取消收藏失败：' + (errorResult.message || '请求失败'));
+                    } catch {
+                        alert('取消收藏失败，请重试');
+                    }
+                }
+            } catch (error) {
+                console.error('取消收藏请求错误:', error);
+                alert('取消收藏失败，请检查网络连接');
+            }
+        }
+    });
+});
+
 // 页面加载完成后执行
 window.addEventListener('DOMContentLoaded', () => {
     // 初始化页面状态

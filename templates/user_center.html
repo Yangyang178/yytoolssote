@@ -1,10 +1,5 @@
 {% extends 'base.html' %}
 
-{% block head %}
-    {{ super() }}
-    <link rel="stylesheet" href="{{ url_for('static', filename='user_center.css') }}">
-{% endblock %}
-
 {% block content %}
 <div class="user-center-container">
     <div class="container">
@@ -464,6 +459,8 @@
         {% endif %}
     </div>
 </div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='user_center.css') }}">
 
 <!-- 替换文件模态框 -->
 <div id="replaceModal" class="modal hidden">
