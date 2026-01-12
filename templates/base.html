@@ -250,7 +250,19 @@
         <script>
           // 将flash消息转换为toast提示
           document.addEventListener('DOMContentLoaded', function() {
-            showToast('{{ messages[0] }}', 'info');
+            {% for message in messages %}
+              // 自动判断消息类型
+              let messageType = 'info';
+              const msg = '{{ message | replace("'", "\\'") }}';
+              if (msg.includes('成功') || msg.includes('注册成功') || msg.includes('登录成功') || msg.includes('更新成功') || msg.includes('上传成功') || msg.includes('删除成功')) {
+                messageType = 'success';
+              } else if (msg.includes('错误') || msg.includes('失败') || msg.includes('不存在') || msg.includes('无效') || msg.includes('无权限')) {
+                messageType = 'error';
+              } else if (msg.includes('警告') || msg.includes('注意')) {
+                messageType = 'warning';
+              }
+              showToast(msg, messageType);
+            {% endfor %}
           });
         </script>
       {% endif %}

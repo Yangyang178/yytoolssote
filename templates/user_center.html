@@ -225,8 +225,8 @@
                                 <div class="file-card-actions">
                                     <a class="file-action-btn action-detail" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
                                     <a class="file-action-btn action-download" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
-                                    <!-- 替换文件按钮 -->
-                                    <button class="file-action-btn action-replace" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}">替换</button>
+                                    <!-- 发布新版按钮 -->
+                                <button class="file-action-btn action-replace" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}">发布新版</button>
                                     <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post">
                                         <button class="file-action-btn action-delete" type="submit">删除</button>
                                     </form>
@@ -471,13 +471,13 @@
 
 <link rel="stylesheet" href="{{ url_for('static', filename='user_center.css') }}">
 
-<!-- 替换文件模态框 -->
+<!-- 发布新版模态框 -->
 <div id="replaceModal" class="modal hidden">
     <div class="modal-content">
         <div class="modal-header">
             <h3 class="modal-title">
                 <span class="modal-icon">🔄</span>
-                替换文件
+                发布新版
             </h3>
             <button class="modal-close" onclick="closeReplaceModal()">&times;</button>
         </div>
@@ -486,7 +486,7 @@
                 <input type="hidden" id="replaceFileId" name="file_id">
                 <div class="form-section">
                     <div class="form-group">
-                        <label for="replaceFile" class="form-label">选择新文件</label>
+                        <label for="replaceFile" class="form-label">选择新版本文件</label>
                         <div class="modern-file-upload">
                             <input type="file" id="replaceFile" name="file" required class="file-input">
                             <label for="replaceFile" class="file-label">
@@ -519,7 +519,7 @@
                     </button>
                     <button type="submit" class="btn btn-primary btn-submit">
                         <span class="btn-icon">🚀</span>
-                        替换文件
+                        发布新版
                     </button>
                 </div>
             </form>
