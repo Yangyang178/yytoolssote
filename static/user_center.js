@@ -104,6 +104,44 @@ if (searchClearBtn) {
     });
 }
 
+// 收藏文件搜索功能
+const favoriteFileSearch = document.getElementById('favorite-file-search');
+const favoriteSearchClearBtn = document.getElementById('favorite-search-clear-btn');
+const favoriteFileCards = document.querySelectorAll('.file-card');
+const favoriteSearchResultsInfo = document.getElementById('favorite-search-results-info');
+
+if (favoriteFileSearch) {
+    favoriteFileSearch.addEventListener('input', () => {
+        const searchTerm = favoriteFileSearch.value.trim().toLowerCase();
+        let visibleCount = 0;
+        
+        favoriteFileCards.forEach(card => {
+            const searchText = card.getAttribute('data-search').toLowerCase();
+            if (searchTerm === '' || searchText.includes(searchTerm)) {
+                card.style.display = 'block';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+        
+        // 更新搜索结果信息
+        if (searchTerm) {
+            favoriteSearchResultsInfo.textContent = `找到 ${visibleCount} 个匹配的收藏文件`;
+        } else {
+            favoriteSearchResultsInfo.textContent = '';
+        }
+    });
+}
+
+// 清除收藏文件搜索
+if (favoriteSearchClearBtn) {
+    favoriteSearchClearBtn.addEventListener('click', () => {
+        favoriteFileSearch.value = '';
+        favoriteFileSearch.dispatchEvent(new Event('input'));
+    });
+}
+
 // 替换文件模态框交互
 const replaceModal = document.getElementById('replaceModal');
 const replaceFileForm = document.getElementById('replaceFileForm');

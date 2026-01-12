@@ -248,9 +248,18 @@
                 
                 <!-- 收藏文件 -->
                 <section class="content-section">
-                    <div class="section-header">
+                    <div class="section-header section-header-center-search">
                         <h2 class="section-title">收藏文件</h2>
+                        <div class="search-container">
+                            <div class="search-input-wrapper">
+                                <span class="search-icon">🔍</span>
+                                <input type="text" id="favorite-file-search" placeholder="搜索收藏文件..." class="search-input">
+                                <button class="search-clear-btn" id="favorite-search-clear-btn">&times;</button>
+                            </div>
+                            <button class="search-btn">搜索</button>
+                        </div>
                     </div>
+                    <div class="search-results-info" id="favorite-search-results-info"></div>
                     
                     {% if favorite_files %}
                         <div class="files-grid">
@@ -259,7 +268,7 @@
                             {% if f.dkfile is defined and f.dkfile is mapping %}
                                 {% set d = f.dkfile.get('data', {}) %}
                             {% endif %}
-                            <div class="file-card">
+                            <div class="file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories|default([]) %}{{ category.name }} {% endfor %} {% for tag in f.tags|default([]) %}{{ tag.name }} {% endfor %}">
                               <div class="file-card-header">
                                 <div class="file-icon-container">
                                   <div class="file-icon">
@@ -344,12 +353,12 @@
                     <div class="section-header">
                         <h2 class="section-title">访问记录</h2>
                         <button class="toggle-btn" id="toggle-logs-btn">
-                            <span id="toggle-icon">▼</span>
+                            <span id="toggle-icon">▶</span>
                         </button>
                     </div>
                     
                     {% if access_logs %}
-                        <div id="logs-container" class="logs-container">
+                        <div id="logs-container" class="logs-container" style="display: none;">
                             <table class="logs-table">
                                 <thead>
                                     <tr>
@@ -380,7 +389,7 @@
                             </table>
                         </div>
                     {% else %}
-                        <div id="logs-container" class="logs-container">
+                        <div id="logs-container" class="logs-container" style="display: none;">
                             <div class="empty-state">
                                 <div class="empty-icon">📋</div>
                                 <h3 class="empty-title">暂无访问记录</h3>
@@ -395,11 +404,11 @@
                     <div class="section-header">
                         <h2 class="section-title">操作日志</h2>
                         <button class="toggle-btn" id="toggle-operation-logs-btn">
-                            <span id="toggle-operation-icon">▼</span>
+                            <span id="toggle-operation-icon">▶</span>
                         </button>
                     </div>
                     
-                    <div id="operation-logs-container" class="logs-container">
+                    <div id="operation-logs-container" class="logs-container" style="display: none;">
                         {% if operation_logs %}
                             <table class="logs-table">
                                 <thead>
