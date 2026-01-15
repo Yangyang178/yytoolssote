@@ -35,6 +35,36 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
+# 静态文件缓存配置
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=30)  # 静态文件默认缓存30天
+
+# 添加缓存控制头的中间件
+@app.after_request
+def add_cache_headers(response):
+    # 为静态资源添加缓存头
+    if request.path.startswith('/static/'):
+        # 对于CSS、JS、图片等静态资源，设置较长的缓存时间
+        if any(ext in request.path for ext in ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.json', '.woff', '.woff2', '.ttf', '.eot']):
+            response.cache_control.max_age = 31536000  # 1年
+            response.cache_control.public = True
+            response.cache_control.immutable = True
+        # 对于manifest.json和service-worker.js，设置较短的缓存时间
+        elif '/static/manifest.json' in request.path or '/static/service-worker.js' in request.path:
+            response.cache_control.max_age = 86400  # 1天
+            response.cache_control.public = True
+            response.cache_control.must_revalidate = True
+    # 对于HTML页面，设置不缓存或短时间缓存
+    elif request.path.endswith('.html') or '.' not in request.path:
+        response.cache_control.no_cache = True
+        response.cache_control.no_store = True
+        response.cache_control.must_revalidate = True
+    # 对于API响应，设置适当的缓存头
+    elif request.path.startswith('/api/'):
+        response.cache_control.max_age = 3600  # 1小时
+        response.cache_control.public = True
+        response.cache_control.must_revalidate = True
+    return response
+
 DKFILE_BASE = os.getenv("DKFILE_API_BASE", "http://dkfile.net/dkfile_api")
 DKFILE_API_KEY = os.getenv("DKFILE_API_KEY")
 DKFILE_AUTH_SCHEME = os.getenv("DKFILE_AUTH_SCHEME", "bearer")

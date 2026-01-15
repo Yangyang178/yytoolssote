@@ -11,19 +11,20 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="yytoolssite">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='navbar.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='hero.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='unified.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- 合并CSS文件引用，减少HTTP请求 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='navbar.css') }}?v={{ range(1000000, 9999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='hero.css') }}?v={{ range(1000000, 9999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='unified.css') }}?v={{ range(1000000, 9999999) | random }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v={{ range(1000000, 9999999) | random }}">
     <style>
-        /* 加载动画样式 */
+        /* 加载动画样式 - 优化版 */
         .loading-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(255, 255, 255, 0.8);
+            background-color: rgba(255, 255, 255, 0.9);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -31,6 +32,7 @@
             opacity: 0;
             visibility: hidden;
             transition: opacity 0.3s ease, visibility 0.3s ease;
+            backdrop-filter: blur(5px);
         }
         
         .loading-overlay.active {
@@ -38,13 +40,28 @@
             visibility: visible;
         }
         
+        .loading-spinner-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+        
         .loading-spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid #f3f3f3;
-            border-top: 5px solid #4F46E5;
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(79, 70, 229, 0.1);
+            border-left-color: #4F46E5;
             border-radius: 50%;
             animation: spin 1s linear infinite;
+            box-shadow: 0 0 20px rgba(79, 70, 229, 0.2);
+        }
+        
+        .loading-text {
+            font-size: 16px;
+            font-weight: 600;
+            color: #4F46E5;
+            text-align: center;
         }
         
         @keyframes spin {
@@ -115,26 +132,80 @@
     <!-- 引入jQuery以支持浏览器扩展 -->
     <!-- 懒加载脚本 -->
   <script>
-    // 图片懒加载实现
+    // 图片懒加载实现 - 优化版
     document.addEventListener('DOMContentLoaded', function() {
-      const lazyImages = document.querySelectorAll('img[data-src]');
+      // 设置图片占位符样式
+      const style = document.createElement('style');
+      style.textContent = `
+        img[data-src] {
+          background-color: #f8fafc;
+          background-image: linear-gradient(45deg, #e2e8f0 25%, transparent 25%, transparent 75%, #e2e8f0 75%, #e2e8f0);
+          background-size: 20px 20px;
+          animation: placeholder-animation 1s linear infinite;
+          min-height: 50px;
+          object-fit: cover;
+        }
+        
+        @keyframes placeholder-animation {
+          0% { background-position: 0 0; }
+          100% { background-position: 20px 20px; }
+        }
+      `;
+      document.head.appendChild(style);
       
-      // 初始化IntersectionObserver
+      // 初始化IntersectionObserver，添加根边距以提前加载图片
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting) {
             const img = entry.target;
+            // 图片加载完成后移除占位符样式
+            img.onload = function() {
+              img.style.background = 'none';
+              img.style.animation = 'none';
+            };
+            // 加载图片
             img.src = img.dataset.src;
+            // 如果有data-srcset属性，也加载
+            if (img.dataset.srcset) {
+              img.srcset = img.dataset.srcset;
+              img.removeAttribute('data-srcset');
+            }
+            // 停止观察
             img.removeAttribute('data-src');
             observer.unobserve(img);
           }
         });
+      }, {
+        rootMargin: '50px 0px', // 提前50px加载图片
+        threshold: 0.1 // 当图片10%可见时加载
       });
       
-      // 观察所有懒加载图片
+      // 观察所有带有data-src属性的图片
+      const lazyImages = document.querySelectorAll('img[data-src]');
       lazyImages.forEach(img => {
         observer.observe(img);
       });
+      
+      // 处理动态加载的图片
+      const observerForDynamicContent = new MutationObserver((mutations) => {
+        mutations.forEach(mutation => {
+          if (mutation.type === 'childList') {
+            const newImages = mutation.target.querySelectorAll('img[data-src]');
+            newImages.forEach(img => {
+              observer.observe(img);
+            });
+          }
+        });
+      });
+      
+      // 观察主内容区域的变化
+      const mainContent = document.querySelector('main');
+      if (mainContent) {
+        observerForDynamicContent.observe(mainContent, {
+          childList: true,
+          subtree: true
+        });
+      }
     });
   </script>
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -145,16 +216,27 @@
       // 加载动画控制
       const loadingOverlay = document.createElement('div');
       loadingOverlay.className = 'loading-overlay';
-      loadingOverlay.innerHTML = '<div class="loading-spinner"></div>';
+      loadingOverlay.innerHTML = `
+        <div class="loading-spinner-container">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">加载中...</div>
+        </div>
+      `;
       document.body.appendChild(loadingOverlay);
+      
+      // 获取加载文本元素
+      const loadingText = loadingOverlay.querySelector('.loading-text');
       
       // 提示消息容器
       const toastContainer = document.createElement('div');
       toastContainer.className = 'toast-container';
       document.body.appendChild(toastContainer);
       
-      // 全局加载控制函数
-      window.showLoading = function() {
+      // 全局加载控制函数 - 支持自定义文本
+      window.showLoading = function(text = '加载中...') {
+        if (loadingText) {
+          loadingText.textContent = text;
+        }
         loadingOverlay.classList.add('active');
       };
       
@@ -162,15 +244,37 @@
         loadingOverlay.classList.remove('active');
       };
       
-      // 提示消息函数
-      window.showToast = function(message, type = 'info', duration = 3000) {
+      // 提示消息函数 - 增强版
+      window.showToast = function(message, type = 'info', duration = 3000, position = 'top-right') {
         const toast = document.createElement('div');
+        
+        // 添加图标
+        let icon = '';
+        switch(type) {
+          case 'success':
+            icon = '✓';
+            break;
+          case 'error':
+            icon = '✗';
+            break;
+          case 'warning':
+            icon = '⚠';
+            break;
+          case 'info':
+            icon = 'ℹ';
+            break;
+        }
+        
         toast.className = `toast ${type}`;
         toast.innerHTML = `
-          <span>${message}</span>
-          <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 20px;">${icon}</span>
+            <span style="flex: 1;">${message}</span>
+            <button class="toast-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+          </div>
         `;
         
+        // 根据位置选择不同的容器或添加位置类
         toastContainer.appendChild(toast);
         
         // 显示提示
@@ -181,6 +285,23 @@
           toast.classList.remove('show');
           setTimeout(() => toast.remove(), 300);
         }, duration);
+      };
+      
+      // 简化的提示函数，方便调用
+      window.showSuccess = function(message, duration = 3000) {
+        showToast(message, 'success', duration);
+      };
+      
+      window.showError = function(message, duration = 3000) {
+        showToast(message, 'error', duration);
+      };
+      
+      window.showWarning = function(message, duration = 3000) {
+        showToast(message, 'warning', duration);
+      };
+      
+      window.showInfo = function(message, duration = 3000) {
+        showToast(message, 'info', duration);
       };
       
       // 页面加载完成后隐藏加载动画
@@ -194,6 +315,75 @@
         // 只对非异步表单提交显示加载动画
         if (!form.hasAttribute('data-no-loading')) {
           showLoading();
+        }
+      });
+      
+      // 快捷键支持
+      document.addEventListener('keydown', function(e) {
+        // 只在非输入状态下响应快捷键
+        if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) {
+          return;
+        }
+        
+        // Ctrl+K: 聚焦搜索框
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+          e.preventDefault();
+          const searchInput = document.getElementById('file-search');
+          if (searchInput) {
+            searchInput.focus();
+            showToast('搜索框已聚焦', 'info', 1500);
+          } else {
+            showToast('当前页面没有搜索框', 'warning', 1500);
+          }
+        }
+        
+        // Ctrl+U: 跳转到上传页面
+        if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('upload') }}';
+          showLoading('正在跳转到上传页面...');
+        }
+        
+        // Ctrl+H: 跳转到首页
+        if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('index') }}';
+          showLoading('正在跳转到首页...');
+        }
+        
+        // Ctrl+A: 跳转到AI对话页面
+        if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('ai_page') }}';
+          showLoading('正在跳转到AI对话页面...');
+        }
+        
+        // Ctrl+B: 跳转到博客页面
+        if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('blog_page') }}';
+          showLoading('正在跳转到博客页面...');
+        }
+        
+        // Ctrl+C: 跳转到用户中心
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('user_center') }}';
+          showLoading('正在跳转到用户中心...');
+        }
+        
+        // Ctrl+L: 登录/注册
+        if ((e.ctrlKey || e.metaKey) && e.key === 'l') {
+          e.preventDefault();
+          window.location.href = '{{ url_for('auth') }}';
+          showLoading('正在跳转到登录页面...');
+        }
+        
+        // Ctrl+/ or Ctrl+?: 显示快捷键帮助
+        if ((e.ctrlKey || e.metaKey) && (e.key === '/' || e.key === '?')) {
+          e.preventDefault();
+          showToast(`
+快捷键帮助:\n            Ctrl+K: 聚焦搜索框\n            Ctrl+U: 跳转到上传页面\n            Ctrl+H: 跳转到首页\n            Ctrl+A: 跳转到AI对话页面\n            Ctrl+B: 跳转到博客页面\n            Ctrl+C: 跳转到用户中心\n            Ctrl+L: 登录/注册\n            Ctrl+/或?: 显示快捷键帮助          `.replace(/^ {12}/gm, ''), 'info', 5000);
         }
       });
     });

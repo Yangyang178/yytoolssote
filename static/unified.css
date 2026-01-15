@@ -121,6 +121,84 @@ body {
     opacity: 0.9;
 }
 
+/* 增强触屏操作体验 */
+/* 确保所有可点击元素有足够的触摸目标大小 */
+.btn, .nav-btn, .interaction-btn, .category-btn, .page-btn {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 12px 20px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 确保链接有足够的点击区域 */
+a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 确保表单元素有足够的触摸目标大小 */
+input, button, select, textarea {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* 优化分类筛选按钮的触屏体验 */
+.category-btn {
+    min-height: 44px;
+    min-width: 80px;
+    padding: 10px 16px;
+}
+
+/* 优化文件互动按钮的触屏体验 */
+.interaction-btn {
+    min-height: 44px;
+    min-width: 80px;
+    padding: 8px 16px;
+}
+
+/* 优化分页按钮的触屏体验 */
+.page-btn {
+    min-height: 48px;
+    min-width: 48px;
+}
+
+/* 优化移动端按钮间距，避免误触 */
+@media (max-width: 768px) {
+    /* 增加按钮之间的间距 */
+    .btn, .nav-btn, .interaction-btn, .category-btn {
+        margin-bottom: 8px;
+    }
+    
+    /* 增加表单元素之间的间距 */
+    .form-group {
+        margin-bottom: 20px;
+    }
+    
+    /* 确保按钮在移动端有足够的宽度，便于点击 */
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* 优化页面标题下方的间距 */
+    .page-title {
+        margin-bottom: 20px;
+    }
+    
+    /* 优化提示消息在移动端的显示位置，避免遮挡内容 */
+    .toast-container {
+        top: 100px;
+        right: 10px;
+        left: 10px;
+        max-width: none;
+    }
+    
+    .toast {
+        max-width: none;
+    }
+}
+
 /* 表单元素触屏优化 */
 .form-input,
 .form-textarea,

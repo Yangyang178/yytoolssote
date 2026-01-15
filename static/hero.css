@@ -544,6 +544,93 @@ html, body {
   align-items: stretch;
 }
 
+/* 优化文件卡片在移动端的显示 */
+@media (max-width: 768px) {
+  /* 调整文件卡片头部布局，确保元素不拥挤 */
+  .file-card-header {
+    padding: 16px 20px;
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+  }
+  
+  /* 调整文件信息头部对齐方式 */
+  .file-info-header {
+    text-align: center;
+  }
+  
+  /* 调整文件互动按钮位置，避免遮挡内容 */
+  .file-interactions {
+    position: static;
+    margin-left: 0;
+    margin-top: 12px;
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+  }
+  
+  /* 调整文件卡片内容内边距 */
+  .file-card-body {
+    padding: 16px 20px;
+  }
+  
+  /* 调整文件卡片底部内边距 */
+  .file-card-footer {
+    padding: 12px 20px;
+  }
+  
+  /* 调整文件操作按钮布局，确保在移动端显示正常 */
+  .file-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  /* 调整文件操作按钮宽度，确保在移动端显示正常 */
+  .file-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* 调整搜索框样式，适配移动端 */
+  .search-box {
+    margin: 0 16px;
+  }
+  
+  /* 调整功能亮点区域内边距 */
+  .features-section {
+    padding: 40px 0;
+  }
+  
+  /* 调整英雄区域内边距 */
+  .hero-section {
+    padding: 100px 0 60px 0;
+  }
+  
+  /* 调整英雄标题和副标题大小 */
+  .hero-title {
+    font-size: 2rem;
+  }
+  
+  .hero-subtitle {
+    font-size: 1rem;
+  }
+  
+  /* 调整英雄按钮区域布局 */
+  .hero-actions {
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  
+  /* 调整按钮大小，确保在移动端易于点击 */
+  .btn-large {
+    padding: 14px 28px;
+    font-size: 1rem;
+    width: 100%;
+    max-width: 300px;
+  }
+}
+
 .file-meta {
   flex: 1;
   min-width: 0;

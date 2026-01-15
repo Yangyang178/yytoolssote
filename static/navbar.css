@@ -429,6 +429,28 @@ main {
     left: 0;
   }
   
+  /* 确保移动导航菜单内的按钮有足够的点击区域 */
+  body #main-nav .nav-buttons.active .nav-btn {
+    padding: 18px 30px;
+    font-size: 16px;
+    min-height: 56px;
+  }
+  
+  /* 调整导航栏logo在移动端的显示 */
+  body #main-nav .nav-logo {
+    margin-left: 0;
+  }
+  
+  /* 调整导航栏容器内边距，适配移动端 */
+  body #main-nav .nav-container {
+    padding: 0 16px;
+  }
+  
+  /* 确保主内容区域在移动端有足够的顶部内边距，避免被导航栏遮挡 */
+  main {
+    padding-top: 90px;
+  }
+  
   body #main-nav .nav-btn {
     display: block;
     padding: 16px 30px;

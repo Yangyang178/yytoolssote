@@ -37,7 +37,56 @@ body{padding:0;margin:0}
 .ai-output{background:#eff6ff;border:1px solid #c7d2fe;color:#0f172a;padding:12px;border-radius:8px;white-space:pre-wrap;max-height:360px;overflow:auto;line-height:1.5;word-break:break-word}
 
 /* 本地文件区域样式 */
-#local{display:flex;flex-direction:column;height:750px}
+#local{display:flex;flex-direction:column;height:100%}
 #local .card-body{display:flex;flex-direction:column;overflow:hidden;padding:0 24px}
 #local .file-list{flex:1;min-height:0;overflow:auto;padding-right:0;padding-top:0;padding-bottom:0;margin-top:0;margin-bottom:0}
 #local .file-list{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* 响应式设计 - 移动端适配 */
+@media (max-width: 768px) {
+  /* 调整本地文件区域高度，避免在移动端溢出 */
+  #local {
+    height: auto;
+    min-height: 500px;
+  }
+  
+  /* 本地文件列表在移动端改为单列布局 */
+  #local .file-list {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  /* 调整上传区域高度，适配移动端 */
+  .upload-zone {
+    height: 250px;
+    padding: 20px;
+  }
+  
+  /* 调整上传图标大小 */
+  .upload-icon {
+    font-size: 24px;
+  }
+  
+  /* 调整上传按钮区域为单列布局 */
+  .actions {
+    flex-direction: column;
+  }
+  
+  /* 调整页面容器内边距 */
+  .container {
+    padding: 16px;
+  }
+  
+  /* 调整代码块样式，适配移动端 */
+  .code, .ai-output {
+    max-height: 250px;
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  /* 调整表单元素样式，适配移动端 */
+  .input, .textarea {
+    padding: 12px;
+    font-size: 16px;
+  }
+}

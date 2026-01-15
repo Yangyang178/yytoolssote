@@ -363,10 +363,13 @@
     border-radius: var(--radius-xl);
     width: 90%;
     max-width: 600px;
+    max-height: 90vh;
     box-shadow: var(--shadow-2xl);
     animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     overflow: hidden;
     border: 1px solid var(--border-light);
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
@@ -426,6 +429,12 @@
 
 .modal-body {
     padding: 40px;
+    overflow-y: auto;
+    max-height: calc(90vh - 180px);
+}
+
+#edit-modal form {
+    display: block;
 }
 
 .form-section {

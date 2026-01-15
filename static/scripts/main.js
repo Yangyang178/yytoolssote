@@ -137,18 +137,22 @@ async function initFileInteractions() {
     console.log('文件互动状态初始化完成');
   } catch (error) {
     console.error('初始化文件互动状态时发生错误:', error);
-    showStatusMessage('初始化文件互动状态失败: ' + error.message, 'error');
+    window.hideLoading();
+    window.showToast('初始化文件互动状态失败: ' + error.message, 'error');
   }
 }
 
 // 处理点赞按钮点击事件
 async function handleLike(fileId, btn) {
   if (!isLoggedIn) {
-    showStatusMessage('请先登录，才能执行此操作', 'error');
+    window.showToast('请先登录，才能执行此操作', 'error');
     return;
   }
   
   try {
+    // 显示加载动画
+    window.showLoading('正在处理点赞操作...');
+    
     // 调用点赞API
     const response = await fetch(`/api/files/${fileId}/like`, {
       method: 'POST',
@@ -168,28 +172,34 @@ async function handleLike(fileId, btn) {
       const iconElement = btn.querySelector('.icon-like');
       if (data.data.liked) {
         iconElement.style.color = '#EF4444'; // 红色表示已点赞
-        showStatusMessage('点赞成功', 'success');
+        window.showToast('点赞成功', 'success');
       } else {
         iconElement.style.color = ''; // 默认颜色表示未点赞
-        showStatusMessage('取消点赞成功', 'success');
+        window.showToast('取消点赞成功', 'success');
       }
     } else {
-      showStatusMessage('操作失败: ' + data.message, 'error');
+      window.showToast('操作失败: ' + data.message, 'error');
     }
   } catch (error) {
     console.error('点赞操作失败:', error);
-    showStatusMessage('点赞操作失败: ' + error.message, 'error');
+    window.showToast('点赞操作失败: ' + error.message, 'error');
+  } finally {
+    // 隐藏加载动画
+    window.hideLoading();
   }
 }
 
 // 处理收藏按钮点击事件
 async function handleFavorite(fileId, btn) {
   if (!isLoggedIn) {
-    showStatusMessage('请先登录，才能执行此操作', 'error');
+    window.showToast('请先登录，才能执行此操作', 'error');
     return;
   }
   
   try {
+    // 显示加载动画
+    window.showLoading('正在处理收藏操作...');
+    
     // 调用收藏API
     const response = await fetch(`/api/files/${fileId}/favorite`, {
       method: 'POST',
@@ -209,17 +219,20 @@ async function handleFavorite(fileId, btn) {
       const iconElement = btn.querySelector('.icon-favorite');
       if (data.data.favorited) {
         iconElement.style.color = '#F59E0B'; // 黄色表示已收藏
-        showStatusMessage('收藏成功', 'success');
+        window.showToast('收藏成功', 'success');
       } else {
         iconElement.style.color = ''; // 默认颜色表示未收藏
-        showStatusMessage('取消收藏成功', 'success');
+        window.showToast('取消收藏成功', 'success');
       }
     } else {
-      showStatusMessage('操作失败: ' + data.message, 'error');
+      window.showToast('操作失败: ' + data.message, 'error');
     }
   } catch (error) {
     console.error('收藏操作失败:', error);
-    showStatusMessage('收藏操作失败: ' + error.message, 'error');
+    window.showToast('收藏操作失败: ' + error.message, 'error');
+  } finally {
+    // 隐藏加载动画
+    window.hideLoading();
   }
 }
 
@@ -405,28 +418,7 @@ function clearSearch() {
   searchFiles();
 }
 
-// 状态消息管理
-function showStatusMessage(message, type = 'info', duration = 3000) {
-  // 创建状态消息元素
-  let statusMessage = document.getElementById('statusMessage');
-  if (!statusMessage) {
-    statusMessage = document.createElement('div');
-    statusMessage.id = 'statusMessage';
-    document.body.appendChild(statusMessage);
-  }
-  
-  // 设置消息内容和样式
-  statusMessage.textContent = message;
-  statusMessage.className = `status-message ${type}`;
-  
-  // 显示消息
-  statusMessage.classList.add('show');
-  
-  // 自动隐藏消息
-  setTimeout(() => {
-    statusMessage.classList.remove('show');
-  }, duration);
-}
+
 
 // 分类筛选功能
 function initCategoryFilter() {
