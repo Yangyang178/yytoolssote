@@ -1,3 +1,19 @@
-Flask==3.0.0
-requests==2.32.3
-python-dotenv==1.0.1
+# 核心框架（使用系统实际安装的版本）
+Flask==2.0.3
+Werkzeug==2.0.3
+Jinja2==3.0.3
+click==8.0.4
+itsdangerous==2.0.1
+MarkupSafe==2.0.1
+
+# HTTP请求
+requests==2.20.0
+
+# 工具类
+python-dotenv==0.20.0
+
+# 数据库（如果使用）
+# SQLAlchemy==1.4.46
+
+# 注意：Flask 3.0.0 版本在PyPI中尚不存在
+# 请使用 2.0.3 版本，这是稳定版本
