@@ -1542,6 +1542,25 @@ def api_get_file_interaction_status(file_id):
 def open_local(stored_name):
     return send_from_directory(app.config['UPLOAD_FOLDER'], stored_name)
 
+# 沙盒运行环境
+@app.route('/sandbox/<stored_name>')
+def sandbox(stored_name):
+    # 获取文件名
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT filename FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        file_name = file['filename'] if file else stored_name
+    finally:
+        conn.close()
+    
+    # 生成iframe的src路径
+    iframe_src = url_for('open_local', stored_name=stored_name)
+    
+    return render_template('sandbox.html', 
+                          tool_name=file_name, 
+                          iframe_src=iframe_src, 
+                          username=session.get('username'))
+
 # 下载本地文件
 @app.route('/download/<stored_name>')
 def download_local(stored_name):

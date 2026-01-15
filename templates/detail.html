@@ -45,7 +45,8 @@
         
         <!-- 操作按钮 -->
         <div class="detail-actions">
-          <a class="btn btn-primary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">打开文件</a>
+          <a class="btn btn-primary" href="{{ url_for('sandbox', stored_name=item.stored_name) }}" target="_blank">在沙盒中运行</a>
+          <a class="btn btn-secondary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">直接打开</a>
           <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
 

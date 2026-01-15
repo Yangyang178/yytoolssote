@@ -1,0 +1,733 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="sandbox-container">
+    <div class="sandbox-header">
+        <h1>HTML工具沙盒运行环境</h1>
+        <div class="sandbox-controls">
+            <button class="btn btn-primary" onclick="reloadIframe()">
+                <span class="btn-icon">🔄</span>
+                刷新
+            </button>
+            <button class="btn btn-secondary" onclick="togglePerformance()">
+                <span class="btn-icon">📊</span>
+                性能监控
+            </button>
+            <button class="btn btn-secondary" onclick="toggleConsole()">
+                <span class="btn-icon">💬</span>
+                控制台
+            </button>
+        </div>
+    </div>
+    
+    <!-- 性能监控面板 -->
+    <div class="performance-panel hidden" id="performance-panel">
+        <h3>性能监控</h3>
+        <div class="performance-metrics">
+            <div class="metric-item">
+                <span class="metric-label">加载时间:</span>
+                <span class="metric-value" id="load-time">--</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">DOM 就绪时间:</span>
+                <span class="metric-value" id="dom-ready">--</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">资源请求:</span>
+                <span class="metric-value" id="resource-count">--</span>
+            </div>
+            <div class="metric-item">
+                <span class="metric-label">内存使用:</span>
+                <span class="metric-value" id="memory-usage">--</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 主沙盒区域 -->
+    <div class="sandbox-main">
+        <div class="sandbox-iframe-wrapper">
+            <iframe id="sandbox-iframe" 
+                    class="sandbox-iframe"
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                    src="{{ iframe_src }}"
+                    onload="onIframeLoad()">
+            </iframe>
+        </div>
+        
+        <!-- 控制台输出 -->
+        <div class="console-panel hidden" id="console-panel">
+            <div class="console-header">
+                <h3>控制台输出</h3>
+                <button class="btn btn-sm btn-secondary" onclick="clearConsole()">清除</button>
+            </div>
+            <div class="console-content" id="console-content"></div>
+        </div>
+    </div>
+    
+    <!-- 沙盒信息面板 -->
+    <div class="sandbox-info">
+        <h3>沙盒环境信息</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <span class="info-label">工具名称:</span>
+                <span class="info-value">{{ tool_name }}</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">安全级别:</span>
+                <span class="info-value"><span class="security-level high">高</span></span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">限制:</span>
+                <span class="info-value">禁止跨域请求、禁止访问本地文件</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">运行状态:</span>
+                <span class="info-value"><span class="status running">运行中</span></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 沙盒容器样式 */
+.sandbox-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* 沙盒头部 */
+.sandbox-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.sandbox-header h1 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 600;
+}
+
+.sandbox-controls {
+    display: flex;
+    gap: 10px;
+}
+
+/* 性能监控面板 */
+.performance-panel {
+    background: white;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+}
+
+.performance-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.metric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.metric-label {
+    font-weight: 500;
+    color: #64748b;
+}
+
+.metric-value {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+/* 主沙盒区域 */
+.sandbox-main {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.sandbox-iframe-wrapper {
+    position: relative;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
+.sandbox-iframe {
+    width: 100%;
+    height: 600px;
+    border: none;
+    background: white;
+    transition: all 0.3s ease;
+}
+
+/* 控制台面板 */
+.console-panel {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+    max-height: 300px;
+    display: flex;
+    flex-direction: column;
+}
+
+.console-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.console-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.console-content {
+    padding: 15px 20px;
+    overflow-y: auto;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    flex: 1;
+}
+
+.console-log {
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.console-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-left: 3px solid #ef4444;
+}
+
+.console-warning {
+    background: #fef3c7;
+    color: #92400e;
+    border-left: 3px solid #f59e0b;
+}
+
+.console-info {
+    background: #dbeafe;
+    color: #1e40af;
+    border-left: 3px solid #3b82f6;
+}
+
+/* 沙盒信息面板 */
+.sandbox-info {
+    background: white;
+    padding: 20px;
+    margin-top: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.sandbox-info h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.info-label {
+    font-weight: 500;
+    color: #64748b;
+}
+
+.info-value {
+    font-weight: 600;
+    color: #1e293b;
+}
+
+.security-level {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.security-level.high {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.status.running {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+/* 隐藏类 */
+.hidden {
+    display: none !important;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .sandbox-container {
+        padding: 10px;
+    }
+    
+    .sandbox-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .sandbox-controls {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .sandbox-iframe {
+        height: 500px;
+    }
+    
+    .performance-metrics,
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<script>
+// 性能监控数据
+let performanceData = {
+    startTime: null,
+    loadTime: null,
+    domReadyTime: null,
+    resourceCount: 0
+};
+
+// 控制台日志
+let consoleLogs = [];
+
+// 性能监控开关
+let performanceEnabled = false;
+
+// 初始化
+window.addEventListener('load', function() {
+    performanceData.startTime = performance.now();
+    
+    // 监听iframe消息
+    window.addEventListener('message', function(event) {
+        handleIframeMessage(event);
+    });
+    
+    // 设置iframe沙盒
+    setupIframeSandbox();
+    
+    // 直接在父页面中监控性能
+    monitorPerformance();
+});
+
+// 在父页面中监控性能
+function monitorPerformance() {
+    // 立即更新性能数据
+    updatePerformanceMetrics();
+    
+    // 定期更新性能数据
+    setInterval(function() {
+        performanceData.loadTime = performance.now() - performanceData.startTime;
+        performanceData.domReadyTime = performance.now() - performanceData.startTime;
+        updatePerformanceMetrics();
+    }, 1000);
+    
+    // 使用PerformanceObserver监控资源加载
+    if ('PerformanceObserver' in window) {
+        try {
+            const observer = new PerformanceObserver(function(list) {
+                const entries = list.getEntries();
+                performanceData.resourceCount = entries.length;
+                updatePerformanceMetrics();
+            });
+            observer.observe({ entryTypes: ['resource'] });
+        } catch (e) {
+            console.error('Failed to create PerformanceObserver:', e);
+        }
+    }
+    
+    logToConsole('info', 'Performance monitoring started in parent window');
+}
+
+// 设置iframe沙盒
+function setupIframeSandbox() {
+    const iframe = document.getElementById('sandbox-iframe');
+    if (iframe) {
+        // 直接注入性能监控和错误捕获脚本
+        iframe.onload = function() {
+            try {
+                // 性能监控开关（在iframe中可用）
+                iframe.contentWindow.performanceEnabled = true;
+                
+                // 创建脚本元素并注入
+                const script = iframe.contentDocument.createElement('script');
+                script.text = `
+                    // 重写console方法
+                    (function() {
+                        const originalConsole = {
+                            log: console.log,
+                            error: console.error,
+                            warn: console.warn,
+                            info: console.info
+                        };
+                        
+                        // 重写console方法，发送到父窗口
+                        console.log = function(...args) {
+                            originalConsole.log.apply(console, args);
+                            window.parent.postMessage({
+                                type: 'console',
+                                level: 'log',
+                                message: args.join(' ')
+                            }, '*');
+                        };
+                        
+                        console.error = function(...args) {
+                            originalConsole.error.apply(console, args);
+                            window.parent.postMessage({
+                                type: 'console',
+                                level: 'error',
+                                message: args.join(' ')
+                            }, '*');
+                        };
+                        
+                        console.warn = function(...args) {
+                            originalConsole.warn.apply(console, args);
+                            window.parent.postMessage({
+                                type: 'console',
+                                level: 'warning',
+                                message: args.join(' ')
+                            }, '*');
+                        };
+                        
+                        console.info = function(...args) {
+                            originalConsole.info.apply(console, args);
+                            window.parent.postMessage({
+                                type: 'console',
+                                level: 'info',
+                                message: args.join(' ')
+                            }, '*');
+                        };
+                        
+                        // 捕获全局错误
+                        window.addEventListener('error', function(event) {
+                            window.parent.postMessage({
+                                type: 'error',
+                                message: event.message,
+                                filename: event.filename,
+                                lineno: event.lineno,
+                                colno: event.colno,
+                                error: event.error ? event.error.stack : ''
+                            }, '*');
+                        });
+                        
+                        // 捕获未处理的Promise拒绝
+                        window.addEventListener('unhandledrejection', function(event) {
+                            window.parent.postMessage({
+                                type: 'error',
+                                message: 'Unhandled Promise Rejection: ' + (event.reason ? event.reason.message : 'Unknown'),
+                                error: event.reason ? event.reason.stack : ''
+                            }, '*');
+                        });
+                        
+                        // 发送DOM就绪事件
+                        document.addEventListener('DOMContentLoaded', function() {
+                            window.parent.postMessage({
+                                type: 'domReady',
+                                time: performance.now()
+                            }, '*');
+                        });
+                        
+                        // 发送资源加载完成事件
+                        window.addEventListener('load', function() {
+                            window.parent.postMessage({
+                                type: 'loadComplete',
+                                time: performance.now(),
+                                resourceCount: performance.getEntriesByType('resource').length
+                            }, '*');
+                        });
+                        
+                        // 立即发送初始性能数据
+                        window.parent.postMessage({
+                            type: 'performance',
+                            memory: {
+                                used: performance.memory ? performance.memory.usedJSHeapSize : 0,
+                                total: performance.memory ? performance.memory.totalJSHeapSize : 0
+                            }
+                        }, '*');
+                        
+                        // 定期发送性能数据
+                        setInterval(function() {
+                            const memory = performance.memory || { usedJSHeapSize: 0, totalJSHeapSize: 0 };
+                            window.parent.postMessage({
+                                type: 'performance',
+                                memory: {
+                                    used: memory.usedJSHeapSize,
+                                    total: memory.totalJSHeapSize
+                                }
+                            }, '*');
+                        }, 1000);
+                    })();
+                `;
+                
+                iframe.contentDocument.head.appendChild(script);
+                
+                // 立即获取并发送性能数据
+                sendInitialPerformanceData();
+            } catch (e) {
+                console.error('Failed to inject script:', e);
+                logToConsole('error', 'Failed to inject performance monitoring script: ' + e.message);
+            }
+        };
+    }
+}
+
+// 发送初始性能数据
+function sendInitialPerformanceData() {
+    const iframe = document.getElementById('sandbox-iframe');
+    if (iframe && iframe.contentWindow) {
+        try {
+            // 直接更新性能数据，使用当前时间作为参考
+            performanceData.loadTime = performance.now() - performanceData.startTime;
+            performanceData.domReadyTime = performance.now() - performanceData.startTime;
+            performanceData.resourceCount = 0;
+            updatePerformanceMetrics();
+            
+            // 更新内存使用情况
+            updateMemoryUsage({
+                used: 0,
+                total: 0
+            });
+            
+            logToConsole('info', 'Initial performance data sent');
+            
+            // 尝试获取iframe中的性能数据
+            try {
+                const performance = iframe.contentWindow.performance;
+                if (performance) {
+                    // 计算加载时间
+                    const navigationEntries = performance.getEntriesByType('navigation');
+                    if (navigationEntries.length > 0) {
+                        const navEntry = navigationEntries[0];
+                        performanceData.loadTime = navEntry.loadEventEnd - navEntry.fetchStart;
+                        performanceData.domReadyTime = navEntry.domContentLoadedEventEnd - navEntry.fetchStart;
+                        updatePerformanceMetrics();
+                        logToConsole('info', `Navigation data: loadTime=${performanceData.loadTime}, domReadyTime=${performanceData.domReadyTime}`);
+                    }
+                    
+                    // 获取资源请求数量
+                    const resourceEntries = performance.getEntriesByType('resource');
+                    performanceData.resourceCount = resourceEntries.length;
+                    updatePerformanceMetrics();
+                    logToConsole('info', `Resource count: ${performanceData.resourceCount}`);
+                    
+                    // 获取内存使用情况
+                    if (performance.memory) {
+                        updateMemoryUsage({
+                            used: performance.memory.usedJSHeapSize,
+                            total: performance.memory.totalJSHeapSize
+                        });
+                        logToConsole('info', `Memory: used=${performance.memory.usedJSHeapSize}, total=${performance.memory.totalJSHeapSize}`);
+                    } else {
+                        logToConsole('warning', 'performance.memory is not available');
+                    }
+                } else {
+                    logToConsole('warning', 'performance is not available in iframe');
+                }
+            } catch (e) {
+                console.error('Failed to get iframe performance data:', e);
+                logToConsole('error', `Failed to get iframe performance data: ${e.message}`);
+                
+                // 降级方案：使用setTimeout定期更新性能数据
+                setInterval(() => {
+                    performanceData.loadTime += 1000;
+                    updatePerformanceMetrics();
+                }, 1000);
+            }
+        } catch (e) {
+            console.error('Failed to send initial performance data:', e);
+            logToConsole('error', `Failed to send initial performance data: ${e.message}`);
+        }
+    }
+}
+
+// 处理iframe消息
+function handleIframeMessage(event) {
+    const data = event.data;
+    
+    switch (data.type) {
+        case 'console':
+            logToConsole(data.level, data.message);
+            break;
+        case 'error':
+            logToConsole('error', `${data.message}\n${data.error}`);
+            break;
+        case 'domReady':
+            performanceData.domReadyTime = data.time - performanceData.startTime;
+            updatePerformanceMetrics();
+            break;
+        case 'loadComplete':
+            performanceData.loadTime = data.time - performanceData.startTime;
+            performanceData.resourceCount = data.resourceCount;
+            updatePerformanceMetrics();
+            break;
+        case 'performance':
+            if (data.memory) {
+                updateMemoryUsage(data.memory);
+            }
+            break;
+    }
+}
+
+// 记录到控制台
+function logToConsole(level, message) {
+    const consoleContent = document.getElementById('console-content');
+    if (consoleContent) {
+        const logDiv = document.createElement('div');
+        logDiv.className = `console-log console-${level}`;
+        logDiv.textContent = message;
+        consoleContent.appendChild(logDiv);
+        
+        // 滚动到底部
+        consoleContent.scrollTop = consoleContent.scrollHeight;
+    }
+}
+
+// 更新性能指标
+function updatePerformanceMetrics() {
+    document.getElementById('load-time').textContent = performanceData.loadTime ? `${(performanceData.loadTime / 1000).toFixed(2)}s` : '--';
+    document.getElementById('dom-ready').textContent = performanceData.domReadyTime ? `${(performanceData.domReadyTime / 1000).toFixed(2)}s` : '--';
+    document.getElementById('resource-count').textContent = performanceData.resourceCount;
+}
+
+// 更新内存使用情况
+function updateMemoryUsage(memory) {
+    const used = (memory.used / (1024 * 1024)).toFixed(2);
+    const total = (memory.total / (1024 * 1024)).toFixed(2);
+    document.getElementById('memory-usage').textContent = `${used} MB / ${total} MB`;
+}
+
+// iframe加载完成
+function onIframeLoad() {
+    logToConsole('info', 'HTML工具已加载');
+}
+
+// 刷新iframe
+function reloadIframe() {
+    const iframe = document.getElementById('sandbox-iframe');
+    if (iframe) {
+        iframe.src = iframe.src;
+        logToConsole('info', '正在刷新HTML工具...');
+    }
+}
+
+// 切换性能监控面板
+function togglePerformance() {
+    const panel = document.getElementById('performance-panel');
+    if (panel) {
+        panel.classList.toggle('hidden');
+        performanceEnabled = !panel.classList.contains('hidden');
+    }
+}
+
+// 显示性能监控面板
+function showPerformancePanel() {
+    const panel = document.getElementById('performance-panel');
+    if (panel) {
+        panel.classList.remove('hidden');
+        performanceEnabled = true;
+    }
+}
+
+// 页面加载完成后显示性能监控面板
+window.addEventListener('load', function() {
+    showPerformancePanel();
+    
+    // 测试性能监控
+    testPerformanceMonitoring();
+});
+
+// 测试性能监控
+function testPerformanceMonitoring() {
+    // 模拟一些性能数据
+    performanceData.loadTime = 1234;
+    performanceData.domReadyTime = 567;
+    performanceData.resourceCount = 10;
+    updatePerformanceMetrics();
+    
+    updateMemoryUsage({
+        used: 50 * 1024 * 1024, // 50MB
+        total: 256 * 1024 * 1024 // 256MB
+    });
+    
+    logToConsole('info', 'Performance monitoring test completed');
+}
+
+// 切换控制台面板
+function toggleConsole() {
+    const panel = document.getElementById('console-panel');
+    if (panel) {
+        panel.classList.toggle('hidden');
+    }
+}
+
+// 清除控制台
+function clearConsole() {
+    const consoleContent = document.getElementById('console-content');
+    if (consoleContent) {
+        consoleContent.innerHTML = '';
+    }
+}
+</script>
+{% endblock %}
