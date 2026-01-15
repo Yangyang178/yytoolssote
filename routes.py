@@ -526,9 +526,9 @@ def upload():
                 # 计算文件大小
                 file_size = os.path.getsize(file_path)
                 
-                # 插入数据库
-                conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc) 
-                               VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+                # 插入数据库，包含created_at字段
+                conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, created_at) 
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                            (file_id, session['user_id'], file.filename, stored_name, file_path, file_size, 
                             project_name, project_desc))
             
@@ -955,8 +955,8 @@ def upload_to_folder(folder_id):
         file_size = os.path.getsize(file_path)
         
         # 插入数据库
-        conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_desc, folder_id) 
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)''', 
+        conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_desc, folder_id, created_at) 
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                    (file_id, session['user_id'], file.filename, stored_name, file_path, file_size, 
                     description, folder_id))
         
@@ -1028,8 +1028,8 @@ def upload_folder_to_folder(folder_id):
             file_size = os.path.getsize(file_path)
             
             # 插入数据库，保存相对路径作为项目名称，方便识别文件夹结构
-            conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, folder_id) 
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
+            conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, folder_id, created_at) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                        (file_id, session['user_id'], os.path.basename(relative_path), stored_name, file_path, file_size, 
                         relative_path, description, folder_id))
             

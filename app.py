@@ -614,8 +614,19 @@ def get_all_files(user_id=None):
                     "name": tag_row["name"]
                 })
             
-            # 检查 created_at 字段是否存在
+            # 检查 created_at 字段是否存在并转换时区
             created_at = row["created_at"] if "created_at" in row.keys() else ""
+            if created_at:
+                # 将UTC时间转换为本地时间（Asia/Shanghai）
+                try:
+                    # 解析ISO格式的时间字符串
+                    utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    # 转换为东八区时间
+                    local_dt = utc_dt + timedelta(hours=8)
+                    created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    # 如果解析失败，保持原格式
+                    pass
             result.append({
                 "id": file_id, 
                 "filename": row["filename"], 
@@ -629,7 +640,7 @@ def get_all_files(user_id=None):
                 "favorite_count": favorite_count,
                 "categories": categories,
                 "tags": tags,
-                "created_at": row["created_at"] if "created_at" in row.keys() else ""
+                "created_at": created_at
             })
         return result
     finally:
@@ -672,8 +683,19 @@ def get_file_by_id(file_id, user_id=None, check_owner=True):
                     "name": tag_row["name"]
                 })
             
-            # 检查 created_at 字段是否存在
+            # 检查 created_at 字段是否存在并转换时区
             created_at = row["created_at"] if "created_at" in row.keys() else ""
+            if created_at:
+                # 将UTC时间转换为本地时间（Asia/Shanghai）
+                try:
+                    # 解析ISO格式的时间字符串
+                    utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    # 转换为东八区时间
+                    local_dt = utc_dt + timedelta(hours=8)
+                    created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    # 如果解析失败，保持原格式
+                    pass
             return {
                 "id": row["id"], 
                 "filename": row["filename"], 
