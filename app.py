@@ -901,6 +901,22 @@ def log_access(file_id, action, request):
         conn.close()
 
 
+def cleanup_old_logs():
+    """清理超过一周的访问记录和操作日志"""
+    conn = get_db()
+    try:
+        # 清理超过一周的访问记录
+        conn.execute('''DELETE FROM access_logs 
+                        WHERE access_time < datetime('now', '-7 days')''')
+        
+        # 清理超过一周的操作日志
+        conn.execute('''DELETE FROM operation_logs 
+                        WHERE created_at < datetime('now', '-7 days')''')
+        
+        conn.commit()
+    finally:
+        conn.close()
+
 
 def get_user_by_email(email):
     conn = get_db()
@@ -1256,4 +1272,6 @@ from routes import *
 
 if __name__ == "__main__":
     init_db()
+    # 清理超过一周的日志记录
+    cleanup_old_logs()
     app.run(debug=True, port=9876)
