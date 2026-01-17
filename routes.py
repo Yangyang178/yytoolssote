@@ -3,7 +3,7 @@
 
 # 导入必要的模块和函数
 from flask import request, render_template, redirect, url_for, flash, send_from_directory, jsonify, session
-from app import app, get_db, get_all_files, get_access_logs, generate_verification_code, send_verification_email, save_verification_code, verify_code, log_message, log_login_attempt, page_error_response, api_response
+from app import app, get_db, get_all_files, get_access_logs, generate_verification_code, send_verification_email, save_verification_code, verify_code, log_message, log_login_attempt, log_access, page_error_response, api_response
 from werkzeug.security import generate_password_hash, check_password_hash
 import json
 import os
@@ -280,15 +280,32 @@ def user_center():
             LIMIT 50
         ''', (session['user_id'],)).fetchall()
         
-        # 获取访问日志 - 通过JOIN files表获取文件名
-        access_logs = conn.execute('''
+        # 获取访问日志 - 通过JOIN files表获取文件名，基于access_logs中的user_id
+        access_logs_raw = conn.execute('''
             SELECT al.*, f.filename 
             FROM access_logs al 
             JOIN files f ON al.file_id = f.id 
-            WHERE f.user_id = ? 
+            WHERE al.user_id = ? 
             ORDER BY al.access_time DESC 
             LIMIT 50
         ''', (session['user_id'],)).fetchall()
+        
+        # 转换访问时间为本地时间
+        access_logs = []
+        from datetime import datetime, timedelta
+        for log in access_logs_raw:
+            log_dict = dict(log)
+            if log_dict.get('access_time'):
+                try:
+                    # 解析ISO格式的时间字符串
+                    utc_dt = datetime.fromisoformat(log_dict['access_time'])
+                    # 转换为东八区时间
+                    local_dt = utc_dt + timedelta(hours=8)
+                    log_dict['access_time'] = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    # 如果解析失败，保持原格式
+                    pass
+            access_logs.append(log_dict)
     finally:
         conn.close()
     
@@ -1545,11 +1562,28 @@ def api_get_file_interaction_status(file_id):
 # 打开本地文件
 @app.route('/open/<stored_name>')
 def open_local(stored_name):
+    # 记录访问日志
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        if file:
+            log_access(file['id'], 'open', request)
+    finally:
+        conn.close()
     return send_from_directory(app.config['UPLOAD_FOLDER'], stored_name)
 
 # 沙盒运行环境
 @app.route('/sandbox/<stored_name>')
 def sandbox(stored_name):
+    # 记录访问日志
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        if file:
+            log_access(file['id'], 'sandbox', request)
+    finally:
+        conn.close()
+    
     # 获取文件名
     conn = get_db()
     try:
@@ -1569,6 +1603,14 @@ def sandbox(stored_name):
 # 下载本地文件
 @app.route('/download/<stored_name>')
 def download_local(stored_name):
+    # 记录访问日志
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
+        if file:
+            log_access(file['id'], 'download', request)
+    finally:
+        conn.close()
     return send_from_directory(app.config['UPLOAD_FOLDER'], stored_name, as_attachment=True)
 
 # 文件详情页面
@@ -1584,6 +1626,9 @@ def file_detail(file_id):
                            (file_id, session['user_id'])).fetchone()
         if not item:
             return page_error_response('index', '文件不存在或无权限', 404)
+        
+        # 记录访问日志
+        log_access(file_id, 'view', request)
         
         # 解析dkfile字段
         item_dict = dict(item)
