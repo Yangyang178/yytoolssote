@@ -603,7 +603,7 @@ html, body {
   
   /* 调整英雄区域内边距 */
   .hero-section {
-    padding: 100px 0 60px 0;
+    padding: 140px 0 60px 0;
   }
   
   /* 调整英雄标题和副标题大小 */
@@ -945,7 +945,7 @@ html, body {
   
   .files-grid {
     grid-template-columns: 1fr;
-    gap: 20px;
+    gap: 16px;
   }
   
   .section-header-wrapper {
@@ -963,6 +963,10 @@ html, body {
     justify-content: center;
   }
   
+  .file-card {
+    min-height: auto;
+  }
+  
   .file-card-header {
     flex-direction: column;
     text-align: center;
@@ -975,36 +979,42 @@ html, body {
     max-width: 100%;
   }
   
+  .file-name {
+    font-size: 1rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    -webkit-line-clamp: 2;
+  }
+  
+  .file-size {
+    font-size: 0.8rem;
+  }
+  
   .file-interactions {
-    position: absolute;
-    top: 10px;
-    right: 20px;
-    gap: 6px;
+    position: static;
+    margin-top: 12px;
+    gap: 8px;
+    flex-direction: row;
+    justify-content: center;
   }
   
   .interaction-btn {
-    padding: 5px 14px;
-    font-size: 0.7rem;
-    min-width: 65px;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    min-width: 70px;
   }
   
   .icon-like,
   .icon-favorite {
-    font-size: 0.8rem;
+    font-size: 0.875rem;
   }
   
   .file-card-body {
     padding: 16px 20px;
   }
   
-  .file-card-footer {
-    padding: 12px 20px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .file-actions {
-    justify-content: center;
+  .file-project {
+    gap: 10px;
   }
   
   .project-name,
@@ -1013,17 +1023,71 @@ html, body {
     flex-direction: column;
     align-items: flex-start;
     gap: 4px;
+    font-size: 0.8rem;
   }
   
   .project-name .label,
   .project-desc .label,
   .remote-link .label {
     min-width: auto;
+    font-size: 0.75rem;
+  }
+  
+  .project-name .value,
+  .project-desc .value,
+  .remote-link .value {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+  
+  .file-card-footer {
+    padding: 12px 20px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .file-actions {
+    justify-content: center;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .file-action {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  
+  .created-time {
+    font-size: 0.75rem;
   }
   
   .remote-table th,
   .remote-table td {
     padding: 12px 16px;
+    font-size: 0.8rem;
+  }
+  
+  /* 分类标签和标签样式调整 */
+  .file-categories,
+  .file-tags {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .categories-list,
+  .tags-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .category-tag,
+  .tag {
+    padding: 4px 10px;
+    font-size: 0.7rem;
+    border-radius: 12px;
   }
 }
 

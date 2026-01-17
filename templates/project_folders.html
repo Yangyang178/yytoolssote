@@ -584,6 +584,36 @@
         grid-template-columns: 1fr;
     }
     
+    /* 调整移动端删除按钮位置，避免与文件夹图标重叠 */
+    .btn-delete {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: linear-gradient(135deg, #EF4444, #DC2626);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        z-index: 10;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+    }
+    
+    .btn-delete:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    
+    .delete-icon {
+        font-size: 0.75rem;
+    }
+    
     .modal-content {
         width: 95%;
         margin: 20px;

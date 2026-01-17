@@ -1098,10 +1098,11 @@
     
     .files-grid {
         grid-template-columns: 1fr;
+        gap: 16px;
     }
     
     .content-section {
-        padding: 24px;
+        padding: 20px;
     }
     
     .form-actions {
@@ -1110,6 +1111,45 @@
     
     .file-actions {
         flex-direction: column;
+    }
+    
+    /* 文件卡片移动端调整 */
+    .file-card {
+        padding: 16px;
+        gap: 8px;
+    }
+    
+    .file-icon {
+        font-size: 2rem;
+    }
+    
+    .file-name {
+        font-size: 1.1rem;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .file-size {
+        font-size: 0.8rem;
+    }
+    
+    .file-desc {
+        font-size: 0.85rem;
+        word-break: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .file-actions {
+        gap: 8px;
+        margin-top: 8px;
+    }
+    
+    .btn-detail,
+    .btn-download,
+    .btn-preview,
+    .btn-file-delete {
+        padding: 8px 12px;
+        font-size: 0.85rem;
     }
 }
 </style>
