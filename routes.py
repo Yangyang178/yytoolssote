@@ -199,10 +199,15 @@ def auth():
                 if login_method != 'password' and mode == 'register' and existing:
                     return api_response(success=False, message='该邮箱已被使用', code=400)
                 
-                # 生成并发送验证码
+                # 生成验证码
                 code = generate_verification_code()
-                send_verification_email(email, code, purpose)
+                # 先保存验证码到数据库
                 save_verification_code(email, code, purpose)
+                # 异步发送验证码邮件
+                import threading
+                email_thread = threading.Thread(target=send_verification_email, args=(email, code, purpose))
+                email_thread.daemon = True
+                email_thread.start()
                 
                 return api_response(success=True, message='验证码已发送')
             except Exception as e:

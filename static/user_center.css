@@ -358,12 +358,12 @@
 
 .modal-content {
     background-color: var(--bg-primary);
-    margin: 5% auto;
+    margin: 2% auto;
     padding: 0;
     border-radius: var(--radius-xl);
     width: 90%;
     max-width: 600px;
-    max-height: 90vh;
+    max-height: 95vh;
     box-shadow: var(--shadow-2xl);
     animation: slideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     overflow: hidden;
@@ -430,7 +430,8 @@
 .modal-body {
     padding: 40px;
     overflow-y: auto;
-    max-height: calc(90vh - 180px);
+    flex: 1;
+    min-height: 0;
 }
 
 #edit-modal form {
