@@ -25,6 +25,42 @@ def calculate_file_hash(file_path):
             hasher.update(chunk)
     return hasher.hexdigest()
 
+def get_file_category(filename):
+    """根据文件扩展名自动识别文件分类"""
+    ext = os.path.splitext(filename)[1].lower()
+    
+    category_mapping = {
+        '图片处理': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico', '.tiff', '.psd', '.ai', '.eps'],
+        '文件处理': ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt', '.rtf', '.odt', '.ods', '.odp'],
+        '娱乐游戏': ['.html', '.htm', '.swf', '.fla', '.unity3d', '.unity'],
+        '开发工具': ['.py', '.js', '.java', '.c', '.cpp', '.h', '.php', '.rb', '.go', '.rs', '.ts', '.jsx', '.vue', '.css', '.scss', '.less', '.json', '.xml', '.yaml', '.yml', '.sql', '.sh', '.bat', '.ps1'],
+        '通用工具': ['.zip', '.rar', '.7z', '.tar', '.gz', '.exe', '.msi', '.dmg', '.apk', '.ipa', '.deb', '.rpm'],
+        '生活工具': ['.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a', '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.3gp', '.m4v']
+    }
+    
+    for category, extensions in category_mapping.items():
+        if ext in extensions:
+            return category
+    
+    return '通用工具'
+
+def get_or_create_category(conn, category_name, user_id):
+    """获取或创建分类"""
+    category = conn.execute('SELECT id FROM categories WHERE name = ? AND user_id = ?', (category_name, user_id)).fetchone()
+    if category:
+        return category['id']
+    
+    cursor = conn.cursor()
+    cursor.execute('INSERT INTO categories (name, user_id) VALUES (?, ?)', (category_name, user_id))
+    conn.commit()
+    return cursor.lastrowid
+
+def assign_category_to_file(conn, file_id, category_name, user_id):
+    """为文件分配分类"""
+    category_id = get_or_create_category(conn, category_name, user_id)
+    conn.execute('INSERT OR IGNORE INTO file_categories (file_id, category_id) VALUES (?, ?)', (file_id, category_id))
+    conn.commit()
+
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -1226,7 +1262,7 @@ def index():
                 "is_update": d.get("is_update"),
                 "updated_at": d.get("updated_at"),
             })
-    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, username=session.get('username'))
+    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, username=session.get('username'), role=session.get('role'))
 
 
 

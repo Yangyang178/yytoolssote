@@ -96,6 +96,7 @@ def auth():
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 session['email'] = user['email']
+                session['role'] = user['role']
                 
                 # 记录操作日志
                 log_message(
@@ -157,6 +158,7 @@ def auth():
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 session['email'] = user['email']
+                session['role'] = user['role']
                 
                 print(f"DEBUG: Session设置成功，user_id: {session['user_id']}")
                 # 记录操作日志
@@ -524,6 +526,8 @@ def upload():
         files = request.files.getlist('file')
         project_name = request.form.get('project_name')
         project_desc = request.form.get('project_desc')
+        upload_target = request.form.get('upload_target', 'user')
+        file_category = request.form.get('file_category')
         
         if not files or files[0].filename == '':
             flash('请选择文件')
@@ -532,6 +536,15 @@ def upload():
         # 处理文件上传（简化版，实际应包含安全检查）
         conn = get_db()
         try:
+            # 检查用户是否为管理员
+            current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+            is_admin = current_user and current_user['role'] == 'admin'
+            
+            # 确定上传目标用户ID
+            target_user_id = session['user_id']
+            if is_admin and upload_target == 'home':
+                target_user_id = 'default_user'
+            
             for file in files:
                 if file.filename == '':
                     continue
@@ -551,8 +564,13 @@ def upload():
                 # 插入数据库，包含created_at字段
                 conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, created_at) 
                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
-                           (file_id, session['user_id'], file.filename, stored_name, file_path, file_size, 
+                           (file_id, target_user_id, file.filename, stored_name, file_path, file_size, 
                             project_name, project_desc))
+                
+                # 使用用户选择的分类（仅管理员）
+                if is_admin and file_category:
+                    from app import get_or_create_category, assign_category_to_file
+                    assign_category_to_file(conn, file_id, file_category, target_user_id)
             
             conn.commit()
             flash('文件上传成功')
@@ -1647,11 +1665,22 @@ def file_delete(file_id):
     
     conn = get_db()
     try:
-        file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+        current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        is_admin = current_user and current_user['role'] == 'admin'
+        
+        file = conn.execute('SELECT * FROM files WHERE id = ? AND (user_id = ? OR user_id = "default_user")', 
                            (file_id, session['user_id'])).fetchone()
         if not file:
             flash('文件不存在或无权限')
-            return redirect(url_for('user_center'))
+            return redirect(url_for('index'))
+        
+        if file['user_id'] == 'default_user' and not is_admin:
+            flash('无权限删除首页文件')
+            return redirect(url_for('index'))
+        
+        if file['user_id'] != session['user_id'] and file['user_id'] != 'default_user':
+            flash('无权限删除此文件')
+            return redirect(url_for('index'))
         
         # 删除文件
         conn.execute('DELETE FROM files WHERE id = ?', (file_id,))
@@ -1677,9 +1706,12 @@ def file_delete(file_id):
             # 提取folder_id
             folder_id = referrer.split('/')[-1]
             return redirect(url_for('folder_detail', folder_id=folder_id))
-        else:
-            # 从其他页面删除的，跳回用户中心
+        elif referrer and 'user_center' in referrer:
+            # 从用户中心删除的，跳回用户中心
             return redirect(url_for('user_center'))
+        else:
+            # 从首页删除的，跳回首页
+            return redirect(url_for('index'))
     except Exception as e:
         conn.rollback()
         flash(f'删除文件失败: {str(e)}')
@@ -1690,9 +1722,12 @@ def file_delete(file_id):
             # 从文件夹详情页删除的，跳回文件夹详情页
             folder_id = referrer.split('/')[-1]
             return redirect(url_for('folder_detail', folder_id=folder_id))
-        else:
-            # 从其他页面删除的，跳回用户中心
+        elif referrer and 'user_center' in referrer:
+            # 从用户中心删除的，跳回用户中心
             return redirect(url_for('user_center'))
+        else:
+            # 从首页删除的，跳回首页
+            return redirect(url_for('index'))
     finally:
         conn.close()
 
@@ -1751,5 +1786,75 @@ def file_replace():
         conn.rollback()
         flash(f'替换文件失败: {str(e)}')
         return redirect(url_for('user_center'))
+    finally:
+        conn.close()
+
+# 权限管理页面
+@app.route('/permission-management')
+def permission_management():
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+    
+    conn = get_db()
+    try:
+        current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not current_user or current_user['role'] != 'admin':
+            flash('无权限访问此页面')
+            return redirect(url_for('user_center'))
+        
+        users = conn.execute('SELECT * FROM users ORDER BY created_at DESC').fetchall()
+    finally:
+        conn.close()
+    
+    return render_template('permission_management.html', 
+                           username=session.get('username'), 
+                           users=users,
+                           current_user=current_user)
+
+# 更新用户角色
+@app.route('/update-user-role/<user_id>', methods=['POST'])
+def update_user_role(user_id):
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+    
+    conn = get_db()
+    try:
+        current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not current_user or current_user['role'] != 'admin':
+            return jsonify({'success': False, 'message': '无权限'}), 403
+        
+        if user_id == session['user_id']:
+            return jsonify({'success': False, 'message': '不能修改自己的角色'}), 400
+        
+        new_role = request.form.get('role')
+        if new_role not in ['user', 'admin']:
+            return jsonify({'success': False, 'message': '无效的角色'}), 400
+        
+        conn.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': '角色更新成功'})
+    finally:
+        conn.close()
+
+# 删除用户
+@app.route('/delete-user/<user_id>', methods=['POST'])
+def delete_user(user_id):
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+    
+    conn = get_db()
+    try:
+        current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not current_user or current_user['role'] != 'admin':
+            return jsonify({'success': False, 'message': '无权限'}), 403
+        
+        if user_id == session['user_id']:
+            return jsonify({'success': False, 'message': '不能删除自己'}), 400
+        
+        conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': '用户删除成功'})
     finally:
         conn.close()

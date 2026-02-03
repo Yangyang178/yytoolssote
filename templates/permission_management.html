@@ -1,0 +1,345 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="user-center-container">
+    <div class="container">
+        <div class="page-header">
+            <h1 class="page-title">权限管理</h1>
+        </div>
+        
+        <!-- 返回按钮 -->
+        <div class="back-section">
+            <a href="{{ url_for('user_center') }}" class="btn btn-secondary">
+                <i>←</i> 返回用户中心
+            </a>
+        </div>
+        
+        <!-- 用户列表 -->
+        <div class="content-section">
+            <div class="section-header">
+                <h2 class="section-title">用户列表</h2>
+                <p class="section-desc">管理系统用户权限</p>
+            </div>
+            
+            <div class="users-list">
+                {% for user in users %}
+                <div class="user-item">
+                    <div class="user-info">
+                        <div class="user-avatar-small">
+                            {% if user.avatar %}
+                                <img src="{{ url_for('static', filename='avatars/' + user.avatar) }}" alt="{{ user.username }}">
+                            {% else %}
+                                <div class="avatar-icon-small">{{ user.username[0] | upper }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="user-details">
+                            <h3 class="user-name">{{ user.username }}</h3>
+                            <p class="user-email">{{ user.email }}</p>
+                            <p class="user-created">注册时间: {{ user.created_at }}</p>
+                            <div class="user-role-badge {{ 'role-admin' if user.role == 'admin' else 'role-user' }}">
+                                {{ '管理员' if user.role == 'admin' else '普通用户' }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="user-actions">
+                        {% if user.id != current_user.id %}
+                        <select class="role-select" data-user-id="{{ user.id }}" data-current-role="{{ user.role }}">
+                            <option value="user" {{ 'selected' if user.role == 'user' else '' }}>普通用户</option>
+                            <option value="admin" {{ 'selected' if user.role == 'admin' else '' }}>管理员</option>
+                        </select>
+                        <button class="btn btn-delete-user" data-user-id="{{ user.id }}" data-user-name="{{ user.username }}">
+                            <i>🗑️</i> 删除
+                        </button>
+                        {% else %}
+                        <span class="current-user-badge">当前用户</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 权限管理页面样式 */
+.permission-management-container {
+    padding: 120px 20px 60px;
+    background: #f8fafc;
+    min-height: calc(100vh - 120px);
+}
+
+.back-section {
+    margin-bottom: 30px;
+}
+
+.content-section {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+    padding: 32px;
+}
+
+.section-header {
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.section-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 16px 0;
+}
+
+.section-desc {
+    color: #64748b;
+    font-size: 1rem;
+    margin: 0;
+}
+
+.users-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.user-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.user-item:hover {
+    background: #f1f5f9;
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex: 1;
+}
+
+.user-avatar-small {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.user-avatar-small img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-icon-small {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: white;
+}
+
+.user-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.user-name {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+}
+
+.user-email {
+    font-size: 0.9375rem;
+    color: #64748b;
+    margin: 0 0 4px 0;
+}
+
+.user-created {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin: 0;
+}
+
+.user-role-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.role-admin {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+}
+
+.role-user {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+}
+
+.user-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.role-select {
+    padding: 8px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: #1e293b;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.role-select:hover {
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.btn-delete-user {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-delete-user:hover {
+    background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.current-user-badge {
+    padding: 8px 16px;
+    background: #e2e8f0;
+    color: #64748b;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .permission-management-container {
+        padding: 100px 16px 40px;
+    }
+    
+    .section-title {
+        font-size: 1.5rem;
+    }
+    
+    .user-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .user-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+    
+    .user-actions {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .role-select,
+    .btn-delete-user {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script>
+    // 更新用户角色
+    document.querySelectorAll('.role-select').forEach(select => {
+        select.addEventListener('change', function() {
+            const userId = this.dataset.userId;
+            const newRole = this.value;
+            const userName = this.dataset.userName;
+            
+            if (confirm(`确定要将用户 ${userName} 的角色更改为 ${newRole === 'admin' ? '管理员' : '普通用户'} 吗？`)) {
+                fetch(`/update-user-role/${userId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `role=${newRole}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('操作失败，请重试');
+                });
+            }
+        });
+    });
+    
+    // 删除用户
+    document.querySelectorAll('.btn-delete-user').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const userId = this.dataset.userId;
+            const userName = this.dataset.userName;
+            
+            if (confirm(`确定要删除用户 ${userName} 吗？此操作不可恢复。`)) {
+                fetch(`/delete-user/${userId}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(data.message);
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('操作失败，请重试');
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

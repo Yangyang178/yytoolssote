@@ -62,7 +62,7 @@
                         <p class="form-hint">公开的文件可以被其他用户访问</p>
                     </div>
                     
-                    {% if session.role == 'developer' %}
+                    {% if session.get('role') == 'admin' %}
                     <div class="form-group">
                         <label for="upload_target" class="form-label">上传位置</label>
                         <div class="radio-group">
@@ -76,6 +76,20 @@
                             </div>
                         </div>
                         <p class="form-hint">选择文件上传的目标位置</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="file_category" class="form-label">文件分类</label>
+                        <select id="file_category" name="file_category" class="form-select" required>
+                            <option value="">请选择分类</option>
+                            <option value="图片处理">图片处理</option>
+                            <option value="文件处理">文件处理</option>
+                            <option value="娱乐游戏">娱乐游戏</option>
+                            <option value="开发工具">开发工具</option>
+                            <option value="通用工具">通用工具</option>
+                            <option value="生活工具">生活工具</option>
+                        </select>
+                        <p class="form-hint">选择文件所属的分类</p>
                     </div>
                     {% endif %}
                 </div>

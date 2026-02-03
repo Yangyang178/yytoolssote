@@ -51,7 +51,7 @@
     <div class="section-header-wrapper">
       <h2 class="section-header">文件列表</h2>
       <div class="section-actions">
-        {% if session.role == 'developer' %}
+        {% if session.get('role') == 'admin' %}
         <a href="{{ url_for('upload') }}" class="btn btn-primary">
           <i class="icon-upload">📤</i> 上传新文件
         </a>
@@ -165,7 +165,7 @@
             <div class="file-actions">
               <a class="btn btn-detail file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>
               <a class="btn btn-download file-action" href="{{ url_for('download_local', stored_name=f.stored_name) }}">下载</a>
-              {% if session.role == 'developer' %}
+              {% if session.get('role') == 'admin' %}
               <form class="inline" action="{{ url_for('file_delete', file_id=f.id) }}" method="post" onsubmit="return confirm('确定要删除这个文件吗？此操作不可恢复。')">
                 <button class="btn btn-delete file-action" type="submit">删除</button>
               </form>

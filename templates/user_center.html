@@ -90,6 +90,26 @@
                             </a>
                         </div>
                     </div>
+                    
+                    <!-- 权限管理卡片 - 仅管理员可见 -->
+                    {% if user.role == 'admin' %}
+                    <div class="project-card">
+                        <div class="project-card-header">
+                            <div class="project-icon" style="background: linear-gradient(135deg, #EF4444, #DC2626);">
+                                <div style="font-size: 2rem; color: white;">🛡️</div>
+                            </div>
+                            <div class="project-info">
+                                <h3 class="project-title">权限管理</h3>
+                                <p class="project-desc">用户权限控制</p>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 12px; margin: 20px 0;">
+                            <a href="{{ url_for('permission_management') }}" class="btn" style="background: linear-gradient(135deg, #EF4444, #DC2626); color: white; border: none; width: 100%; padding: 12px; font-size: 1rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; justify-content: center;">
+                                <i>⚙️</i> 权限管理
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
                 
 
