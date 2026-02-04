@@ -74,13 +74,13 @@
     
     <!-- 分类筛选功能 -->
     <div class="category-filter">
-      <button class="category-btn active" data-category="all">全部</button>
-      <button class="category-btn" data-category="图片处理">图片处理</button>
-      <button class="category-btn" data-category="娱乐游戏">娱乐游戏</button>
-      <button class="category-btn" data-category="通用工具">通用工具</button>
-      <button class="category-btn" data-category="生活工具">生活工具</button>
-      <button class="category-btn" data-category="文件处理">文件处理</button>
-      <button class="category-btn" data-category="开发工具">开发工具</button>
+      <button class="category-btn active" data-category="all">全部 <span class="category-count" id="count-全部">0</span></button>
+      <button class="category-btn" data-category="图片处理">图片处理 <span class="category-count" id="count-图片处理">0</span></button>
+      <button class="category-btn" data-category="娱乐游戏">娱乐游戏 <span class="category-count" id="count-娱乐游戏">0</span></button>
+      <button class="category-btn" data-category="通用工具">通用工具 <span class="category-count" id="count-通用工具">0</span></button>
+      <button class="category-btn" data-category="生活工具">生活工具 <span class="category-count" id="count-生活工具">0</span></button>
+      <button class="category-btn" data-category="文件处理">文件处理 <span class="category-count" id="count-文件处理">0</span></button>
+      <button class="category-btn" data-category="开发工具">开发工具 <span class="category-count" id="count-开发工具">0</span></button>
     </div>
     
     {% if files %}
@@ -282,6 +282,20 @@
 .category-btn span {
   position: relative;
   z-index: 1;
+}
+
+.category-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
 }
 
 .category-btn:hover {

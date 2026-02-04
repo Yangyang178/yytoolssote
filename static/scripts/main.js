@@ -425,6 +425,61 @@ function initCategoryFilter() {
   const categoryBtns = document.querySelectorAll('.category-btn');
   const fileCards = document.querySelectorAll('.file-card');
   
+  // 统计每个分类的文件数量
+  function updateCategoryCounts() {
+    const categories = ['图片处理', '娱乐游戏', '通用工具', '生活工具', '文件处理', '开发工具'];
+    const counts = {
+      '图片处理': 0,
+      '娱乐游戏': 0,
+      '通用工具': 0,
+      '生活工具': 0,
+      '文件处理': 0,
+      '开发工具': 0,
+      '全部': 0
+    };
+    
+    fileCards.forEach(card => {
+      const cardCategories = card.dataset.categories || '';
+      const categoriesList = cardCategories.split(',').map(cat => cat.trim());
+      
+      categoriesList.forEach(category => {
+        if (counts.hasOwnProperty(category)) {
+          counts[category]++;
+        }
+      });
+      
+      // 统计全部数量
+      counts['全部']++;
+    });
+    
+    // 更新分类按钮上的数量显示
+    categories.forEach(category => {
+      const countElement = document.getElementById(`count-${category}`);
+      if (countElement) {
+        countElement.textContent = counts[category];
+      }
+    });
+    
+    // 更新全部按钮上的数量显示
+    const allCountElement = document.getElementById('count-全部');
+    if (allCountElement) {
+      allCountElement.textContent = counts['全部'];
+    }
+  }
+  
+  // 初始化时更新数量
+  updateCategoryCounts();
+  
+  // 监听文件卡片的变化，实时更新分类数量
+  const observer = new MutationObserver(() => {
+    updateCategoryCounts();
+  });
+  
+  observer.observe(document.querySelector('.files-grid'), {
+    childList: true,
+    subtree: true
+  });
+  
   categoryBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       // 移除所有按钮的active类
