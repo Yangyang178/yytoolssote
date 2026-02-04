@@ -160,7 +160,7 @@
           </div>
           <div class="file-card-footer">
             <div class="file-meta">
-              <div class="created-time">创建时间：{{ d and d.created_at or '-' }}</div>
+              <div class="created-time">上传时间：{{ d and d.created_at or '-' }}</div>
             </div>
             <div class="file-actions">
               <a class="btn btn-detail file-action" href="{{ url_for('file_detail', file_id=f.id) }}">详情</a>

@@ -1830,6 +1830,15 @@ def update_user_role(user_id):
         if new_role not in ['user', 'admin']:
             return jsonify({'success': False, 'message': '无效的角色'}), 400
         
+        # 检查是否为特定管理员账号
+        if current_user['email'] != 'yhz2024_2024@qq.com':
+            return jsonify({'success': False, 'message': '只有特定管理员账号才能修改其他用户的角色'}), 403
+        
+        # 检查被修改的用户是否为管理员
+        target_user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if target_user and target_user['role'] == 'admin':
+            return jsonify({'success': False, 'message': '不能修改管理员的角色'}), 400
+        
         conn.execute('UPDATE users SET role = ? WHERE id = ?', (new_role, user_id))
         conn.commit()
         
@@ -1851,6 +1860,15 @@ def delete_user(user_id):
         
         if user_id == session['user_id']:
             return jsonify({'success': False, 'message': '不能删除自己'}), 400
+        
+        # 检查是否为特定管理员账号
+        if current_user['email'] != 'yhz2024_2024@qq.com':
+            return jsonify({'success': False, 'message': '只有特定管理员账号才能删除其他用户'}), 403
+        
+        # 检查被删除的用户是否为管理员
+        target_user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+        if target_user and target_user['role'] == 'admin':
+            return jsonify({'success': False, 'message': '不能删除管理员'}), 400
         
         conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
         conn.commit()
