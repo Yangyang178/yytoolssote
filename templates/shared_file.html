@@ -1,0 +1,209 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="shared-file-container">
+    <div class="container">
+        <div class="share-card">
+            <div class="share-header">
+                <div class="share-icon">📄</div>
+                <h1 class="share-title">文件分享</h1>
+                <p class="share-subtitle">来自 {{ share.username }} 的分享</p>
+            </div>
+            
+            <div class="file-info-section">
+                <div class="info-item">
+                    <span class="info-label">文件名：</span>
+                    <span class="info-value">{{ file.filename }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">文件大小：</span>
+                    <span class="info-value">{{ (file.size / 1024) | round(2) }} KB</span>
+                </div>
+                {% if file.project_name %}
+                <div class="info-item">
+                    <span class="info-label">项目名称：</span>
+                    <span class="info-value">{{ file.project_name }}</span>
+                </div>
+                {% endif %}
+                {% if file.project_desc %}
+                <div class="info-item">
+                    <span class="info-label">项目描述：</span>
+                    <span class="info-value">{{ file.project_desc }}</span>
+                </div>
+                {% endif %}
+                <div class="info-item">
+                    <span class="info-label">分享时间：</span>
+                    <span class="info-value">{{ file.created_at }}</span>
+                </div>
+                {% if file.expires_at %}
+                <div class="info-item">
+                    <span class="info-label">有效期至：</span>
+                    <span class="info-value expires">{{ file.expires_at }}</span>
+                </div>
+                {% endif %}
+                <div class="info-item">
+                    <span class="info-label">访问次数：</span>
+                    <span class="info-value">{{ file.access_count }} 次</span>
+                </div>
+            </div>
+            
+            <div class="share-actions">
+                <a href="{{ url_for('download_shared_file', share_code=share.share_code) }}" class="btn btn-download">
+                    <i class="download-icon">⬇️</i> 下载文件
+                </a>
+                <a href="{{ url_for('index') }}" class="btn btn-secondary">
+                    <i class="home-icon">🏠</i> 返回首页
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.shared-file-container {
+    padding: 120px 20px 60px;
+    margin: 0;
+    background: #f8fafc;
+    min-height: calc(100vh - 120px);
+}
+
+.shared-file-container .container {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.share-card {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    padding: 40px;
+    margin-top: 40px;
+}
+
+.share-header {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.share-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.share-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 10px;
+}
+
+.share-subtitle {
+    font-size: 1rem;
+    color: #64748b;
+}
+
+.file-info-section {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 30px;
+}
+
+.info-item {
+    display: flex;
+    padding: 12px 0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.info-item:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #64748b;
+    min-width: 120px;
+}
+
+.info-value {
+    color: #1e293b;
+    flex: 1;
+}
+
+.info-value.expires {
+    color: #EF4444;
+    font-weight: 600;
+}
+
+.share-actions {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    border: none;
+}
+
+.btn-download {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 2px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+    color: #334155;
+    transform: translateY(-1px);
+}
+
+@media (max-width: 768px) {
+    .shared-file-container {
+        padding: 100px 16px 40px;
+    }
+    
+    .share-card {
+        padding: 24px;
+    }
+    
+    .info-item {
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .info-label {
+        min-width: auto;
+    }
+    
+    .share-actions {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}

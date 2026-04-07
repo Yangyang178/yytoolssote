@@ -311,4 +311,114 @@ window.addEventListener('DOMContentLoaded', () => {
     if (searchResultsInfo && !fileSearch.value.trim()) {
         searchResultsInfo.textContent = '';
     }
+    
+    // 初始化分享功能
+    initShareFunctionality();
+});
+
+// ==================== 文件分享功能 ====================
+
+let currentShareFileId = null;
+
+// 初始化分享功能
+function initShareFunctionality() {
+    // 为所有分享按钮添加点击事件
+    document.querySelectorAll('.action-share').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const fileId = this.dataset.fileId;
+            const fileName = this.dataset.fileName;
+            openShareModal(fileId, fileName);
+        });
+    });
+}
+
+// 打开分享弹窗
+function openShareModal(fileId, fileName) {
+    currentShareFileId = fileId;
+    document.getElementById('shareFileName').textContent = fileName;
+    document.getElementById('shareLinkSection').style.display = 'none';
+    document.getElementById('generateShareBtn').style.display = 'inline-flex';
+    document.getElementById('shareModal').classList.remove('hidden');
+    document.getElementById('shareModal').style.display = 'block';
+}
+
+// 关闭分享弹窗
+function closeShareModal() {
+    document.getElementById('shareModal').classList.add('hidden');
+    document.getElementById('shareModal').style.display = 'none';
+    currentShareFileId = null;
+}
+
+// 生成分享链接
+async function generateShareLink() {
+    if (!currentShareFileId) {
+        alert('文件ID不存在');
+        return;
+    }
+    
+    const expiresHours = document.getElementById('shareExpires').value;
+    const btn = document.getElementById('generateShareBtn');
+    
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-icon">⏳</span> 生成中...';
+    
+    try {
+        const response = await fetch('/api/share-file', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file_id: currentShareFileId,
+                expires_hours: parseInt(expiresHours)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('shareLinkInput').value = data.data.share_url;
+            document.getElementById('shareExpiresInfo').textContent = 
+                `有效期至: ${data.data.expires_at}`;
+            document.getElementById('shareLinkSection').style.display = 'block';
+            document.getElementById('generateShareBtn').style.display = 'none';
+        } else {
+            alert('生成分享链接失败: ' + data.message);
+        }
+    } catch (error) {
+        alert('生成分享链接失败: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span class="btn-icon">🔗</span> 生成分享链接';
+    }
+}
+
+// 复制分享链接
+function copyShareLink() {
+    const linkInput = document.getElementById('shareLinkInput');
+    linkInput.select();
+    linkInput.setSelectionRange(0, 99999);
+    
+    try {
+        navigator.clipboard.writeText(linkInput.value);
+        const btn = document.querySelector('.btn-copy');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="copy-icon">✓</span> 已复制';
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+        }, 2000);
+    } catch (err) {
+        document.execCommand('copy');
+        alert('链接已复制到剪贴板');
+    }
+}
+
+// 点击分享弹窗外部关闭
+window.addEventListener('click', (e) => {
+    const shareModal = document.getElementById('shareModal');
+    if (e.target === shareModal) {
+        closeShareModal();
+    }
 });

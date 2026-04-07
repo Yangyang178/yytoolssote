@@ -112,6 +112,10 @@
               <div class="file-size">{{ (f.size or 0) | int }} B</div>
             </div>
             <div class="file-interactions">
+              <div class="interaction-stat">
+                <i class="icon-view">👁️</i>
+                <span class="count">{{ f.view_count or 0 }}</span>
+              </div>
               <button class="interaction-btn like-btn" data-file-id="{{ f.id }}">
                 <i class="icon-like">❤️</i>
                 <span class="count">0</span>

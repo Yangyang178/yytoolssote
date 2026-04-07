@@ -1,4 +1,4 @@
-# 路由定义文件
+﻿# 路由定义文件
 # 基于模板文件和现有功能重构路由
 
 # 导入必要的模块和函数
@@ -205,13 +205,18 @@ def auth():
                 code = generate_verification_code()
                 # 先保存验证码到数据库
                 save_verification_code(email, code, purpose)
-                # 异步发送验证码邮件
-                import threading
-                email_thread = threading.Thread(target=send_verification_email, args=(email, code, purpose))
-                email_thread.daemon = True
-                email_thread.start()
                 
-                return api_response(success=True, message='验证码已发送')
+                # 同步发送验证码邮件，捕获异常
+                try:
+                    send_verification_email(email, code, purpose)
+                    return api_response(success=True, message='验证码已发送，请查收邮件')
+                except Exception as email_error:
+                    # 邮件发送失败，返回错误信息
+                    error_msg = str(email_error)
+                    if 'SMTP配置不完整' in error_msg:
+                        return api_response(success=False, message='邮件服务未配置，请联系管理员配置SMTP邮箱服务', code=500)
+                    else:
+                        return api_response(success=False, message=f'验证码发送失败: {error_msg}', code=500)
             except Exception as e:
                 return api_response(success=False, message=f'发送验证码失败: {str(e)}', code=500)
             finally:
@@ -982,17 +987,32 @@ def upload_to_folder(folder_id):
             flash('文件夹不存在或无权限')
             return redirect(url_for('folder_detail', folder_id=folder_id))
         
-        # 生成唯一文件名
-        file_id = str(uuid.uuid4())
-        ext = os.path.splitext(file.filename)[1]
-        stored_name = f"{file_id}{ext}"
+        # 检查存储空间
+        from app import get_user_storage_usage
+        storage_usage = get_user_storage_usage(session['user_id'])
         
-        # 保存文件
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
-        file.save(file_path)
-        
-        # 计算文件大小
-        file_size = os.path.getsize(file_path)
+        # 先保存文件到临时位置以获取大小
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            file.save(tmp_file.name)
+            file_size = os.path.getsize(tmp_file.name)
+            
+            # 检查上传后是否会超过限制
+            if storage_usage['total_size'] + file_size > storage_usage['max_storage']:
+                # 删除临时文件
+                os.unlink(tmp_file.name)
+                flash(f'存储空间不足！已使用 {storage_usage["total_size"] / (1024*1024):.2f}MB，剩余空间不足以存储此文件（{file_size / (1024*1024):.2f}MB）')
+                return redirect(url_for('folder_detail', folder_id=folder_id))
+            
+            # 生成唯一文件名
+            file_id = str(uuid.uuid4())
+            ext = os.path.splitext(file.filename)[1]
+            stored_name = f"{file_id}{ext}"
+            
+            # 移动文件到最终位置
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
+            import shutil
+            shutil.move(tmp_file.name, file_path)
         
         # 插入数据库
         conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_desc, folder_id, created_at) 
@@ -1046,26 +1066,49 @@ def upload_folder_to_folder(folder_id):
             flash('文件夹不存在或无权限')
             return redirect(url_for('folder_detail', folder_id=folder_id))
         
-        uploaded_files_count = 0
+        # 检查存储空间
+        from app import get_user_storage_usage
+        storage_usage = get_user_storage_usage(session['user_id'])
         
+        uploaded_files_count = 0
+        total_upload_size = 0
+        
+        # 先计算所有文件的总大小
+        import tempfile
+        temp_files = []
         for file in files:
             if file.filename == '' or not hasattr(file, 'filename'):
                 continue
             
-            # 获取文件的相对路径（包含文件夹结构）
-            relative_path = file.filename
-            
+            # 保存到临时文件
+            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+                file.save(tmp_file.name)
+                file_size = os.path.getsize(tmp_file.name)
+                temp_files.append((tmp_file.name, file.filename, file_size))
+                total_upload_size += file_size
+        
+        # 检查总空间是否足够
+        if storage_usage['total_size'] + total_upload_size > storage_usage['max_storage']:
+            # 删除所有临时文件
+            for tmp_path, _, _ in temp_files:
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+            flash(f'存储空间不足！已使用 {storage_usage["total_size"] / (1024*1024):.2f}MB，剩余空间不足以存储此文件夹（{total_upload_size / (1024*1024):.2f}MB）')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+        
+        # 移动文件到最终位置并插入数据库
+        for tmp_path, relative_path, file_size in temp_files:
             # 生成唯一文件名
             file_id = str(uuid.uuid4())
             ext = os.path.splitext(relative_path)[1]
             stored_name = f"{file_id}{ext}"
             
-            # 保存文件
+            # 移动文件到最终位置
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
-            file.save(file_path)
-            
-            # 计算文件大小
-            file_size = os.path.getsize(file_path)
+            import shutil
+            shutil.move(tmp_path, file_path)
             
             # 插入数据库，保存相对路径作为项目名称，方便识别文件夹结构
             conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, folder_id, created_at) 
@@ -1200,7 +1243,16 @@ def project_folders():
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         folders = conn.execute('SELECT * FROM folders WHERE user_id = ? AND (parent_id IS NULL OR parent_id = "") ORDER BY created_at DESC', 
                               (session['user_id'],)).fetchall()
-        return render_template('project_folders.html', username=session.get('username'), user=user, folders=folders)
+        
+        # 获取用户存储空间使用情况
+        from app import get_user_storage_usage
+        storage_usage = get_user_storage_usage(session['user_id'])
+        
+        return render_template('project_folders.html', 
+                             username=session.get('username'), 
+                             user=user, 
+                             folders=folders,
+                             storage_usage=storage_usage)
     finally:
         conn.close()
 
@@ -1627,6 +1679,9 @@ def download_local(stored_name):
         file = conn.execute('SELECT id FROM files WHERE stored_name = ?', (stored_name,)).fetchone()
         if file:
             log_access(file['id'], 'download', request)
+            # 更新访问计数
+            conn.execute('UPDATE files SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?', (file['id'],))
+            conn.commit()
     finally:
         conn.close()
     return send_from_directory(app.config['UPLOAD_FOLDER'], stored_name, as_attachment=True)
@@ -1647,6 +1702,10 @@ def file_detail(file_id):
         
         # 记录访问日志
         log_access(file_id, 'view', request)
+        
+        # 更新访问计数
+        conn.execute('UPDATE files SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?', (file_id,))
+        conn.commit()
         
         # 解析dkfile字段
         item_dict = dict(item)
@@ -1874,5 +1933,110 @@ def delete_user(user_id):
         conn.commit()
         
         return jsonify({'success': True, 'message': '用户删除成功'})
+    finally:
+        conn.close()
+
+
+# File Share Functions
+
+# Generate share link
+@app.route('/api/share-file', methods=['POST'])
+def share_file():
+    if 'user_id' not in session:
+        return api_response(success=False, message='Please login first', code=401)
+    
+    data = request.get_json()
+    file_id = data.get('file_id')
+    expires_hours = data.get('expires_hours', 24)
+    
+    if not file_id:
+        return api_response(success=False, message='File ID is required', code=400)
+    
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+        if not file:
+            return api_response(success=False, message='File not found', code=404)
+        
+        import secrets
+        share_code = secrets.token_urlsafe(8)
+        share_id = str(uuid.uuid4())
+        
+        from datetime import datetime, timedelta
+        expires_at = datetime.now() + timedelta(hours=expires_hours)
+        
+        conn.execute('''INSERT INTO file_shares (id, file_id, user_id, share_code, expires_at)
+                       VALUES (?, ?, ?, ?, ?)''',
+                    (share_id, file_id, session['user_id'], share_code, expires_at))
+        conn.commit()
+        
+        share_url = url_for('shared_file', share_code=share_code, _external=True)
+        
+        return api_response(success=True, message='Share link generated successfully', data={
+            'share_url': share_url,
+            'share_code': share_code,
+            'expires_at': expires_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'Failed to generate share link: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# Access shared file page
+@app.route('/s/<share_code>')
+def shared_file(share_code):
+    conn = get_db()
+    try:
+        share = conn.execute('''SELECT fs.*, f.filename, f.stored_name, f.size, f.project_name, f.project_desc, u.username
+                              FROM file_shares fs
+                              JOIN files f ON fs.file_id = f.id
+                              JOIN users u ON fs.user_id = u.id
+                              WHERE fs.share_code = ?''', (share_code,)).fetchone()
+        
+        if not share:
+            return render_template('share_error.html', error='Share link does not exist or has expired')
+        
+        from datetime import datetime
+        if share['expires_at']:
+            expires_at = datetime.fromisoformat(str(share['expires_at']))
+            if datetime.now() > expires_at:
+                return render_template('share_error.html', error='Share link has expired')
+        
+        conn.execute('UPDATE file_shares SET access_count = access_count + 1 WHERE share_code = ?', (share_code,))
+        conn.commit()
+        
+        return render_template('shared_file.html',
+                             share=share,
+                             file=share)
+    finally:
+        conn.close()
+
+# Download shared file
+@app.route('/download-shared/<share_code>')
+def download_shared_file(share_code):
+    conn = get_db()
+    try:
+        share = conn.execute('''SELECT fs.*, f.stored_name, f.filename
+                              FROM file_shares fs
+                              JOIN files f ON fs.file_id = f.id
+                              WHERE fs.share_code = ?''', (share_code,)).fetchone()
+        
+        if not share:
+            flash('Share link does not exist or has expired')
+            return redirect(url_for('index'))
+        
+        from datetime import datetime
+        if share['expires_at']:
+            expires_at = datetime.fromisoformat(str(share['expires_at']))
+            if datetime.now() > expires_at:
+                flash('Share link has expired')
+                return redirect(url_for('index'))
+        
+        from flask import send_from_directory
+        upload_folder = app.config['UPLOAD_FOLDER']
+        return send_from_directory(upload_folder, share['stored_name'], 
+                                 as_attachment=True, 
+                                 download_name=share['filename'])
     finally:
         conn.close()

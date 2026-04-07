@@ -200,6 +200,13 @@ def init_db():
             # 字段已经存在，跳过
             pass
         
+        # 检查并添加view_count字段到现有files表
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN view_count INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            # 字段已经存在，跳过
+            pass
+        
         # 创建folders表
         conn.execute('''CREATE TABLE IF NOT EXISTS folders (
                         id TEXT PRIMARY KEY,
@@ -365,6 +372,19 @@ def init_db():
                         prompt TEXT NOT NULL,
                         response TEXT NOT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )''')
+        
+        # 创建文件分享链接表
+        conn.execute('''CREATE TABLE IF NOT EXISTS file_shares (
+                        id TEXT PRIMARY KEY,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        share_code TEXT NOT NULL UNIQUE,
+                        expires_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        access_count INTEGER DEFAULT 0,
+                        FOREIGN KEY (file_id) REFERENCES files (id),
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )''')
         
@@ -663,6 +683,7 @@ def get_all_files(user_id=None):
                 except:
                     # 如果解析失败，保持原格式
                     pass
+            view_count = row["view_count"] if "view_count" in row.keys() else 0
             result.append({
                 "id": file_id, 
                 "filename": row["filename"], 
@@ -674,6 +695,7 @@ def get_all_files(user_id=None):
                 "project_desc": row["project_desc"],
                 "like_count": like_count,
                 "favorite_count": favorite_count,
+                "view_count": view_count,
                 "categories": categories,
                 "tags": tags,
                 "created_at": created_at
@@ -921,6 +943,31 @@ def delete_file(file_id, user_id):
     finally:
         conn.close()
 
+
+def get_user_storage_usage(user_id):
+    """获取用户存储空间使用情况"""
+    conn = get_db()
+    try:
+        # 计算用户所有文件的总大小（包括文件夹中的文件）
+        result = conn.execute('''
+            SELECT COALESCE(SUM(size), 0) as total_size
+            FROM files 
+            WHERE user_id = ?
+        ''', (user_id,)).fetchone()
+        
+        total_size = result['total_size'] if result else 0
+        
+        # 定义总空间限制（1GB）
+        MAX_STORAGE = 1 * 1024 * 1024 * 1024  # 1GB in bytes
+        
+        return {
+            'total_size': total_size,
+            'max_storage': MAX_STORAGE,
+            'used_percentage': (total_size / MAX_STORAGE * 100) if MAX_STORAGE > 0 else 0,
+            'is_over_limit': total_size >= MAX_STORAGE
+        }
+    finally:
+        conn.close()
 
 
 def log_access(file_id, action, request):
@@ -1310,4 +1357,4 @@ if __name__ == "__main__":
     init_db()
     # 清理超过一周的日志记录
     cleanup_old_logs()
-    app.run(debug=True, port=9876)
+    app.run(debug=True, host='0.0.0.0', port=9876)

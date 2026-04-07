@@ -199,7 +199,7 @@
                             <div class="user-file-card" data-search="{{ f.filename }} {{ f.project_name or '' }} {{ f.project_desc or '' }} {% for category in f.categories|default([]) %}{{ category.name }} {% endfor %} {% for tag in f.tags|default([]) %}{{ tag.name }} {% endfor %}">
                                 <div class="file-card-top">
                                     <div class="file-name-large">{{ f.filename }}</div>
-                                    <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" data-file-url="{{ url_for('open_local', stored_name=f.stored_name, _external=True) }}" title="分享文件链接">
+                                    <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" title="分享文件链接">
                                         分享
                                     </button>
                                 </div>
@@ -313,7 +313,7 @@
                                   <div class="file-size">{{ (f.size or 0) | int }} B</div>
                                 </div>
                                 <div class="file-card-actions-top">
-                                  <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" data-file-url="{{ url_for('open_local', stored_name=f.stored_name, _external=True) }}" title="分享文件链接">
+                                  <button class="file-action-btn action-share" data-file-id="{{ f.id }}" data-file-name="{{ f.filename }}" title="分享文件链接">
                                     分享
                                   </button>
                                 </div>
@@ -549,6 +549,138 @@
 
 <div id="app-data" data-is-logged-in="{{ user is not none | tojson | safe }}" class="hidden"></div>
 
-<script src="{{ url_for('static', filename='user_center.js') }}"></script>
+<!-- 分享文件弹窗 -->
+<div id="shareModal" class="modal hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 class="modal-title">
+                <span class="modal-icon">🔗</span>
+                分享文件
+            </h3>
+            <button class="modal-close" onclick="closeShareModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="share-info">
+                <div class="share-file-name" id="shareFileName"></div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">有效期</label>
+                <select id="shareExpires" class="form-select">
+                    <option value="1">1小时</option>
+                    <option value="24" selected>24小时</option>
+                    <option value="168">7天</option>
+                    <option value="720">30天</option>
+                    <option value="0">永久有效</option>
+                </select>
+            </div>
+            
+            <div class="share-link-section" id="shareLinkSection" style="display: none;">
+                <label class="form-label">分享链接</label>
+                <div class="share-link-container">
+                    <input type="text" id="shareLinkInput" class="form-input" readonly>
+                    <button class="btn btn-copy" onclick="copyShareLink()">
+                        <span class="copy-icon">📋</span> 复制
+                    </button>
+                </div>
+                <div class="share-expires-info" id="shareExpiresInfo"></div>
+            </div>
+        </div>
+        
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeShareModal()">
+                <span class="btn-icon">✕</span>
+                取消
+            </button>
+            <button type="button" class="btn btn-primary" id="generateShareBtn" onclick="generateShareLink()">
+                <span class="btn-icon">🔗</span>
+                生成分享链接
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 分享弹窗样式 */
+.share-info {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.share-file-name {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 1.125rem;
+}
+
+.form-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 1rem;
+    background: white;
+    color: #1e293b;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.share-link-section {
+    margin-top: 20px;
+}
+
+.share-link-container {
+    display: flex;
+    gap: 12px;
+}
+
+.share-link-container .form-input {
+    flex: 1;
+}
+
+.btn-copy {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.btn-copy:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.share-expires-info {
+    margin-top: 12px;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+@media (max-width: 768px) {
+    .share-link-container {
+        flex-direction: column;
+    }
+    
+    .btn-copy {
+        width: 100%;
+        justify-content: center;
+    }
+}
+</style>
+
+<script src="{{ url_for('static', filename='user_center.js') }}"></script>      
 
 {% endblock %}
