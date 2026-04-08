@@ -63,7 +63,7 @@ def assign_category_to_file(conn, file_id, category_name, user_id):
 
 BASE_DIR = Path(__file__).parent
 load_dotenv(BASE_DIR / ".env")
-UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 DATA_DIR = BASE_DIR / "data"
 DB_FILE = DATA_DIR / "db.sqlite"
 

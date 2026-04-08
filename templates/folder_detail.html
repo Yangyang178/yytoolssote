@@ -19,6 +19,9 @@
                 <button class="btn btn-upload" id="upload-file-btn">
                     <i class="upload-icon">📤</i> 上传文件
                 </button>
+                <button class="btn btn-batch-upload" id="batch-upload-btn">
+                    <i class="upload-icon">📤</i> 批量上传
+                </button>
                 <button class="btn btn-upload-folder" id="upload-folder-btn">
                     <i class="upload-folder-icon">📁</i> 上传文件夹
                 </button>
@@ -59,6 +62,36 @@
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" id="cancel-folder-upload-btn">取消</button>
                         <button type="submit" class="btn btn-primary">上传文件夹</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 批量上传表单 -->
+            <div class="content-section" id="batch-upload-form" style="display: none;">
+                <h3 class="section-title">📤 批量上传文件</h3>
+                <form id="batch-file-form" action="{{ url_for('batch_upload_files', folder_id=folder.id) }}" method="post" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label">选择文件（支持多选）</label>
+                        <div class="batch-upload-area" id="batch-upload-area">
+                            <div class="upload-placeholder">
+                                <span class="upload-icon-large">📁</span>
+                                <p>拖拽文件到此处，或点击选择文件</p>
+                                <p class="upload-hint">支持同时选择多个文件上传</p>
+                            </div>
+                            <input type="file" id="batch-file-input" name="files" class="batch-file-input" multiple required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="batch-description" class="form-label">文件描述（可选，将应用于所有文件）</label>
+                        <textarea id="batch-description" name="description" class="form-textarea" placeholder="请输入文件描述" rows="3"></textarea>
+                    </div>
+                    <div class="selected-files-list" id="selected-files-list" style="display: none;">
+                        <label class="form-label">已选择文件：</label>
+                        <div class="files-preview" id="files-preview"></div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" id="cancel-batch-upload-btn">取消</button>
+                        <button type="submit" class="btn btn-primary" id="batch-upload-submit">开始上传</button>
                     </div>
                 </form>
             </div>
@@ -116,6 +149,12 @@
                             <button class="btn btn-batch-delete" id="batch-delete-btn" disabled>
                                 <i class="delete-icon">🗑️</i> 批量删除 (0)
                             </button>
+                            <button class="btn btn-batch-download" id="batch-download-btn" disabled>
+                                <i class="download-icon">📥</i> 批量下载 (0)
+                            </button>
+                            <button class="btn btn-batch-move" id="batch-move-btn" disabled>
+                                <i class="move-icon">📁</i> 批量移动 (0)
+                            </button>
                         </div>
                         <!-- 搜索区域 -->
                         <div class="search-container">
@@ -153,8 +192,15 @@
                             <div class="file-actions">
                                 <a href="{{ url_for('file_detail', file_id=file.id) }}" class="btn btn-detail">详情</a>
                                 <a href="{{ url_for('download_local', stored_name=file.stored_name) }}" class="btn btn-download">下载</a>
-                                <!-- 预览按钮 - 仅支持图片和PDF -->
-                                {% if file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf')) %}
+                                <!-- 预览按钮 - 支持多种文件类型 -->
+                                {% set filename_lower = file.filename.lower() %}
+                                {% if filename_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg')) or 
+                                      filename_lower.endswith('.pdf') or
+                                      filename_lower.endswith(('.mp4', '.webm', '.ogg', '.mov', '.avi')) or
+                                      filename_lower.endswith(('.mp3', '.wav', '.m4a', '.flac', '.aac')) or
+                                      filename_lower.endswith(('.py', '.js', '.ts', '.html', '.css', '.json', '.xml', '.sql')) or
+                                      filename_lower.endswith(('.java', '.cpp', '.c', '.h', '.go', '.rs', '.php', '.sh')) or
+                                      filename_lower.endswith(('.yaml', '.yml', '.md', '.markdown', '.txt', '.log', '.csv')) %}
                                     <button class="btn btn-preview" onclick="previewFile('{{ file.id }}', '{{ file.filename }}', '{{ url_for('static', filename='uploads/' + file.stored_name) }}')">
                                         <i class="preview-icon">👁️</i> 预览
                                     </button>
@@ -215,20 +261,78 @@
                 </div>
             </div>
             
+            <!-- 批量移动弹窗 -->
+            <div id="batch-move-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">📁 批量移动文件</h2>
+                        <button class="btn btn-close" onclick="closeBatchMoveModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="move-info">已选择 <span id="move-file-count">0</span> 个文件</p>
+                        <div class="form-group">
+                            <label class="form-label">选择目标文件夹：</label>
+                            <select id="target-folder-select" class="form-input folder-select">
+                                <option value="">-- 请选择文件夹 --</option>
+                                <option value="root">根目录（移出文件夹）</option>
+                                {% for f in user_folders %}
+                                    <option value="{{ f.id }}">{{ f.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="selected-files-preview" id="move-files-preview"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-cancel" onclick="closeBatchMoveModal()">取消</button>
+                        <button class="btn btn-primary" id="confirm-batch-move">确认移动</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 批量下载进度弹窗 -->
+            <div id="batch-download-modal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">📥 批量下载</h2>
+                        <button class="btn btn-close" onclick="closeBatchDownloadModal()">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="download-info">正在打包 <span id="download-file-count">0</span> 个文件...</p>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="download-progress-bar"></div>
+                        </div>
+                        <p class="progress-text" id="download-progress-text">准备中...</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-cancel" onclick="closeBatchDownloadModal()">取消</button>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 文件预览弹窗 -->
             <div id="file-preview-modal" class="modal" style="display: none;">
                 <div class="modal-content modal-preview-content">
                     <div class="modal-header">
                         <h2 class="modal-title" id="preview-file-name">文件预览</h2>
+                        <div class="preview-toolbar">
+                            <button class="btn btn-toolbar" id="toggle-source-btn" style="display: none;">
+                                <span id="toggle-source-text">查看源码</span>
+                            </button>
+                            <button class="btn btn-toolbar" id="copy-code-btn" style="display: none;">
+                                📋 复制代码
+                            </button>
+                            <button class="btn btn-toolbar" id="fullscreen-btn">
+                                ⛶ 全屏
+                            </button>
+                        </div>
                         <button class="btn btn-close" onclick="closePreviewModal()">&times;</button>
                     </div>
                     <div class="modal-body modal-preview-body">
-                        <!-- 预览内容容器 -->
                         <div id="preview-content">
-                            <!-- 预览内容将通过JavaScript动态加载 -->
                         </div>
                     </div>
                     <div class="modal-footer">
+                        <span id="preview-file-info" class="preview-file-info"></span>
                         <button class="btn btn-cancel" onclick="closePreviewModal()">关闭</button>
                     </div>
                 </div>
@@ -791,6 +895,242 @@
     box-shadow: none;
 }
 
+/* 批量下载按钮样式 */
+.btn-batch-download {
+    background: linear-gradient(135deg, #10B981, #059669);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 24px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+}
+
+.btn-batch-download:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.35);
+    background: linear-gradient(135deg, #059669, #047857);
+}
+
+.btn-batch-download:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 批量移动按钮样式 */
+.btn-batch-move {
+    background: linear-gradient(135deg, #8B5CF6, #7C3AED);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 24px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
+
+.btn-batch-move:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.35);
+    background: linear-gradient(135deg, #7C3AED, #6D28D9);
+}
+
+.btn-batch-move:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* 批量上传按钮样式 */
+.btn-batch-upload {
+    background: linear-gradient(135deg, #F59E0B, #D97706);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 28px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.25);
+}
+
+.btn-batch-upload:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35);
+}
+
+/* 批量上传区域样式 */
+.batch-upload-area {
+    border: 2px dashed #d1d5db;
+    border-radius: 16px;
+    padding: 40px 20px;
+    text-align: center;
+    background: #f9fafb;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+.batch-upload-area:hover,
+.batch-upload-area.drag-over {
+    border-color: #667eea;
+    background: #f0f4ff;
+}
+
+.upload-placeholder {
+    pointer-events: none;
+}
+
+.upload-icon-large {
+    font-size: 3rem;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.upload-hint {
+    font-size: 0.875rem;
+    color: #9ca3af;
+    margin-top: 8px;
+}
+
+.batch-file-input {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.selected-files-list {
+    margin-top: 20px;
+    padding: 16px;
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+}
+
+.files-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.file-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    font-size: 0.875rem;
+}
+
+.file-preview-item .file-icon-small {
+    font-size: 1rem;
+}
+
+.file-preview-item .file-name-small {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-preview-item .file-size-small {
+    color: #9ca3af;
+    font-size: 0.75rem;
+}
+
+/* 移动弹窗样式 */
+.move-info {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 16px;
+}
+
+.folder-select {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e2e8f0;
+    border-radius: 12px;
+    font-size: 1rem;
+    background: white;
+    cursor: pointer;
+}
+
+.selected-files-preview {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.selected-files-preview .file-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.selected-files-preview .file-item:last-child {
+    border-bottom: none;
+}
+
+/* 进度条样式 */
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 16px 0;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.progress-text {
+    font-size: 0.875rem;
+    color: #64748b;
+    text-align: center;
+}
+
+.download-info {
+    font-size: 1rem;
+    color: #64748b;
+    margin-bottom: 8px;
+}
+
 /* 搜索区域样式 */
 .search-container {
     display: flex;
@@ -933,6 +1273,434 @@
     border: none;
     border-radius: 8px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 预览工具栏样式 */
+.preview-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-left: auto;
+    margin-right: 16px;
+}
+
+.btn-toolbar {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-toolbar:hover {
+    background: #e2e8f0;
+    color: #334155;
+}
+
+/* 预览文件信息 */
+.preview-file-info {
+    flex: 1;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+/* 视频预览样式 */
+#preview-content video {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+/* 音频预览样式 */
+#preview-content audio {
+    width: 100%;
+    max-width: 500px;
+    margin: 20px auto;
+    display: block;
+}
+
+.audio-preview-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    min-height: 200px;
+}
+
+.audio-preview-container .audio-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.audio-preview-container .audio-name {
+    color: white;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+}
+
+.audio-preview-container audio {
+    filter: sepia(20%) saturate(70%) grayscale(1) contrast(99%) invert(12%);
+}
+
+/* 代码预览样式 */
+.code-preview-container {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.code-preview-container pre {
+    margin: 0;
+    padding: 20px;
+    font-family: 'Fira Code', 'Consolas', 'Monaco', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    tab-size: 4;
+    overflow-x: auto;
+    white-space: pre;
+}
+
+.code-preview-container code {
+    font-family: inherit;
+    background: transparent;
+    padding: 0;
+}
+
+/* Prism.js 主题覆盖 */
+.code-preview-container .token.comment,
+.code-preview-container .token.prolog,
+.code-preview-container .token.doctype,
+.code-preview-container .token.cdata {
+    color: #6a9955;
+}
+
+.code-preview-container .token.punctuation {
+    color: #d4d4d4;
+}
+
+.code-preview-container .token.property,
+.code-preview-container .token.tag,
+.code-preview-container .token.boolean,
+.code-preview-container .token.number,
+.code-preview-container .token.constant,
+.code-preview-container .token.symbol,
+.code-preview-container .token.deleted {
+    color: #b5cea8;
+}
+
+.code-preview-container .token.selector,
+.code-preview-container .token.attr-name,
+.code-preview-container .token.string,
+.code-preview-container .token.char,
+.code-preview-container .token.builtin,
+.code-preview-container .token.inserted {
+    color: #ce9178;
+}
+
+.code-preview-container .token.operator,
+.code-preview-container .token.entity,
+.code-preview-container .token.url,
+.code-preview-container .language-css .token.string,
+.code-preview-container .style .token.string {
+    color: #d4d4d4;
+}
+
+.code-preview-container .token.atrule,
+.code-preview-container .token.attr-value,
+.code-preview-container .token.keyword {
+    color: #569cd6;
+}
+
+.code-preview-container .token.function,
+.code-preview-container .token.class-name {
+    color: #dcdcaa;
+}
+
+.code-preview-container .token.regex,
+.code-preview-container .token.important,
+.code-preview-container .token.variable {
+    color: #d16969;
+}
+
+/* 代码行号 */
+.code-preview-container .line-numbers {
+    position: relative;
+    padding-left: 3.8em;
+    counter-reset: linenumber;
+}
+
+.code-preview-container .line-numbers > code {
+    position: relative;
+    white-space: inherit;
+}
+
+.code-preview-container .line-numbers .line-numbers-rows {
+    position: absolute;
+    pointer-events: none;
+    top: 0;
+    font-size: 100%;
+    left: -3.8em;
+    width: 3em;
+    letter-spacing: -1px;
+    border-right: 1px solid #404040;
+    user-select: none;
+    counter-reset: linenumber;
+}
+
+.code-preview-container .line-numbers-rows > span {
+    pointer-events: none;
+    display: block;
+    counter-increment: linenumber;
+}
+
+.code-preview-container .line-numbers-rows > span:before {
+    content: counter(linenumber);
+    color: #858585;
+    display: block;
+    padding-right: 0.8em;
+    text-align: right;
+}
+
+/* Markdown预览样式 */
+.markdown-preview-container {
+    padding: 24px;
+    max-height: 70vh;
+    overflow-y: auto;
+    line-height: 1.8;
+    color: #1e293b;
+}
+
+.markdown-preview-container h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 1rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #e2e8f0;
+    color: #1e293b;
+}
+
+.markdown-preview-container h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem 0;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155;
+}
+
+.markdown-preview-container h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 1.25rem 0 0.5rem 0;
+    color: #475569;
+}
+
+.markdown-preview-container h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
+    color: #64748b;
+}
+
+.markdown-preview-container p {
+    margin: 0 0 1rem 0;
+}
+
+.markdown-preview-container ul,
+.markdown-preview-container ol {
+    margin: 0 0 1rem 0;
+    padding-left: 2rem;
+}
+
+.markdown-preview-container li {
+    margin: 0.25rem 0;
+}
+
+.markdown-preview-container blockquote {
+    margin: 1rem 0;
+    padding: 0.5rem 1rem;
+    border-left: 4px solid #667eea;
+    background: #f8fafc;
+    color: #64748b;
+    border-radius: 0 8px 8px 0;
+}
+
+.markdown-preview-container code {
+    background: #f1f5f9;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 0.9em;
+    color: #e11d48;
+}
+
+.markdown-preview-container pre {
+    background: #1e1e1e;
+    padding: 1rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.markdown-preview-container pre code {
+    background: transparent;
+    padding: 0;
+    color: #d4d4d4;
+}
+
+.markdown-preview-container table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.markdown-preview-container th,
+.markdown-preview-container td {
+    border: 1px solid #e2e8f0;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.markdown-preview-container th {
+    background: #f8fafc;
+    font-weight: 600;
+}
+
+.markdown-preview-container img {
+    max-width: 100%;
+    border-radius: 8px;
+    margin: 1rem 0;
+}
+
+.markdown-preview-container a {
+    color: #667eea;
+    text-decoration: none;
+}
+
+.markdown-preview-container a:hover {
+    text-decoration: underline;
+}
+
+.markdown-preview-container hr {
+    border: none;
+    border-top: 2px solid #e2e8f0;
+    margin: 2rem 0;
+}
+
+/* 文本预览样式 */
+.text-preview-container {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 20px;
+    max-height: 70vh;
+    overflow: auto;
+}
+
+.text-preview-container pre {
+    margin: 0;
+    font-family: 'Fira Code', 'Consolas', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* 文件类型标签 */
+.file-type-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+.file-type-badge.image { background: #dbeafe; color: #1d4ed8; }
+.file-type-badge.video { background: #fce7f3; color: #be185d; }
+.file-type-badge.audio { background: #d1fae5; color: #047857; }
+.file-type-badge.code { background: #fef3c7; color: #b45309; }
+.file-type-badge.markdown { background: #e0e7ff; color: #4338ca; }
+.file-type-badge.pdf { background: #fee2e2; color: #b91c1c; }
+.file-type-badge.text { background: #f1f5f9; color: #475569; }
+
+/* 全屏模式 */
+.modal-content.fullscreen {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+}
+
+.modal-content.fullscreen .modal-preview-body {
+    height: calc(100vh - 140px);
+}
+
+/* 加载动画 */
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: #64748b;
+}
+
+.loading-spinner::before {
+    content: '';
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e2e8f0;
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* 错误消息 */
+.error-message {
+    color: #dc2626;
+    padding: 20px;
+    text-align: center;
+    background: #fee2e2;
+    border-radius: 8px;
+}
+
+/* 不支持预览消息 */
+.unsupported-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    color: #64748b;
+    text-align: center;
+}
+
+.unsupported-message p:first-child {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.unsupported-message p:last-child {
+    font-size: 0.875rem;
 }
 
 /* 响应式调整 */
@@ -1160,6 +1928,8 @@
         const selectAllCheckbox = document.getElementById('select-all');
         const fileCheckboxes = document.querySelectorAll('.file-checkbox');
         const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        const batchDownloadBtn = document.getElementById('batch-download-btn');
+        const batchMoveBtn = document.getElementById('batch-move-btn');
         
         // 全选/取消全选功能
         selectAllCheckbox.addEventListener('change', function() {
@@ -1167,28 +1937,46 @@
             fileCheckboxes.forEach(checkbox => {
                 checkbox.checked = isChecked;
             });
-            updateBatchDeleteButton();
+            updateBatchButtons();
         });
         
         // 文件复选框变化事件
         fileCheckboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', updateBatchDeleteButton);
+            checkbox.addEventListener('change', updateBatchButtons);
         });
         
         // 批量删除按钮点击事件
         batchDeleteBtn.addEventListener('click', function() {
             openBatchDeleteModal();
         });
+        
+        // 批量下载按钮点击事件
+        batchDownloadBtn.addEventListener('click', function() {
+            openBatchDownloadModal();
+        });
+        
+        // 批量移动按钮点击事件
+        batchMoveBtn.addEventListener('click', function() {
+            openBatchMoveModal();
+        });
     }
     
-    // 更新批量删除按钮状态
-    function updateBatchDeleteButton() {
+    // 更新所有批量操作按钮状态
+    function updateBatchButtons() {
         const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
         const count = checkedCheckboxes.length;
         const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        const batchDownloadBtn = document.getElementById('batch-download-btn');
+        const batchMoveBtn = document.getElementById('batch-move-btn');
         
         batchDeleteBtn.disabled = count === 0;
         batchDeleteBtn.innerHTML = `<i class="delete-icon">🗑️</i> 批量删除 (${count})`;
+        
+        batchDownloadBtn.disabled = count === 0;
+        batchDownloadBtn.innerHTML = `<i class="download-icon">📥</i> 批量下载 (${count})`;
+        
+        batchMoveBtn.disabled = count === 0;
+        batchMoveBtn.innerHTML = `<i class="move-icon">📁</i> 批量移动 (${count})`;
     }
     
     // 打开批量删除弹窗
@@ -1208,6 +1996,220 @@
     // 关闭批量删除弹窗
     function closeBatchDeleteModal() {
         document.getElementById('batch-delete-modal').style.display = 'none';
+    }
+    
+    // 打开批量下载弹窗
+    function openBatchDownloadModal() {
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        const fileIds = Array.from(checkedCheckboxes).map(checkbox => checkbox.dataset.fileId);
+        
+        if (fileIds.length === 0) {
+            return;
+        }
+        
+        document.getElementById('download-file-count').textContent = fileIds.length;
+        document.getElementById('batch-download-modal').style.display = 'flex';
+        
+        // 开始下载
+        downloadFiles(fileIds);
+    }
+    
+    // 关闭批量下载弹窗
+    function closeBatchDownloadModal() {
+        document.getElementById('batch-download-modal').style.display = 'none';
+    }
+    
+    // 下载文件
+    function downloadFiles(fileIds) {
+        const progressBar = document.getElementById('download-progress-bar');
+        const progressText = document.getElementById('download-progress-text');
+        
+        progressBar.style.width = '10%';
+        progressText.textContent = '正在准备文件...';
+        
+        fetch('/batch-download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ file_ids: fileIds })
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('下载失败');
+            progressBar.style.width = '50%';
+            progressText.textContent = '正在打包文件...';
+            return response.blob();
+        })
+        .then(blob => {
+            progressBar.style.width = '90%';
+            progressText.textContent = '正在下载...';
+            
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'files_' + new Date().getTime() + '.zip';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            
+            progressBar.style.width = '100%';
+            progressText.textContent = '下载完成！';
+            
+            setTimeout(() => {
+                closeBatchDownloadModal();
+                location.reload();
+            }, 1500);
+        })
+        .catch(error => {
+            progressText.textContent = '下载失败: ' + error.message;
+            progressBar.style.background = '#EF4444';
+        });
+    }
+    
+    // 打开批量移动弹窗
+    function openBatchMoveModal() {
+        const checkedCheckboxes = document.querySelectorAll('.file-checkbox:checked');
+        const fileIds = Array.from(checkedCheckboxes).map(checkbox => checkbox.dataset.fileId);
+        const fileNames = Array.from(checkedCheckboxes).map(checkbox => checkbox.dataset.fileName);
+        
+        if (fileIds.length === 0) {
+            return;
+        }
+        
+        document.getElementById('move-file-count').textContent = fileIds.length;
+        
+        // 显示选中的文件
+        const preview = document.getElementById('move-files-preview');
+        preview.innerHTML = fileNames.map(name => 
+            `<div class="file-item"><span>📄</span><span>${name}</span></div>`
+        ).join('');
+        
+        // 存储文件ID
+        document.getElementById('batch-move-modal').dataset.fileIds = fileIds.join(',');
+        document.getElementById('batch-move-modal').style.display = 'flex';
+    }
+    
+    // 关闭批量移动弹窗
+    function closeBatchMoveModal() {
+        document.getElementById('batch-move-modal').style.display = 'none';
+    }
+    
+    // 确认批量移动
+    document.getElementById('confirm-batch-move').addEventListener('click', function() {
+        const targetFolderId = document.getElementById('target-folder-select').value;
+        const fileIds = document.getElementById('batch-move-modal').dataset.fileIds.split(',');
+        
+        if (!targetFolderId && targetFolderId !== 'root') {
+            alert('请选择目标文件夹');
+            return;
+        }
+        
+        fetch('/batch-move', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                file_ids: fileIds,
+                target_folder_id: targetFolderId === 'root' ? null : targetFolderId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('文件移动成功！');
+                closeBatchMoveModal();
+                location.reload();
+            } else {
+                alert('移动失败: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('移动失败: ' + error.message);
+        });
+    });
+    
+    // 批量上传功能
+    function initBatchUpload() {
+        const batchUploadBtn = document.getElementById('batch-upload-btn');
+        const batchUploadForm = document.getElementById('batch-upload-form');
+        const cancelBatchUploadBtn = document.getElementById('cancel-batch-upload-btn');
+        const batchFileInput = document.getElementById('batch-file-input');
+        const batchUploadArea = document.getElementById('batch-upload-area');
+        const filesPreview = document.getElementById('files-preview');
+        const selectedFilesList = document.getElementById('selected-files-list');
+        
+        // 显示批量上传表单
+        batchUploadBtn.addEventListener('click', function() {
+            batchUploadForm.style.display = 'block';
+            document.getElementById('upload-file-form').style.display = 'none';
+            document.getElementById('upload-folder-form').style.display = 'none';
+            document.getElementById('create-subfolder-form').style.display = 'none';
+        });
+        
+        // 取消批量上传
+        cancelBatchUploadBtn.addEventListener('click', function() {
+            batchUploadForm.style.display = 'none';
+            batchFileInput.value = '';
+            selectedFilesList.style.display = 'none';
+            filesPreview.innerHTML = '';
+        });
+        
+        // 拖拽上传
+        batchUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            this.classList.add('drag-over');
+        });
+        
+        batchUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+        });
+        
+        batchUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            this.classList.remove('drag-over');
+            const files = e.dataTransfer.files;
+            handleSelectedFiles(files);
+        });
+        
+        // 文件选择
+        batchFileInput.addEventListener('change', function() {
+            handleSelectedFiles(this.files);
+        });
+        
+        // 处理选中的文件
+        function handleSelectedFiles(files) {
+            if (files.length === 0) return;
+            
+            selectedFilesList.style.display = 'block';
+            filesPreview.innerHTML = '';
+            
+            Array.from(files).forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-preview-item';
+                
+                const icon = file.type.startsWith('image/') ? '🖼️' : '📄';
+                const size = formatFileSize(file.size);
+                
+                fileItem.innerHTML = `
+                    <span class="file-icon-small">${icon}</span>
+                    <span class="file-name-small" title="${file.name}">${file.name}</span>
+                    <span class="file-size-small">${size}</span>
+                `;
+                filesPreview.appendChild(fileItem);
+            });
+        }
+        
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
     }
     
     // 搜索功能初始化
@@ -1254,35 +2256,409 @@
         searchFiles();
     }
     
-    // 文件预览功能
+    // 文件预览功能（增强版）
+    let currentPreviewFile = null;
+    let isShowingSource = false;
+    let originalContent = '';
+    
+    // 文件类型映射
+    const fileTypeMap = {
+        image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'],
+        video: ['.mp4', '.webm', '.ogg', '.mov', '.avi'],
+        audio: ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'],
+        pdf: ['.pdf'],
+        markdown: ['.md', '.markdown'],
+        code: {
+            '.py': 'python',
+            '.js': 'javascript',
+            '.ts': 'typescript',
+            '.jsx': 'jsx',
+            '.tsx': 'tsx',
+            '.html': 'html',
+            '.htm': 'html',
+            '.css': 'css',
+            '.scss': 'scss',
+            '.sass': 'sass',
+            '.less': 'less',
+            '.json': 'json',
+            '.xml': 'xml',
+            '.sql': 'sql',
+            '.java': 'java',
+            '.cpp': 'cpp',
+            '.c': 'c',
+            '.h': 'c',
+            '.hpp': 'cpp',
+            '.cs': 'csharp',
+            '.go': 'go',
+            '.rs': 'rust',
+            '.php': 'php',
+            '.rb': 'ruby',
+            '.swift': 'swift',
+            '.kt': 'kotlin',
+            '.scala': 'scala',
+            '.sh': 'bash',
+            '.bash': 'bash',
+            '.zsh': 'bash',
+            '.ps1': 'powershell',
+            '.yaml': 'yaml',
+            '.yml': 'yaml',
+            '.toml': 'toml',
+            '.ini': 'ini',
+            '.conf': 'nginx',
+            '.dockerfile': 'docker',
+            '.vue': 'vue',
+            '.svelte': 'svelte',
+            '.lua': 'lua',
+            '.r': 'r',
+            '.m': 'matlab',
+            '.pl': 'perl'
+        },
+        text: ['.txt', '.log', '.csv']
+    };
+    
+    function getFileType(fileName) {
+        const ext = '.' + fileName.toLowerCase().split('.').pop();
+        
+        if (fileTypeMap.image.includes(ext)) return 'image';
+        if (fileTypeMap.video.includes(ext)) return 'video';
+        if (fileTypeMap.audio.includes(ext)) return 'audio';
+        if (fileTypeMap.pdf.includes(ext)) return 'pdf';
+        if (fileTypeMap.markdown.includes(ext)) return 'markdown';
+        if (fileTypeMap.code[ext]) return 'code';
+        if (fileTypeMap.text.includes(ext)) return 'text';
+        
+        return 'unknown';
+    }
+    
+    function getFileLanguage(fileName) {
+        const ext = '.' + fileName.toLowerCase().split('.').pop();
+        return fileTypeMap.code[ext] || 'plaintext';
+    }
+    
     function previewFile(fileId, fileName, filePath) {
+        currentPreviewFile = { id: fileId, name: fileName, path: filePath };
+        isShowingSource = false;
+        
         document.getElementById('preview-file-name').textContent = fileName;
         const previewContent = document.getElementById('preview-content');
+        const toggleSourceBtn = document.getElementById('toggle-source-btn');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+        const previewInfo = document.getElementById('preview-file-info');
+        
+        // 隐藏工具按钮
+        toggleSourceBtn.style.display = 'none';
+        copyCodeBtn.style.display = 'none';
+        previewInfo.textContent = '';
         
         // 清空预览内容
-        previewContent.innerHTML = '';
-        
-        // 根据文件类型显示不同的预览内容
-        if (fileName.toLowerCase().endsWith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))) {
-            // 图片预览
-            const img = document.createElement('img');
-            img.src = filePath;
-            img.alt = fileName;
-            previewContent.appendChild(img);
-        } else if (fileName.toLowerCase().endsWith('.pdf')) {
-            // PDF预览
-            const iframe = document.createElement('iframe');
-            iframe.src = `https://docs.google.com/viewer?url=${encodeURIComponent(filePath)}&embedded=true`;
-            previewContent.appendChild(iframe);
-        }
+        previewContent.innerHTML = '<div class="loading-spinner">加载中...</div>';
         
         // 显示预览弹窗
         document.getElementById('file-preview-modal').style.display = 'flex';
+        
+        const fileType = getFileType(fileName);
+        
+        switch (fileType) {
+            case 'image':
+                previewImage(filePath, fileName, previewContent, previewInfo);
+                break;
+            case 'video':
+                previewVideo(filePath, fileName, previewContent, previewInfo);
+                break;
+            case 'audio':
+                previewAudio(filePath, fileName, previewContent, previewInfo);
+                break;
+            case 'pdf':
+                previewPDF(filePath, previewContent, previewInfo);
+                break;
+            case 'markdown':
+                previewMarkdown(filePath, fileName, previewContent, toggleSourceBtn, copyCodeBtn, previewInfo);
+                break;
+            case 'code':
+                previewCode(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
+                break;
+            case 'text':
+                previewText(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
+                break;
+            default:
+                previewContent.innerHTML = '<div class="unsupported-message"><p>该文件类型暂不支持预览</p><p>请下载后查看</p></div>';
+        }
     }
+    
+    // 图片预览
+    function previewImage(filePath, fileName, container, infoEl) {
+        const img = document.createElement('img');
+        img.src = filePath;
+        img.alt = fileName;
+        img.onload = function() {
+            infoEl.textContent = `${this.naturalWidth} × ${this.naturalHeight} 像素`;
+        };
+        container.innerHTML = '';
+        container.appendChild(img);
+    }
+    
+    // 视频预览
+    function previewVideo(filePath, fileName, container, infoEl) {
+        const video = document.createElement('video');
+        video.src = filePath;
+        video.controls = true;
+        video.style.maxWidth = '100%';
+        video.style.maxHeight = '70vh';
+        video.onloadedmetadata = function() {
+            const duration = formatDuration(this.duration);
+            infoEl.textContent = `时长: ${duration}`;
+        };
+        container.innerHTML = '';
+        container.appendChild(video);
+    }
+    
+    // 音频预览
+    function previewAudio(filePath, fileName, container, infoEl) {
+        container.innerHTML = `
+            <div class="audio-preview-container">
+                <div class="audio-icon">🎵</div>
+                <div class="audio-name">${fileName}</div>
+                <audio controls src="${filePath}"></audio>
+            </div>
+        `;
+        const audio = container.querySelector('audio');
+        audio.onloadedmetadata = function() {
+            const duration = formatDuration(this.duration);
+            infoEl.textContent = `时长: ${duration}`;
+        };
+    }
+    
+    // PDF预览
+    function previewPDF(filePath, container, infoEl) {
+        infoEl.textContent = 'PDF文档';
+        
+        if (typeof pdfjsLib === 'undefined') {
+            container.innerHTML = '<div class="error-message"><p>PDF预览库加载失败，请刷新页面重试</p></div>';
+            return;
+        }
+        
+        container.innerHTML = '<div class="loading-spinner">加载PDF中...</div>';
+        
+        const pdfContainer = document.createElement('div');
+        pdfContainer.className = 'pdf-preview-container';
+        pdfContainer.style.cssText = 'max-height: 70vh; overflow-y: auto; background: #525659; border-radius: 8px; padding: 20px;';
+        
+        const loadingTask = pdfjsLib.getDocument(filePath);
+        
+        loadingTask.promise.then(function(pdf) {
+            container.innerHTML = '';
+            container.appendChild(pdfContainer);
+            
+            infoEl.textContent = `PDF文档 - ${pdf.numPages} 页`;
+            
+            const canvasContainer = document.createElement('div');
+            canvasContainer.style.cssText = 'display: flex; flex-direction: column; align-items: center; gap: 10px;';
+            pdfContainer.appendChild(canvasContainer);
+            
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                pdf.getPage(pageNum).then(function(page) {
+                    const scale = 1.5;
+                    const viewport = page.getViewport({ scale: scale });
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    canvas.style.cssText = 'max-width: 100%; height: auto; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);';
+                    
+                    const renderContext = {
+                        canvasContext: context,
+                        viewport: viewport
+                    };
+                    
+                    page.render(renderContext);
+                    
+                    const pageWrapper = document.createElement('div');
+                    pageWrapper.style.cssText = 'margin-bottom: 10px;';
+                    pageWrapper.appendChild(canvas);
+                    canvasContainer.appendChild(pageWrapper);
+                });
+            }
+        }).catch(function(error) {
+            console.error('PDF加载错误:', error);
+            container.innerHTML = `<div class="error-message">
+                <p>PDF加载失败</p>
+                <p style="font-size: 0.875rem; margin-top: 8px;">${error.message}</p>
+                <p style="font-size: 0.875rem; margin-top: 8px;">请尝试下载后查看</p>
+            </div>`;
+        });
+    }
+    
+    // Markdown预览
+    function previewMarkdown(filePath, fileName, container, toggleBtn, copyBtn, infoEl) {
+        toggleBtn.style.display = 'inline-block';
+        copyBtn.style.display = 'inline-block';
+        infoEl.textContent = 'Markdown文档';
+        
+        fetch(filePath)
+            .then(response => response.text())
+            .then(content => {
+                originalContent = content;
+                renderMarkdown(content, container);
+            })
+            .catch(err => {
+                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+            });
+    }
+    
+    // 渲染Markdown
+    function renderMarkdown(content, container) {
+        if (typeof marked !== 'undefined') {
+            const html = marked.parse(content);
+            container.innerHTML = `<div class="markdown-preview-container">${html}</div>`;
+            // 高亮代码块
+            if (typeof Prism !== 'undefined') {
+                container.querySelectorAll('pre code').forEach(block => {
+                    Prism.highlightElement(block);
+                });
+            }
+        } else {
+            container.innerHTML = `<div class="markdown-preview-container"><pre>${escapeHtml(content)}</pre></div>`;
+        }
+    }
+    
+    // 代码预览
+    function previewCode(filePath, fileName, container, copyBtn, infoEl) {
+        copyBtn.style.display = 'inline-block';
+        const language = getFileLanguage(fileName);
+        infoEl.textContent = `语言: ${language.toUpperCase()}`;
+        
+        fetch(filePath)
+            .then(response => response.text())
+            .then(content => {
+                originalContent = content;
+                renderCode(content, language, container, fileName);
+            })
+            .catch(err => {
+                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+            });
+    }
+    
+    // 渲染代码
+    function renderCode(content, language, container, fileName) {
+        const lines = content.split('\n').length;
+        const linesHtml = Array.from({length: lines}, (_, i) => `<span></span>`).join('');
+        
+        if (typeof Prism !== 'undefined') {
+            const highlighted = Prism.highlight(content, Prism.languages[language] || Prism.languages.plaintext, language);
+            container.innerHTML = `
+                <div class="code-preview-container">
+                    <div class="file-type-badge code">${language}</div>
+                    <pre class="line-numbers"><code class="language-${language}">${highlighted}</code></pre>
+                </div>
+            `;
+        } else {
+            container.innerHTML = `
+                <div class="code-preview-container">
+                    <div class="file-type-badge code">${language}</div>
+                    <pre><code>${escapeHtml(content)}</code></pre>
+                </div>
+            `;
+        }
+    }
+    
+    // 文本预览
+    function previewText(filePath, fileName, container, copyBtn, infoEl) {
+        copyBtn.style.display = 'inline-block';
+        infoEl.textContent = '文本文件';
+        
+        fetch(filePath)
+            .then(response => response.text())
+            .then(content => {
+                originalContent = content;
+                container.innerHTML = `
+                    <div class="text-preview-container">
+                        <pre>${escapeHtml(content)}</pre>
+                    </div>
+                `;
+            })
+            .catch(err => {
+                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+            });
+    }
+    
+    // HTML转义
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // 格式化时长
+    function formatDuration(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    // 切换源码/渲染视图
+    document.getElementById('toggle-source-btn').addEventListener('click', function() {
+        const previewContent = document.getElementById('preview-content');
+        const toggleText = document.getElementById('toggle-source-text');
+        
+        if (isShowingSource) {
+            // 显示渲染视图
+            if (currentPreviewFile && getFileType(currentPreviewFile.name) === 'markdown') {
+                renderMarkdown(originalContent, previewContent);
+            }
+            toggleText.textContent = '查看源码';
+        } else {
+            // 显示源码
+            previewContent.innerHTML = `
+                <div class="code-preview-container">
+                    <div class="file-type-badge markdown">markdown</div>
+                    <pre><code>${escapeHtml(originalContent)}</code></pre>
+                </div>
+            `;
+            toggleText.textContent = '查看渲染';
+        }
+        
+        isShowingSource = !isShowingSource;
+    });
+    
+    // 复制代码
+    document.getElementById('copy-code-btn').addEventListener('click', function() {
+        if (originalContent) {
+            navigator.clipboard.writeText(originalContent).then(() => {
+                const btn = this;
+                const originalText = btn.textContent;
+                btn.textContent = '✅ 已复制';
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                alert('复制失败: ' + err.message);
+            });
+        }
+    });
+    
+    // 全屏预览
+    document.getElementById('fullscreen-btn').addEventListener('click', function() {
+        const modal = document.getElementById('file-preview-modal');
+        const modalContent = modal.querySelector('.modal-content');
+        
+        if (modalContent.classList.contains('fullscreen')) {
+            modalContent.classList.remove('fullscreen');
+            this.textContent = '⛶ 全屏';
+        } else {
+            modalContent.classList.add('fullscreen');
+            this.textContent = '⛶ 退出全屏';
+        }
+    });
     
     // 关闭预览弹窗
     function closePreviewModal() {
         document.getElementById('file-preview-modal').style.display = 'none';
+        // 停止视频/音频播放
+        const video = document.querySelector('#preview-content video');
+        const audio = document.querySelector('#preview-content audio');
+        if (video) video.pause();
+        if (audio) audio.pause();
     }
     
     // 辅助函数：获取选中的文件ID
@@ -1295,6 +2671,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         // 初始化批量操作功能
         initBatchOperations();
+        // 初始化批量上传功能
+        initBatchUpload();
         // 初始化搜索功能
         initSearch();
         // 点击弹窗外部关闭弹窗

@@ -10,6 +10,7 @@ import os
 import uuid
 import sqlite3
 from pathlib import Path
+from datetime import datetime
 
 
 # 登录/注册页面
@@ -979,42 +980,40 @@ def upload_to_folder(folder_id):
         return redirect(url_for('folder_detail', folder_id=folder_id))
     
     conn = get_db()
+    tmp_file_path = None
     try:
-        # 检查文件夹是否存在且属于当前用户
         folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', 
                            (folder_id, session['user_id'])).fetchone()
         if not folder:
             flash('文件夹不存在或无权限')
             return redirect(url_for('folder_detail', folder_id=folder_id))
         
-        # 检查存储空间
         from app import get_user_storage_usage
         storage_usage = get_user_storage_usage(session['user_id'])
         
-        # 先保存文件到临时位置以获取大小
         import tempfile
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-            file.save(tmp_file.name)
-            file_size = os.path.getsize(tmp_file.name)
-            
-            # 检查上传后是否会超过限制
-            if storage_usage['total_size'] + file_size > storage_usage['max_storage']:
-                # 删除临时文件
-                os.unlink(tmp_file.name)
-                flash(f'存储空间不足！已使用 {storage_usage["total_size"] / (1024*1024):.2f}MB，剩余空间不足以存储此文件（{file_size / (1024*1024):.2f}MB）')
-                return redirect(url_for('folder_detail', folder_id=folder_id))
-            
-            # 生成唯一文件名
-            file_id = str(uuid.uuid4())
-            ext = os.path.splitext(file.filename)[1]
-            stored_name = f"{file_id}{ext}"
-            
-            # 移动文件到最终位置
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
-            import shutil
-            shutil.move(tmp_file.name, file_path)
+        fd, tmp_file_path = tempfile.mkstemp()
+        try:
+            file.save(tmp_file_path)
+        finally:
+            os.close(fd)
         
-        # 插入数据库
+        file_size = os.path.getsize(tmp_file_path)
+        
+        if storage_usage['total_size'] + file_size > storage_usage['max_storage']:
+            os.unlink(tmp_file_path)
+            flash(f'存储空间不足！已使用 {storage_usage["total_size"] / (1024*1024):.2f}MB，剩余空间不足以存储此文件（{file_size / (1024*1024):.2f}MB）')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+        
+        file_id = str(uuid.uuid4())
+        ext = os.path.splitext(file.filename)[1]
+        stored_name = f"{file_id}{ext}"
+        
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
+        import shutil
+        shutil.move(tmp_file_path, file_path)
+        tmp_file_path = None
+        
         conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_desc, folder_id, created_at) 
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                    (file_id, session['user_id'], file.filename, stored_name, file_path, file_size, 
@@ -1022,7 +1021,6 @@ def upload_to_folder(folder_id):
         
         conn.commit()
         
-        # 记录操作日志
         log_message(
             log_type='operation',
             log_level='INFO',
@@ -1038,6 +1036,8 @@ def upload_to_folder(folder_id):
         flash('文件上传成功')
     except Exception as e:
         conn.rollback()
+        if tmp_file_path and os.path.exists(tmp_file_path):
+            os.unlink(tmp_file_path)
         flash(f'上传失败: {str(e)}')
     finally:
         conn.close()
@@ -1058,38 +1058,36 @@ def upload_folder_to_folder(folder_id):
         return redirect(url_for('folder_detail', folder_id=folder_id))
     
     conn = get_db()
+    temp_files = []
     try:
-        # 检查文件夹是否存在且属于当前用户
         folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', 
                            (folder_id, session['user_id'])).fetchone()
         if not folder:
             flash('文件夹不存在或无权限')
             return redirect(url_for('folder_detail', folder_id=folder_id))
         
-        # 检查存储空间
         from app import get_user_storage_usage
         storage_usage = get_user_storage_usage(session['user_id'])
         
         uploaded_files_count = 0
         total_upload_size = 0
         
-        # 先计算所有文件的总大小
         import tempfile
-        temp_files = []
         for file in files:
             if file.filename == '' or not hasattr(file, 'filename'):
                 continue
             
-            # 保存到临时文件
-            with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
-                file.save(tmp_file.name)
-                file_size = os.path.getsize(tmp_file.name)
-                temp_files.append((tmp_file.name, file.filename, file_size))
-                total_upload_size += file_size
+            fd, tmp_path = tempfile.mkstemp()
+            try:
+                file.save(tmp_path)
+            finally:
+                os.close(fd)
+            
+            file_size = os.path.getsize(tmp_path)
+            temp_files.append((tmp_path, file.filename, file_size))
+            total_upload_size += file_size
         
-        # 检查总空间是否足够
         if storage_usage['total_size'] + total_upload_size > storage_usage['max_storage']:
-            # 删除所有临时文件
             for tmp_path, _, _ in temp_files:
                 try:
                     os.unlink(tmp_path)
@@ -1098,19 +1096,15 @@ def upload_folder_to_folder(folder_id):
             flash(f'存储空间不足！已使用 {storage_usage["total_size"] / (1024*1024):.2f}MB，剩余空间不足以存储此文件夹（{total_upload_size / (1024*1024):.2f}MB）')
             return redirect(url_for('folder_detail', folder_id=folder_id))
         
-        # 移动文件到最终位置并插入数据库
         for tmp_path, relative_path, file_size in temp_files:
-            # 生成唯一文件名
             file_id = str(uuid.uuid4())
             ext = os.path.splitext(relative_path)[1]
             stored_name = f"{file_id}{ext}"
             
-            # 移动文件到最终位置
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
             import shutil
             shutil.move(tmp_path, file_path)
             
-            # 插入数据库，保存相对路径作为项目名称，方便识别文件夹结构
             conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_name, project_desc, folder_id, created_at) 
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
                        (file_id, session['user_id'], os.path.basename(relative_path), stored_name, file_path, file_size, 
@@ -1120,7 +1114,6 @@ def upload_folder_to_folder(folder_id):
         
         conn.commit()
         
-        # 记录操作日志
         log_message(
             log_type='operation',
             log_level='INFO',
@@ -1264,7 +1257,6 @@ def folder_detail(folder_id):
     
     conn = get_db()
     try:
-        # 获取当前用户信息
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         
         folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', 
@@ -1274,11 +1266,13 @@ def folder_detail(folder_id):
         
         files = conn.execute('SELECT * FROM files WHERE folder_id = ?', (folder_id,)).fetchall()
         
-        # 获取子文件夹
         subfolders = conn.execute('SELECT * FROM folders WHERE parent_id = ? AND user_id = ?', 
                                (folder_id, session['user_id'])).fetchall()
         
-        return render_template('folder_detail.html', username=session.get('username'), user=user, folder=folder, files=files, subfolders=subfolders)
+        user_folders = conn.execute('SELECT id, name FROM folders WHERE user_id = ? AND id != ? ORDER BY name', 
+                                  (session['user_id'], folder_id)).fetchall()
+        
+        return render_template('folder_detail.html', username=session.get('username'), user=user, folder=folder, files=files, subfolders=subfolders, user_folders=user_folders)
     finally:
         conn.close()
 
@@ -2038,5 +2032,177 @@ def download_shared_file(share_code):
         return send_from_directory(upload_folder, share['stored_name'], 
                                  as_attachment=True, 
                                  download_name=share['filename'])
+    finally:
+        conn.close()
+
+# Batch upload files
+@app.route('/batch-upload/<folder_id>', methods=['POST'])
+def batch_upload_files(folder_id):
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+    
+    files = request.files.getlist('files')
+    description = request.form.get('description', '')
+    
+    if not files or files[0].filename == '':
+        flash('请选择文件')
+        return redirect(url_for('folder_detail', folder_id=folder_id))
+    
+    conn = get_db()
+    try:
+        folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', 
+                           (folder_id, session['user_id'])).fetchone()
+        if not folder:
+            flash('文件夹不存在或无权限')
+            return redirect(url_for('folder_detail', folder_id=folder_id))
+        
+        from app import get_user_storage_usage
+        storage_usage = get_user_storage_usage(session['user_id'])
+        
+        uploaded_count = 0
+        total_size = 0
+        
+        for file in files:
+            if file.filename == '':
+                continue
+            
+            file_id = str(uuid.uuid4())
+            ext = os.path.splitext(file.filename)[1]
+            stored_name = f"{file_id}{ext}"
+            
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
+            file.save(file_path)
+            
+            file_size = os.path.getsize(file_path)
+            total_size += file_size
+            
+            conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, project_desc, folder_id, created_at) 
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
+                       (file_id, session['user_id'], file.filename, stored_name, file_path, file_size, 
+                        description, folder_id))
+            
+            uploaded_count += 1
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='批量上传文件',
+            user_id=session['user_id'],
+            action='upload',
+            target_id=folder_id,
+            target_type='folder',
+            details=f'上传文件数量: {uploaded_count}, 总大小: {total_size} bytes',
+            request=request
+        )
+        
+        flash(f'成功上传 {uploaded_count} 个文件')
+    except Exception as e:
+        conn.rollback()
+        flash(f'上传失败: {str(e)}')
+    finally:
+        conn.close()
+    
+    return redirect(url_for('folder_detail', folder_id=folder_id))
+
+# Batch download files as ZIP
+@app.route('/batch-download', methods=['POST'])
+def batch_download():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json()
+    file_ids = data.get('file_ids', [])
+    
+    if not file_ids:
+        return api_response(success=False, message='请选择要下载的文件', code=400)
+    
+    conn = get_db()
+    try:
+        import zipfile
+        import io
+        from flask import send_file
+        
+        memory_file = io.BytesIO()
+        
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for file_id in file_ids:
+                file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+                                  (file_id, session['user_id'])).fetchone()
+                if file and os.path.exists(file['path']):
+                    zf.write(file['path'], file['filename'])
+        
+        memory_file.seek(0)
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='批量下载文件',
+            user_id=session['user_id'],
+            action='download',
+            target_type='file',
+            details=f'下载文件数量: {len(file_ids)}',
+            request=request
+        )
+        
+        return send_file(
+            memory_file,
+            download_name=f'files_{int(datetime.now().timestamp())}.zip',
+            as_attachment=True,
+            mimetype='application/zip'
+        )
+    except Exception as e:
+        return api_response(success=False, message=f'下载失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# Batch move files
+@app.route('/batch-move', methods=['POST'])
+def batch_move():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json()
+    file_ids = data.get('file_ids', [])
+    target_folder_id = data.get('target_folder_id')
+    
+    if not file_ids:
+        return api_response(success=False, message='请选择要移动的文件', code=400)
+    
+    conn = get_db()
+    try:
+        if target_folder_id:
+            target_folder = conn.execute('SELECT * FROM folders WHERE id = ? AND user_id = ?', 
+                                       (target_folder_id, session['user_id'])).fetchone()
+            if not target_folder:
+                return api_response(success=False, message='目标文件夹不存在或无权限', code=404)
+        
+        moved_count = 0
+        for file_id in file_ids:
+            file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+                              (file_id, session['user_id'])).fetchone()
+            if file:
+                conn.execute('UPDATE files SET folder_id = ? WHERE id = ?', 
+                           (target_folder_id, file_id))
+                moved_count += 1
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='批量移动文件',
+            user_id=session['user_id'],
+            action='move',
+            target_type='file',
+            details=f'移动文件数量: {moved_count}, 目标文件夹: {target_folder_id or "根目录"}',
+            request=request
+        )
+        
+        return api_response(success=True, message=f'成功移动 {moved_count} 个文件')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'移动失败: {str(e)}', code=500)
     finally:
         conn.close()
