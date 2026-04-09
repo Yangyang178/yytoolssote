@@ -1,0 +1,719 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="trash-container">
+    <div class="container">
+        <div class="page-header">
+            <div class="header-actions">
+                <a href="{{ url_for('user_center') }}" class="btn btn-secondary back-btn">
+                    ← 返回用户中心
+                </a>
+            </div>
+            <h1 class="page-title">🗑️ 回收站</h1>
+            <p class="page-subtitle">文件将在删除30天后自动清除</p>
+        </div>
+        
+        {% if user %}
+            <div class="content-section">
+                <div class="trash-stats">
+                    <div class="stat-item">
+                        <span class="stat-icon">📁</span>
+                        <span class="stat-label">文件数量</span>
+                        <span class="stat-value">{{ trash_items|length }}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">💾</span>
+                        <span class="stat-label">占用空间</span>
+                        <span class="stat-value">{{ (total_size / 1024 / 1024)|round(2) }} MB</span>
+                    </div>
+                </div>
+                
+                <div class="trash-actions">
+                    <button class="btn btn-danger" id="empty-trash-btn" {% if trash_items|length == 0 %}disabled{% endif %}>
+                        🗑️ 清空回收站
+                    </button>
+                </div>
+            </div>
+            
+            {% if trash_items|length > 0 %}
+            <div class="content-section">
+                <div class="batch-actions">
+                    <input type="checkbox" id="select-all" class="select-all-checkbox">
+                    <label for="select-all" class="select-all-label">全选</label>
+                    <button class="btn btn-primary" id="batch-restore-btn" disabled>
+                        📤 批量恢复 (0)
+                    </button>
+                    <button class="btn btn-danger" id="batch-delete-btn" disabled>
+                        🗑️ 批量删除 (0)
+                    </button>
+                </div>
+            </div>
+            
+            <div class="content-section">
+                <div class="trash-list">
+                    {% for item in trash_items %}
+                    <div class="trash-item" data-trash-id="{{ item.id }}">
+                        <div class="trash-item-checkbox">
+                            <input type="checkbox" class="trash-checkbox" data-trash-id="{{ item.id }}" data-filename="{{ item.filename }}">
+                        </div>
+                        <div class="trash-item-icon">
+                            {% set ext = item.filename.lower().split('.')[-1] %}
+                            {% if ext in ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] %}
+                                🖼️
+                            {% elif ext == 'pdf' %}
+                                📄
+                            {% elif ext in ['mp4', 'webm', 'ogg', 'mov', 'avi'] %}
+                                🎬
+                            {% elif ext in ['mp3', 'wav', 'm4a', 'flac'] %}
+                                🎵
+                            {% elif ext in ['html', 'css', 'js', 'py', 'java', 'cpp', 'c', 'go', 'rs', 'php'] %}
+                                💻
+                            {% elif ext in ['md', 'markdown', 'txt'] %}
+                                📝
+                            {% else %}
+                                📄
+                            {% endif %}
+                        </div>
+                        <div class="trash-item-info">
+                            <h3 class="trash-item-name">{{ item.filename }}</h3>
+                            <div class="trash-item-meta">
+                                <span class="meta-item">
+                                    <span class="meta-icon">📦</span>
+                                    {{ (item.file_size / 1024)|round(2) if item.file_size else 0 }} KB
+                                </span>
+                                <span class="meta-item">
+                                    <span class="meta-icon">📁</span>
+                                    {{ item.original_folder_name or '根目录' }}
+                                </span>
+                                <span class="meta-item">
+                                    <span class="meta-icon">🕐</span>
+                                    {{ item.deleted_at }}
+                                </span>
+                                <span class="meta-item remaining-days">
+                                    {% set remaining_days = (item.remaining_hours / 24)|round(1) %}
+                                    {% if remaining_days > 0 %}
+                                        <span class="remaining-time">剩余 {{ remaining_days }} 天</span>
+                                    {% else %}
+                                        <span class="expired">即将删除</span>
+                                    {% endif %}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="trash-item-actions">
+                            <button class="btn btn-primary btn-restore" data-trash-id="{{ item.id }}">
+                                📤 恢复
+                            </button>
+                            <button class="btn btn-danger btn-delete-permanent" data-trash-id="{{ item.id }}" data-filename="{{ item.filename }}">
+                                🗑️ 彻底删除
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="content-section empty-trash">
+                <div class="empty-icon">🗑️</div>
+                <h3 class="empty-title">回收站为空</h3>
+                <p class="empty-desc">没有已删除的文件</p>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="content-section">
+                <p>请先登录</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- 清空回收站确认弹窗 -->
+<div id="empty-trash-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">⚠️ 清空回收站</h2>
+            <button class="btn btn-close" onclick="closeEmptyTrashModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>确定要清空回收站吗？</p>
+            <p class="warning-text">⚠️ 此操作不可恢复！所有文件将被永久删除。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel" onclick="closeEmptyTrashModal()">取消</button>
+            <button class="btn btn-danger" id="confirm-empty-trash">确认清空</button>
+        </div>
+    </div>
+</div>
+
+<!-- 彻底删除确认弹窗 -->
+<div id="delete-permanent-modal" class="modal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">⚠️ 彻底删除</h2>
+            <button class="btn btn-close" onclick="closeDeletePermanentModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p>确定要彻底删除 "<span id="delete-filename"></span>" 吗？</p>
+            <p class="warning-text">⚠️ 此操作不可恢复！文件将被永久删除。</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-cancel" onclick="closeDeletePermanentModal()">取消</button>
+            <button class="btn btn-danger" id="confirm-delete-permanent">彻底删除</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.trash-container {
+    padding: 40px 20px;
+    min-height: calc(100vh - 80px);
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.page-header {
+    margin-bottom: 30px;
+}
+
+.header-actions {
+    margin-bottom: 16px;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+}
+
+.page-subtitle {
+    font-size: 1rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.content-section {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.trash-stats {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stat-icon {
+    font-size: 1.5rem;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.stat-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.trash-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.select-all-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.select-all-label {
+    font-size: 0.9375rem;
+    color: #475569;
+    cursor: pointer;
+}
+
+.trash-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.trash-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    transition: all 0.3s ease;
+}
+
+.trash-item:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+
+.trash-item-checkbox {
+    flex-shrink: 0;
+}
+
+.trash-checkbox {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.trash-item-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.trash-item-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.trash-item-name {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trash-item-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.meta-icon {
+    font-size: 0.875rem;
+}
+
+.remaining-time {
+    color: #10b981;
+    font-weight: 500;
+}
+
+.expired {
+    color: #ef4444;
+    font-weight: 500;
+}
+
+.trash-item-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 20px;
+    border-radius: 10px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+.btn-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+.btn-cancel {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.empty-trash {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.empty-title {
+    font-size: 1.5rem;
+    color: #1e293b;
+    margin: 0 0 8px 0;
+}
+
+.empty-desc {
+    font-size: 1rem;
+    color: #64748b;
+    margin: 0;
+}
+
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    width: 90%;
+    max-width: 480px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.btn-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #64748b;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+}
+
+.btn-close:hover {
+    background: #f1f5f9;
+}
+
+.modal-body {
+    padding: 24px;
+}
+
+.modal-body p {
+    margin: 0 0 12px 0;
+    font-size: 1rem;
+    color: #475569;
+}
+
+.warning-text {
+    color: #ef4444 !important;
+    font-weight: 500;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .trash-stats {
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .trash-item {
+        flex-wrap: wrap;
+    }
+    
+    .trash-item-info {
+        width: 100%;
+    }
+    
+    .trash-item-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+    
+    .batch-actions {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+</style>
+
+<script>
+    let currentTrashId = null;
+    let selectedTrashIds = [];
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        initBatchOperations();
+        initRestoreButtons();
+        initDeleteButtons();
+        initEmptyTrash();
+    });
+    
+    function initBatchOperations() {
+        const selectAllCheckbox = document.getElementById('select-all');
+        const trashCheckboxes = document.querySelectorAll('.trash-checkbox');
+        const batchRestoreBtn = document.getElementById('batch-restore-btn');
+        const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        
+        if (!selectAllCheckbox) return;
+        
+        selectAllCheckbox.addEventListener('change', function() {
+            trashCheckboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBatchButtons();
+        });
+        
+        trashCheckboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', updateBatchButtons);
+        });
+        
+        batchRestoreBtn.addEventListener('click', batchRestore);
+        batchDeleteBtn.addEventListener('click', batchDelete);
+    }
+    
+    function updateBatchButtons() {
+        const checkedBoxes = document.querySelectorAll('.trash-checkbox:checked');
+        const count = checkedBoxes.length;
+        const batchRestoreBtn = document.getElementById('batch-restore-btn');
+        const batchDeleteBtn = document.getElementById('batch-delete-btn');
+        
+        batchRestoreBtn.disabled = count === 0;
+        batchRestoreBtn.textContent = `📤 批量恢复 (${count})`;
+        
+        batchDeleteBtn.disabled = count === 0;
+        batchDeleteBtn.textContent = `🗑️ 批量删除 (${count})`;
+        
+        selectedTrashIds = Array.from(checkedBoxes).map(cb => cb.dataset.trashId);
+    }
+    
+    function initRestoreButtons() {
+        document.querySelectorAll('.btn-restore').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const trashId = this.dataset.trashId;
+                restoreFile(trashId);
+            });
+        });
+    }
+    
+    function initDeleteButtons() {
+        document.querySelectorAll('.btn-delete-permanent').forEach(btn => {
+            btn.addEventListener('click', function() {
+                currentTrashId = this.dataset.trashId;
+                const filename = this.dataset.filename;
+                document.getElementById('delete-filename').textContent = filename;
+                document.getElementById('delete-permanent-modal').style.display = 'flex';
+            });
+        });
+        
+        document.getElementById('confirm-delete-permanent').addEventListener('click', function() {
+            if (currentTrashId) {
+                deletePermanent(currentTrashId);
+            }
+        });
+    }
+    
+    function initEmptyTrash() {
+        document.getElementById('empty-trash-btn').addEventListener('click', function() {
+            document.getElementById('empty-trash-modal').style.display = 'flex';
+        });
+        
+        document.getElementById('confirm-empty-trash').addEventListener('click', emptyTrash);
+    }
+    
+    function restoreFile(trashId) {
+        fetch('/api/trash/restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash_id: trashId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('恢复失败: ' + data.message);
+            }
+        })
+        .catch(err => alert('恢复失败: ' + err.message));
+    }
+    
+    function deletePermanent(trashId) {
+        fetch('/api/trash/delete-permanent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash_id: trashId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeDeletePermanentModal();
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('删除失败: ' + data.message);
+            }
+        })
+        .catch(err => alert('删除失败: ' + err.message));
+    }
+    
+    function batchRestore() {
+        if (selectedTrashIds.length === 0) return;
+        
+        fetch('/api/trash/batch-restore', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash_ids: selectedTrashIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('恢复失败: ' + data.message);
+            }
+        })
+        .catch(err => alert('恢复失败: ' + err.message));
+    }
+    
+    function batchDelete() {
+        if (selectedTrashIds.length === 0) return;
+        
+        if (!confirm(`确定要彻底删除选中的 ${selectedTrashIds.length} 个文件吗？此操作不可恢复！`)) {
+            return;
+        }
+        
+        fetch('/api/trash/batch-delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ trash_ids: selectedTrashIds })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('删除失败: ' + data.message);
+            }
+        })
+        .catch(err => alert('删除失败: ' + err.message));
+    }
+    
+    function emptyTrash() {
+        fetch('/api/trash/empty', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeEmptyTrashModal();
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('清空失败: ' + data.message);
+            }
+        })
+        .catch(err => alert('清空失败: ' + err.message));
+    }
+    
+    function closeEmptyTrashModal() {
+        document.getElementById('empty-trash-modal').style.display = 'none';
+    }
+    
+    function closeDeletePermanentModal() {
+        document.getElementById('delete-permanent-modal').style.display = 'none';
+        currentTrashId = null;
+    }
+</script>
+{% endblock %}

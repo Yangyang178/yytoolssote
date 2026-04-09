@@ -388,6 +388,34 @@ def init_db():
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )''')
         
+        # 为files表添加is_deleted字段
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN is_deleted INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        
+        try:
+            conn.execute('ALTER TABLE files ADD COLUMN deleted_at TIMESTAMP')
+        except sqlite3.OperationalError:
+            pass
+        
+        # 创建回收站表
+        conn.execute('''CREATE TABLE IF NOT EXISTS trash (
+                        id TEXT PRIMARY KEY,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        filename TEXT NOT NULL,
+                        stored_name TEXT NOT NULL,
+                        file_path TEXT NOT NULL,
+                        file_size INTEGER,
+                        file_type TEXT,
+                        folder_id TEXT,
+                        original_folder_name TEXT,
+                        deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expire_at TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users (id)
+                    )''')
+        
         conn.commit()
     finally:
         conn.close()
@@ -1001,6 +1029,37 @@ def cleanup_old_logs():
         conn.close()
 
 
+def cleanup_expired_trash():
+    """清理回收站中过期的文件（超过30天）"""
+    conn = get_db()
+    try:
+        expired_items = conn.execute('''
+            SELECT * FROM trash 
+            WHERE expire_at < datetime('now')
+        ''').fetchall()
+        
+        deleted_count = 0
+        for item in expired_items:
+            if os.path.exists(item['file_path']):
+                try:
+                    os.unlink(item['file_path'])
+                except Exception as e:
+                    print(f"删除文件失败: {item['file_path']}, 错误: {str(e)}")
+            
+            conn.execute('DELETE FROM files WHERE id = ?', (item['file_id'],))
+            conn.execute('DELETE FROM trash WHERE id = ?', (item['id'],))
+            deleted_count += 1
+        
+        conn.commit()
+        if deleted_count > 0:
+            print(f"已清理 {deleted_count} 个过期回收站文件")
+    except Exception as e:
+        print(f"清理回收站失败: {str(e)}")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
 def get_user_by_email(email):
     conn = get_db()
     try:
@@ -1357,4 +1416,6 @@ if __name__ == "__main__":
     init_db()
     # 清理超过一周的日志记录
     cleanup_old_logs()
+    # 清理过期的回收站文件
+    cleanup_expired_trash()
     app.run(debug=True, host='0.0.0.0', port=9876)

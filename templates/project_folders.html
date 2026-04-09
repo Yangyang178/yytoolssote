@@ -44,6 +44,54 @@
                 </div>
             </div>
             {% endif %}
+            
+            <!-- 存储空间可视化区域 -->
+            <div class="storage-visualization-section">
+                <div class="visualization-header">
+                    <h2 class="visualization-title">📊 存储空间分析</h2>
+                    <button class="btn btn-refresh" id="refresh-stats-btn">
+                        🔄 刷新数据
+                    </button>
+                </div>
+                
+                <div class="visualization-grid">
+                    <!-- 饼图：文件类型分布 -->
+                    <div class="chart-card">
+                        <h3 class="chart-title">文件类型分布</h3>
+                        <div class="chart-container">
+                            <canvas id="typePieChart"></canvas>
+                        </div>
+                        <div class="chart-legend" id="typeLegend"></div>
+                    </div>
+                    
+                    <!-- 趋势图：存储趋势 -->
+                    <div class="chart-card">
+                        <h3 class="chart-title">存储趋势（最近30天）</h3>
+                        <div class="chart-container">
+                            <canvas id="trendLineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="visualization-grid">
+                    <!-- 大文件排行 -->
+                    <div class="chart-card">
+                        <h3 class="chart-title">🏆 大文件排行 TOP 10</h3>
+                        <div class="large-files-list" id="largeFilesList">
+                            <div class="loading-placeholder">加载中...</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件夹占用统计 -->
+                    <div class="chart-card">
+                        <h3 class="chart-title">📁 文件夹占用统计</h3>
+                        <div class="folder-stats-list" id="folderStatsList">
+                            <div class="loading-placeholder">加载中...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 创建文件夹按钮 -->
             <div class="section-actions">
                 <button class="btn btn-create-folder" id="create-folder-btn">
@@ -774,7 +822,459 @@
         flex-wrap: wrap;
     }
 }
+
+/* 存储空间可视化样式 */
+.storage-visualization-section {
+    margin-bottom: 30px;
+}
+
+.visualization-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.visualization-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0;
+}
+
+.btn-refresh {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 20px;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-refresh:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+}
+
+.visualization-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.chart-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border: 1px solid #e2e8f0;
+}
+
+.chart-title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 20px 0;
+}
+
+.chart-container {
+    position: relative;
+    height: 250px;
+}
+
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+    color: #64748b;
+}
+
+.legend-color {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+}
+
+.large-files-list,
+.folder-stats-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.file-item,
+.folder-stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f8fafc;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.file-item:hover,
+.folder-stat-item:hover {
+    background: #f1f5f9;
+    transform: translateX(4px);
+}
+
+.file-info,
+.folder-stat-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.file-rank {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+}
+
+.file-rank.rank-1 { background: linear-gradient(135deg, #FFD700, #FFA500); }
+.file-rank.rank-2 { background: linear-gradient(135deg, #C0C0C0, #A0A0A0); }
+.file-rank.rank-3 { background: linear-gradient(135deg, #CD7F32, #8B4513); }
+.file-rank.rank-other { background: #94a3b8; }
+
+.file-details,
+.folder-stat-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.file-name,
+.folder-stat-name {
+    font-weight: 600;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-meta,
+.folder-stat-meta {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.file-size,
+.folder-stat-size {
+    font-weight: 700;
+    color: #667eea;
+    white-space: nowrap;
+}
+
+.loading-placeholder {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.progress-bar-mini {
+    width: 100%;
+    height: 8px;
+    background: #e2e8f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+}
+
+.progress-bar-mini-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+@media (max-width: 768px) {
+    .visualization-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .visualization-header {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+    }
+}
 </style>
+
+<!-- Chart.js 库 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+<script>
+// 存储空间可视化功能
+let typePieChart = null;
+let trendLineChart = null;
+
+// 颜色配置
+const chartColors = [
+    '#667eea', '#764ba2', '#10B981', '#F59E0B', '#EF4444',
+    '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16', '#F97316'
+];
+
+// 格式化文件大小
+function formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// 加载存储统计数据
+async function loadStorageStats() {
+    try {
+        const response = await fetch('/api/storage-stats');
+        const result = await response.json();
+        
+        if (result.success) {
+            renderTypePieChart(result.data.type_stats);
+            renderTrendLineChart(result.data.trend_data);
+            renderLargeFilesList(result.data.large_files);
+            renderFolderStatsList(result.data.folder_stats);
+        } else {
+            console.error('加载统计数据失败:', result.message);
+        }
+    } catch (error) {
+        console.error('请求失败:', error);
+    }
+}
+
+// 渲染文件类型饼图
+function renderTypePieChart(typeStats) {
+    const ctx = document.getElementById('typePieChart').getContext('2d');
+    
+    if (typePieChart) {
+        typePieChart.destroy();
+    }
+    
+    if (!typeStats || typeStats.length === 0) {
+        document.getElementById('typeLegend').innerHTML = '<p style="color: #94a3b8; text-align: center;">暂无数据</p>';
+        return;
+    }
+    
+    const labels = typeStats.map(item => item.file_type);
+    const data = typeStats.map(item => item.total_size);
+    
+    typePieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: chartColors.slice(0, labels.length),
+                borderWidth: 2,
+                borderColor: '#ffffff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = ((context.raw / total) * 100).toFixed(1);
+                            return `${context.label}: ${formatSize(context.raw)} (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // 渲染图例
+    const legendHtml = typeStats.map((item, index) => `
+        <div class="legend-item">
+            <div class="legend-color" style="background: ${chartColors[index % chartColors.length]}"></div>
+            <span>${item.file_type}: ${formatSize(item.total_size)}</span>
+        </div>
+    `).join('');
+    document.getElementById('typeLegend').innerHTML = legendHtml;
+}
+
+// 渲染存储趋势图
+function renderTrendLineChart(trendData) {
+    const ctx = document.getElementById('trendLineChart').getContext('2d');
+    
+    if (trendLineChart) {
+        trendLineChart.destroy();
+    }
+    
+    if (!trendData || trendData.length === 0) {
+        return;
+    }
+    
+    const labels = trendData.map(item => {
+        const date = new Date(item.date);
+        return `${date.getMonth() + 1}/${date.getDate()}`;
+    });
+    const data = trendData.map(item => item.size);
+    
+    trendLineChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '存储使用量',
+                data: data,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                fill: true,
+                tension: 0.4,
+                pointRadius: 0,
+                pointHoverRadius: 6,
+                pointHoverBackgroundColor: '#667eea'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return formatSize(context.raw);
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxTicksLimit: 7,
+                        color: '#94a3b8'
+                    }
+                },
+                y: {
+                    grid: {
+                        color: '#f1f5f9'
+                    },
+                    ticks: {
+                        color: '#94a3b8',
+                        callback: function(value) {
+                            return formatSize(value);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// 渲染大文件列表
+function renderLargeFilesList(largeFiles) {
+    const container = document.getElementById('largeFilesList');
+    
+    if (!largeFiles || largeFiles.length === 0) {
+        container.innerHTML = '<div class="loading-placeholder">暂无文件</div>';
+        return;
+    }
+    
+    const html = largeFiles.map((file, index) => {
+        const rankClass = index < 3 ? `rank-${index + 1}` : 'rank-other';
+        return `
+            <div class="file-item">
+                <div class="file-info">
+                    <div class="file-rank ${rankClass}">${index + 1}</div>
+                    <div class="file-details">
+                        <div class="file-name" title="${file.filename}">${file.filename}</div>
+                        <div class="file-meta">${file.folder_name} · ${file.created_at || ''}</div>
+                    </div>
+                </div>
+                <div class="file-size">${formatSize(file.size)}</div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// 渲染文件夹统计列表
+function renderFolderStatsList(folderStats) {
+    const container = document.getElementById('folderStatsList');
+    
+    if (!folderStats || folderStats.length === 0) {
+        container.innerHTML = '<div class="loading-placeholder">暂无数据</div>';
+        return;
+    }
+    
+    const maxSize = Math.max(...folderStats.map(item => item.total_size));
+    
+    const html = folderStats.map((folder, index) => {
+        const percentage = maxSize > 0 ? (folder.total_size / maxSize * 100) : 0;
+        return `
+            <div class="folder-stat-item">
+                <div class="folder-stat-info">
+                    <div class="folder-stat-details">
+                        <div class="folder-stat-name">${folder.folder_name}</div>
+                        <div class="folder-stat-meta">${folder.file_count} 个文件</div>
+                        <div class="progress-bar-mini">
+                            <div class="progress-bar-mini-fill" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="folder-stat-size">${formatSize(folder.total_size)}</div>
+            </div>
+        `;
+    }).join('');
+    
+    container.innerHTML = html;
+}
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadStorageStats();
+    
+    // 刷新按钮事件
+    const refreshBtn = document.getElementById('refresh-stats-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function() {
+            this.disabled = true;
+            this.innerHTML = '🔄 刷新中...';
+            loadStorageStats().then(() => {
+                this.disabled = false;
+                this.innerHTML = '🔄 刷新数据';
+            });
+        });
+    }
+});
+</script>
 
 <script src="{{ url_for('static', filename='scripts/project_folders.js') }}"></script>
 {% endblock %}

@@ -1709,12 +1709,14 @@ def file_detail(file_id):
     finally:
         conn.close()
 
-# 删除文件
+# 删除文件（移动到回收站）
 @app.route('/file/<file_id>/delete', methods=['POST'])
 @app.route('/delete-file/<file_id>', methods=['POST'])
 def file_delete(file_id):
     if 'user_id' not in session:
         return redirect(url_for('auth'))
+    
+    referrer = request.headers.get('Referer')
     
     conn = get_db()
     try:
@@ -1735,51 +1737,54 @@ def file_delete(file_id):
             flash('无权限删除此文件')
             return redirect(url_for('index'))
         
-        # 删除文件
-        conn.execute('DELETE FROM files WHERE id = ?', (file_id,))
+        # 移动文件到回收站而不是直接删除
+        trash_id = str(uuid.uuid4())
         
-        # 获取本地时间
-        from datetime import datetime
+        folder_name = None
+        if file['folder_id']:
+            folder = conn.execute('SELECT name FROM folders WHERE id = ?', (file['folder_id'],)).fetchone()
+            folder_name = folder['name'] if folder else None
+        
+        from datetime import datetime, timedelta
+        expire_at = datetime.now() + timedelta(days=30)
+        
+        conn.execute('''
+            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, 
+                             file_size, file_type, folder_id, original_folder_name, deleted_at, expire_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+        ''', (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
+              file['path'], file['size'], file['filename'].split('.')[-1] if '.' in file['filename'] else '',
+              file['folder_id'], folder_name, expire_at))
+        
+        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (file_id,))
+        
         local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # 在同一个数据库连接中直接记录操作日志
         conn.execute('''INSERT INTO operation_logs (user_id, action, target_id, target_type, message, details, created_at) 
                        VALUES (?, ?, ?, ?, ?, ?, ?)''', 
-                   (session['user_id'], 'delete', file_id, 'file', '删除文件', f'文件名: {file["filename"]}', local_time))
+                   (session['user_id'], 'trash', file_id, 'file', '文件移至回收站', f'文件名: {file["filename"]}', local_time))
         
-        # 提交所有更改
         conn.commit()
         
-        flash('文件删除成功')
+        flash('文件已移至回收站')
         
-        # 根据请求来源决定跳转页面
-        referrer = request.headers.get('Referer')
         if referrer and 'folder' in referrer:
-            # 从文件夹详情页删除的，跳回文件夹详情页
-            # 提取folder_id
             folder_id = referrer.split('/')[-1]
             return redirect(url_for('folder_detail', folder_id=folder_id))
         elif referrer and 'user_center' in referrer:
-            # 从用户中心删除的，跳回用户中心
             return redirect(url_for('user_center'))
         else:
-            # 从首页删除的，跳回首页
             return redirect(url_for('index'))
     except Exception as e:
         conn.rollback()
         flash(f'删除文件失败: {str(e)}')
         
-        # 根据请求来源决定跳转页面
-        referrer = request.headers.get('Referer')
         if referrer and 'folder' in referrer:
-            # 从文件夹详情页删除的，跳回文件夹详情页
             folder_id = referrer.split('/')[-1]
             return redirect(url_for('folder_detail', folder_id=folder_id))
         elif referrer and 'user_center' in referrer:
-            # 从用户中心删除的，跳回用户中心
             return redirect(url_for('user_center'))
         else:
-            # 从首页删除的，跳回首页
             return redirect(url_for('index'))
     finally:
         conn.close()
@@ -2204,5 +2209,410 @@ def batch_move():
     except Exception as e:
         conn.rollback()
         return api_response(success=False, message=f'移动失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# ==================== 回收站功能 ====================
+
+# 回收站页面
+@app.route('/trash')
+def trash():
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+    
+    conn = get_db()
+    try:
+        user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        
+        trash_items = conn.execute('''
+            SELECT t.*, 
+                   (julianday(t.expire_at) - julianday('now')) * 24 as remaining_hours
+            FROM trash t
+            WHERE t.user_id = ?
+            ORDER BY t.deleted_at DESC
+        ''', (session['user_id'],)).fetchall()
+        
+        total_size = sum(item['file_size'] or 0 for item in trash_items)
+        
+        return render_template('trash.html', username=session.get('username'), user=user, trash_items=trash_items, total_size=total_size)
+    finally:
+        conn.close()
+
+# 移动文件到回收站
+@app.route('/api/trash/move', methods=['POST'])
+def move_to_trash():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    file_id = request.form.get('file_id') or request.get_json().get('file_id')
+    
+    if not file_id:
+        return api_response(success=False, message='文件ID不能为空', code=400)
+    
+    conn = get_db()
+    try:
+        file = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', 
+                          (file_id, session['user_id'])).fetchone()
+        
+        if not file:
+            return api_response(success=False, message='文件不存在或无权限', code=404)
+        
+        trash_id = str(uuid.uuid4())
+        
+        folder_name = None
+        if file['folder_id']:
+            folder = conn.execute('SELECT name FROM folders WHERE id = ?', (file['folder_id'],)).fetchone()
+            folder_name = folder['name'] if folder else None
+        
+        from datetime import datetime, timedelta
+        expire_at = datetime.now() + timedelta(days=30)
+        
+        conn.execute('''
+            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, 
+                             file_size, file_type, folder_id, original_folder_name, expire_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
+              file['path'], file['size'], file['filename'].split('.')[-1] if '.' in file['filename'] else '',
+              file['folder_id'], folder_name, expire_at))
+        
+        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (file_id,))
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='文件移至回收站',
+            user_id=session['user_id'],
+            action='trash',
+            target_id=file_id,
+            target_type='file',
+            details=f'文件名: {file["filename"]}',
+            request=request
+        )
+        
+        return api_response(success=True, message='文件已移至回收站')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'操作失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# 从回收站恢复文件
+@app.route('/api/trash/restore', methods=['POST'])
+def restore_from_trash():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json() if request.is_json else request.form
+    trash_id = data.get('trash_id')
+    
+    if not trash_id:
+        return api_response(success=False, message='回收站记录ID不能为空', code=400)
+    
+    conn = get_db()
+    try:
+        trash_item = conn.execute('SELECT * FROM trash WHERE id = ? AND user_id = ?', 
+                                 (trash_id, session['user_id'])).fetchone()
+        
+        if not trash_item:
+            return api_response(success=False, message='回收站记录不存在', code=404)
+        
+        if trash_item['folder_id']:
+            folder = conn.execute('SELECT id FROM folders WHERE id = ? AND user_id = ?', 
+                                (trash_item['folder_id'], session['user_id'])).fetchone()
+            if not folder:
+                conn.execute('UPDATE files SET is_deleted = 0, deleted_at = NULL, folder_id = NULL WHERE id = ?', 
+                           (trash_item['file_id'],))
+            else:
+                conn.execute('UPDATE files SET is_deleted = 0, deleted_at = NULL WHERE id = ?', 
+                           (trash_item['file_id'],))
+        else:
+            conn.execute('UPDATE files SET is_deleted = 0, deleted_at = NULL WHERE id = ?', 
+                       (trash_item['file_id'],))
+        
+        conn.execute('DELETE FROM trash WHERE id = ?', (trash_id,))
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='从回收站恢复文件',
+            user_id=session['user_id'],
+            action='restore',
+            target_id=trash_item['file_id'],
+            target_type='file',
+            details=f'文件名: {trash_item["filename"]}',
+            request=request
+        )
+        
+        return api_response(success=True, message='文件已恢复')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'恢复失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# 彻底删除文件
+@app.route('/api/trash/delete-permanent', methods=['POST'])
+def delete_permanent():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json() if request.is_json else request.form
+    trash_id = data.get('trash_id')
+    
+    if not trash_id:
+        return api_response(success=False, message='回收站记录ID不能为空', code=400)
+    
+    conn = get_db()
+    try:
+        trash_item = conn.execute('SELECT * FROM trash WHERE id = ? AND user_id = ?', 
+                                 (trash_id, session['user_id'])).fetchone()
+        
+        if not trash_item:
+            return api_response(success=False, message='回收站记录不存在', code=404)
+        
+        if os.path.exists(trash_item['file_path']):
+            os.unlink(trash_item['file_path'])
+        
+        conn.execute('DELETE FROM files WHERE id = ?', (trash_item['file_id'],))
+        conn.execute('DELETE FROM trash WHERE id = ?', (trash_id,))
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='彻底删除文件',
+            user_id=session['user_id'],
+            action='delete_permanent',
+            target_id=trash_item['file_id'],
+            target_type='file',
+            details=f'文件名: {trash_item["filename"]}',
+            request=request
+        )
+        
+        return api_response(success=True, message='文件已彻底删除')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'删除失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# 清空回收站
+@app.route('/api/trash/empty', methods=['POST'])
+def empty_trash():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        trash_items = conn.execute('SELECT * FROM trash WHERE user_id = ?', 
+                                  (session['user_id'],)).fetchall()
+        
+        deleted_count = 0
+        for item in trash_items:
+            if os.path.exists(item['file_path']):
+                os.unlink(item['file_path'])
+            conn.execute('DELETE FROM files WHERE id = ?', (item['file_id'],))
+            deleted_count += 1
+        
+        conn.execute('DELETE FROM trash WHERE user_id = ?', (session['user_id'],))
+        
+        conn.commit()
+        
+        log_message(
+            log_type='operation',
+            log_level='INFO',
+            message='清空回收站',
+            user_id=session['user_id'],
+            action='empty_trash',
+            target_type='trash',
+            details=f'删除文件数量: {deleted_count}',
+            request=request
+        )
+        
+        return api_response(success=True, message=f'回收站已清空，共删除 {deleted_count} 个文件')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'清空失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# 批量恢复
+@app.route('/api/trash/batch-restore', methods=['POST'])
+def batch_restore():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json() if request.is_json else request.form
+    trash_ids = data.get('trash_ids', [])
+    
+    if not trash_ids:
+        return api_response(success=False, message='请选择要恢复的文件', code=400)
+    
+    conn = get_db()
+    try:
+        restored_count = 0
+        for trash_id in trash_ids:
+            trash_item = conn.execute('SELECT * FROM trash WHERE id = ? AND user_id = ?', 
+                                     (trash_id, session['user_id'])).fetchone()
+            if trash_item:
+                conn.execute('UPDATE files SET is_deleted = 0, deleted_at = NULL WHERE id = ?', 
+                           (trash_item['file_id'],))
+                conn.execute('DELETE FROM trash WHERE id = ?', (trash_id,))
+                restored_count += 1
+        
+        conn.commit()
+        
+        return api_response(success=True, message=f'成功恢复 {restored_count} 个文件')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'恢复失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# 批量彻底删除
+@app.route('/api/trash/batch-delete', methods=['POST'])
+def batch_delete_permanent():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json() if request.is_json else request.form
+    trash_ids = data.get('trash_ids', [])
+    
+    if not trash_ids:
+        return api_response(success=False, message='请选择要删除的文件', code=400)
+    
+    conn = get_db()
+    try:
+        deleted_count = 0
+        for trash_id in trash_ids:
+            trash_item = conn.execute('SELECT * FROM trash WHERE id = ? AND user_id = ?', 
+                                     (trash_id, session['user_id'])).fetchone()
+            if trash_item:
+                if os.path.exists(trash_item['file_path']):
+                    os.unlink(trash_item['file_path'])
+                conn.execute('DELETE FROM files WHERE id = ?', (trash_item['file_id'],))
+                conn.execute('DELETE FROM trash WHERE id = ?', (trash_id,))
+                deleted_count += 1
+        
+        conn.commit()
+        
+        return api_response(success=True, message=f'成功删除 {deleted_count} 个文件')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'删除失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# ==================== 存储空间可视化功能 ====================
+
+@app.route('/api/storage-stats')
+def api_storage_stats():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        type_stats = conn.execute('''
+            SELECT 
+                CASE 
+                    WHEN filename LIKE '%.html' OR filename LIKE '%.htm' THEN 'HTML'
+                    WHEN filename LIKE '%.css' THEN 'CSS'
+                    WHEN filename LIKE '%.js' THEN 'JavaScript'
+                    WHEN filename LIKE '%.py' THEN 'Python'
+                    WHEN filename LIKE '%.jpg' OR filename LIKE '%.jpeg' OR filename LIKE '%.png' OR filename LIKE '%.gif' OR filename LIKE '%.webp' OR filename LIKE '%.svg' THEN '图片'
+                    WHEN filename LIKE '%.mp4' OR filename LIKE '%.avi' OR filename LIKE '%.mov' OR filename LIKE '%.webm' OR filename LIKE '%.mkv' THEN '视频'
+                    WHEN filename LIKE '%.mp3' OR filename LIKE '%.wav' OR filename LIKE '%.flac' OR filename LIKE '%.aac' THEN '音频'
+                    WHEN filename LIKE '%.pdf' THEN 'PDF'
+                    WHEN filename LIKE '%.doc' OR filename LIKE '%.docx' THEN 'Word'
+                    WHEN filename LIKE '%.xls' OR filename LIKE '%.xlsx' THEN 'Excel'
+                    WHEN filename LIKE '%.ppt' OR filename LIKE '%.pptx' THEN 'PPT'
+                    WHEN filename LIKE '%.zip' OR filename LIKE '%.rar' OR filename LIKE '%.7z' OR filename LIKE '%.tar' OR filename LIKE '%.gz' THEN '压缩包'
+                    ELSE '其他'
+                END as file_type,
+                COUNT(*) as count,
+                SUM(size) as total_size
+            FROM files 
+            WHERE user_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
+            GROUP BY file_type
+            ORDER BY total_size DESC
+        ''', (user_id,)).fetchall()
+        
+        large_files = conn.execute('''
+            SELECT id, filename, size, created_at, folder_id
+            FROM files 
+            WHERE user_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
+            ORDER BY size DESC
+            LIMIT 10
+        ''', (user_id,)).fetchall()
+        
+        large_files_list = []
+        for f in large_files:
+            folder_name = '根目录'
+            if f['folder_id']:
+                folder = conn.execute('SELECT name FROM folders WHERE id = ?', (f['folder_id'],)).fetchone()
+                folder_name = folder['name'] if folder else '根目录'
+            large_files_list.append({
+                'id': f['id'],
+                'filename': f['filename'],
+                'size': f['size'],
+                'created_at': f['created_at'],
+                'folder_name': folder_name
+            })
+        
+        from datetime import datetime, timedelta
+        trend_data = []
+        for i in range(30, -1, -1):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            result = conn.execute('''
+                SELECT COALESCE(SUM(size), 0) as total_size
+                FROM files 
+                WHERE user_id = ? 
+                AND (is_deleted = 0 OR is_deleted IS NULL)
+                AND DATE(created_at) <= ?
+            ''', (user_id, date)).fetchone()
+            trend_data.append({
+                'date': date,
+                'size': result['total_size'] if result else 0
+            })
+        
+        total_stats = conn.execute('''
+            SELECT 
+                COUNT(*) as total_files,
+                COALESCE(SUM(size), 0) as total_size
+            FROM files 
+            WHERE user_id = ? AND (is_deleted = 0 OR is_deleted IS NULL)
+        ''', (user_id,)).fetchone()
+        
+        folder_stats = conn.execute('''
+            SELECT 
+                COALESCE(f.name, '根目录') as folder_name,
+                COUNT(fi.id) as file_count,
+                COALESCE(SUM(fi.size), 0) as total_size
+            FROM files fi
+            LEFT JOIN folders f ON fi.folder_id = f.id
+            WHERE fi.user_id = ? AND (fi.is_deleted = 0 OR fi.is_deleted IS NULL)
+            GROUP BY fi.folder_id
+            ORDER BY total_size DESC
+        ''', (user_id,)).fetchall()
+        
+        return api_response(success=True, data={
+            'type_stats': [dict(row) for row in type_stats],
+            'large_files': large_files_list,
+            'trend_data': trend_data,
+            'total_stats': {
+                'total_files': total_stats['total_files'] if total_stats else 0,
+                'total_size': total_stats['total_size'] if total_stats else 0
+            },
+            'folder_stats': [dict(row) for row in folder_stats]
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'获取统计数据失败: {str(e)}', code=500)
     finally:
         conn.close()
