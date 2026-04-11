@@ -4,207 +4,935 @@
     <div class="container">
         <div class="ai-header">
             <h1 class="ai-title">AI 对话（DeepSeek）</h1>
-            <p class="ai-subtitle">与AI进行智能对话，获取专业回答</p>
+            <p class="ai-subtitle">与AI进行智能对话，获取专业回答 - 支持流式输出、多轮对话、Markdown渲染</p>
         </div>
         
-        <div class="ai-card">
-            <form action="{{ url_for('ai_page') }}" method="post" class="ai-form" data-no-loading="true">
-
-                <div class="form-section">
-                    <h2 class="section-title">AI功能选择</h2>
-                    
-                    <div class="form-row">
-                        <div class="form-group full">
-                            <label for="ai_function" class="form-label">选择AI功能</label>
-                            <select id="ai_function" name="ai_function" class="form-select">
-                                <option value="chat">智能对话</option>
-                                <option value="file_analysis">文件内容分析</option>
-                                <option value="smart_categorization">智能分类</option>
-                                <option value="text_summarization">文本摘要</option>
-                                <option value="code_explanation">代码解释</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-section">
-                    <h2 class="section-title">输入内容</h2>
-                    
-                    <div class="form-group">
-                        <label for="prompt" class="form-label">问题/文本/文件内容</label>
-                        <textarea id="prompt" name="prompt" rows="5" placeholder="在此输入您的问题、文本内容或粘贴文件内容" class="form-textarea" required></textarea>
-                        <p class="form-hint">
-                            • 智能对话：直接输入您的问题<br>
-                            • 文件内容分析：粘贴文件内容，描述您想分析的内容<br>
-                            • 智能分类：输入内容，让AI自动分类<br>
-                            • 文本摘要：输入长文本，获取摘要<br>
-                            • 代码解释：输入代码，获取详细解释
-                        </p>
-                    </div>
-                </div>
-                
-                <div class="form-section">
-                    <h2 class="section-title">AI设置</h2>
-                    
-                    <div class="form-row">
-                        <div class="form-group half">
-                            <label for="model" class="form-label">AI模型</label>
-                            <select id="model" name="model" class="form-select">
-                                <option value="deepseek-chat">DeepSeek Chat</option>
-                            </select>
-                        </div>
-                        <div class="form-group half">
-                            <label for="temperature" class="form-label">生成温度</label>
-                            <select id="temperature" name="temperature" class="form-select">
-                                <option value="0.3">精确 (0.3)</option>
-                                <option value="0.5" selected>平衡 (0.5)</option>
-                                <option value="0.7">灵活 (0.7)</option>
-                                <option value="1.0">创意 (1.0)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-actions">
-                    <a href="{{ url_for('index') }}" class="btn btn-cancel">取消</a>
-                    <button type="submit" class="btn btn-primary btn-submit">
-                        <span class="btn-icon">🤖</span>
-                        发送请求
+        <div class="ai-main-layout">
+            <!-- 左侧：对话历史面板 -->
+            <div class="ai-sidebar" id="aiSidebar">
+                <div class="sidebar-header">
+                    <h3>对话历史</h3>
+                    <button class="btn btn-sm btn-secondary" onclick="newConversation()" title="新建对话">
+                        ➕ 新建
                     </button>
                 </div>
-            </form>
-            
-            {% if ai_error %}
-                <div class="error-message">
-                    <h3 class="error-title">请求失败</h3>
-                    <p class="error-text">{{ ai_error }}</p>
+                <div class="conversation-list" id="conversationList">
+                    <p class="loading-text">加载中...</p>
                 </div>
-            {% endif %}
+                <div class="sidebar-footer">
+                    <button class="btn btn-sm btn-danger" onclick="clearAllConversations()">
+                        🗑️ 清空所有对话
+                    </button>
+                </div>
+            </div>
             
-            {% if ai_output %}
-                <div class="response-section">
-                    <h2 class="section-title">AI回复</h2>
-                    <div class="response-header">
-                        <form action="{{ url_for('save_ai_content') }}" method="post" class="save-form">
-
-                            <input type="hidden" name="ai_function" value="{{ request.form.get('ai_function', 'chat') }}">
-                            <input type="hidden" name="prompt" value="{{ request.form.get('prompt') }}">
-                            <input type="hidden" name="response" value="{{ ai_output }}">
-                            <button type="submit" class="btn btn-secondary">
-                                <span class="btn-icon">💾</span>
-                                保存回复
-                            </button>
+            <!-- 右侧：主对话区域 -->
+            <div class="ai-chat-area">
+                <div class="ai-card">
+                    <!-- 对话消息区域 -->
+                    <div class="chat-messages" id="chatMessages">
+                        <div class="welcome-message">
+                            <div class="welcome-icon">🤖</div>
+                            <h3>欢迎使用 AI 助手</h3>
+                            <p>选择AI功能，输入您的问题开始对话</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 输入区域 -->
+                    <div class="chat-input-area">
+                        <form action="{{ url_for('ai') }}" method="post" class="ai-form" data-no-loading="true" id="aiForm">
+                            <div class="input-toolbar">
+                                <select id="ai_function" name="ai_function" class="toolbar-select">
+                                    <option value="chat">💬 智能对话</option>
+                                    <option value="file_analysis">📄 文件分析</option>
+                                    <option value="smart_categorization">🏷️ 智能分类</option>
+                                    <option value="text_summarization">📝 文本摘要</option>
+                                    <option value="code_explanation">💻 代码解释</option>
+                                </select>
+                                <select id="model" name="model" class="toolbar-select">
+                                    <option value="deepseek-chat">DeepSeek Chat</option>
+                                </select>
+                                <select id="temperature" name="temperature" class="toolbar-select">
+                                    <option value="0.3">精确(0.3)</option>
+                                    <option value="0.5" selected>平衡(0.5)</option>
+                                    <option value="0.7">灵活(0.7)</option>
+                                    <option value="1.0">创意(1.0)</option>
+                                </select>
+                                <span class="stream-toggle">
+                                    <label for="useStream">
+                                        <input type="checkbox" id="useStream" checked> 流式输出
+                                    </label>
+                                </span>
+                            </div>
+                            <div class="input-row">
+                                <textarea id="prompt" name="prompt" rows="3" placeholder="在此输入您的问题、文本内容或粘贴文件内容..." class="form-textarea chat-input" required></textarea>
+                                <button type="submit" class="btn btn-primary send-btn" id="sendBtn">
+                                    <span class="btn-icon">发送</span>
+                                </button>
+                            </div>
                         </form>
                     </div>
-                    <div class="ai-output">
-                        {{ ai_output }}
-                    </div>
                 </div>
-            {% endif %}
-            
-            <!-- AI内容管理区域 -->
-            <div class="ai-management">
-                <h2 class="section-title">AI内容管理</h2>
                 
-                {% if saved_contents %}
-                    <div class="saved-contents-grid">
-                        {% for content in saved_contents %}
-                            <div class="saved-content-card">
-                                <div class="content-header">
-                                    <div class="content-function">{{ content.ai_function }}</div>
-                                    <div class="content-date">{{ content.created_at }}</div>
-                                </div>
-                                <div class="content-prompt">
-                                    <strong>问题：</strong>{{ content.prompt[:100] }}{% if content.prompt|length > 100 %}...{% endif %}
-                                </div>
-                                <div class="content-response">
-                                    <strong>回复：</strong>{{ content.response[:150] }}{% if content.response|length > 150 %}...{% endif %}
-                                </div>
-                                <div class="content-actions">
-                                    <button class="btn btn-sm btn-primary view-content" data-id="{{ content.id }}">
-                                        <span class="btn-icon">👁️</span>
-                                        查看
-                                    </button>
-                                    <form action="{{ url_for('delete_ai_content') }}" method="post" style="display: inline;">
-
-                                        <input type="hidden" name="content_id" value="{{ content.id }}">
-                                        <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要删除这条内容吗？')">
-                                            <span class="btn-icon">🗑️</span>
-                                            删除
+                <!-- AI内容管理区域 -->
+                <div class="ai-management">
+                    <div class="management-header">
+                        <h2 class="section-title">已保存的内容</h2>
+                        <div class="management-actions">
+                            <button class="btn btn-sm btn-secondary" onclick="exportSelectedContent('markdown')">
+                                📥 导出MD
+                            </button>
+                            <button class="btn btn-sm btn-secondary" onclick="exportSelectedContent('txt')">
+                                📥 导出TXT
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {% if saved_contents %}
+                        <div class="saved-contents-grid">
+                            {% for content in saved_contents %}
+                                <div class="saved-content-card" data-id="{{ content.id }}">
+                                    <div class="content-header">
+                                        <div class="content-function">{{ content.ai_function }}</div>
+                                        <div class="content-date">{{ content.created_at[:16] }}</div>
+                                    </div>
+                                    <div class="content-prompt">
+                                        <strong>问题：</strong>{{ content.prompt[:80] }}{% if content.prompt|length > 80 %}...{% endif %}
+                                    </div>
+                                    <div class="content-response-preview">
+                                        {{ content.response[:100] }}{% if content.response|length > 100 %}...{% endif %}
+                                    </div>
+                                    <div class="content-actions">
+                                        <button class="btn btn-sm btn-primary view-content" data-id="{{ content.id }}" onclick="viewSavedContent('{{ content.id }}')">
+                                            👁️ 查看
                                         </button>
-                                    </form>
+                                        <button class="btn btn-sm btn-secondary copy-content" data-id="{{ content.id }}" onclick="copySavedContent('{{ content.id }}')">
+                                            📋 复制
+                                        </button>
+                                        <button class="btn btn-sm btn-secondary export-content-md" data-id="{{ content.id }}" onclick="exportSingleContent('{{ content.id }}', 'markdown')">
+                                            📥 MD
+                                        </button>
+                                        <form action="{{ url_for('delete_ai_content') }}" method="post" style="display: inline;">
+                                            <input type="hidden" name="content_id" value="{{ content.id }}">
+                                            <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('确定要删除这条内容吗？')">
+                                                🗑️ 删除
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
-                            </div>
-                        {% endfor %}
-                    </div>
-                {% else %}
-                    <div class="empty-state">
-                        <div class="empty-icon">📝</div>
-                        <p>您还没有保存任何AI生成的内容</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-        
-        <div class="ai-features">
-            <h2 class="features-title">AI对话的优势</h2>
-            <div class="features-grid">
-                <div class="feature-card">
-                    <div class="feature-icon">💡</div>
-                    <h3 class="feature-title">智能回答</h3>
-                    <p class="feature-desc">基于DeepSeek强大的AI模型，提供准确、专业的回答</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3 class="feature-title">快速响应</h3>
-                    <p class="feature-desc">实时处理您的问题，快速返回结果</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">📚</div>
-                    <h3 class="feature-title">知识渊博</h3>
-                    <p class="feature-desc">涵盖广泛的知识领域，解答各类问题</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔒</div>
-                    <h3 class="feature-title">安全可靠</h3>
-                    <p class="feature-desc">保护您的隐私，确保对话内容安全</p>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <div class="empty-icon">📝</div>
+                            <p>您还没有保存任何AI生成的内容</p>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<!-- Markdown渲染库 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+
 <div id="app-data" data-is-logged-in="{{ session.user_id is not none | tojson | safe }}" class="hidden"></div>
 <link rel="stylesheet" href="{{ url_for('static', filename='ai.css') }}">
+
+<style>
+/* AI增强样式 */
+.ai-main-layout {
+    display: flex;
+    gap: 20px;
+    margin-top: 20px;
+}
+
+.ai-sidebar {
+    width: 260px;
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    height: fit-content;
+    max-height: 600px;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    color: #1e293b;
+}
+
+.conversation-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.conversation-item {
+    padding: 10px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.conversation-item:hover {
+    background: #f8fafc;
+}
+
+.conversation-item.active {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.conversation-item .conv-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversation-item .conv-meta {
+    font-size: 0.75rem;
+    opacity: 0.7;
+    margin-top: 4px;
+}
+
+.sidebar-footer {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.ai-chat-area {
+    flex: 1;
+}
+
+.chat-messages {
+    min-height: 300px;
+    max-height: 450px;
+    overflow-y: auto;
+    padding: 20px;
+    background: #f8fafc;
+    border-radius: 12px 12px 0 0;
+    border: 1px solid #e2e8f0;
+    border-bottom: none;
+}
+
+.welcome-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #64748b;
+}
+
+.welcome-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+}
+
+.message-item {
+    margin-bottom: 16px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.message-user {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.message-assistant {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.message-bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 12px;
+    line-height: 1.6;
+}
+
+.message-user .message-bubble {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.message-assistant .message-bubble {
+    background: white;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    border-bottom-left-radius: 4px;
+}
+
+.message-bubble pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 10px 0;
+    position: relative;
+}
+
+.message-bubble code {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.9rem;
+}
+
+.message-bubble p:last-child {
+    margin-bottom: 0;
+}
+
+.message-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    justify-content: flex-end;
+}
+
+.msg-action-btn {
+    background: #f1f5f9;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.msg-action-btn:hover {
+    background: #e2e8f0;
+}
+
+.chat-input-area {
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 0 0 12px 12px;
+    padding: 16px;
+}
+
+.input-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.toolbar-select {
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    background: white;
+}
+
+.stream-toggle label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    color: #475569;
+    cursor: pointer;
+}
+
+.input-row {
+    display: flex;
+    gap: 10px;
+}
+
+.chat-input {
+    flex: 1;
+    resize: none;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 0.95rem;
+}
+
+.chat-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.send-btn {
+    height: auto;
+    padding: 12px 24px;
+    align-self: flex-end;
+}
+
+.send-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+}
+
+.typing-dot {
+    width: 8px;
+    height: 8px;
+    background: #94a3b8;
+    border-radius: 50%;
+    animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes typingBounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+.management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.content-response-preview {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 8px 0;
+    line-height: 1.4;
+    max-height: 60px;
+    overflow: hidden;
+}
+
+@media (max-width: 900px) {
+    .ai-main-layout {
+        flex-direction: column;
+    }
+    
+    .ai-sidebar {
+        width: 100%;
+        max-height: 200px;
+    }
+}
+</style>
+
 <script>
-  // AI请求表单提交处理
-  document.addEventListener('DOMContentLoaded', function() {
-    const aiForm = document.querySelector('.ai-form');
+// ==================== AI增强功能 - 第二阶段 ====================
+
+let currentConversationId = null;
+let isStreaming = false;
+
+// 初始化 marked 配置
+marked.setOptions({
+    highlight: function(code, lang) {
+        if (lang && hljs.getLanguage(lang)) {
+            try {
+                return hljs.highlight(code, { language: lang }).value;
+            } catch (e) {}
+        }
+        return hljs.highlightAuto(code).value;
+    },
+    breaks: true,
+    gfm: true
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 加载对话历史
+    loadConversations();
     
-    aiForm.addEventListener('submit', function(e) {
-      // 显示加载动画
-      showLoading();
-      
-      // 表单提交成功后隐藏加载动画
-      setTimeout(() => {
-        hideLoading();
-      }, 1000);
+    // 表单提交处理
+    const aiForm = document.getElementById('aiForm');
+    aiForm.addEventListener('submit', handleAiSubmit);
+});
+
+async function handleAiSubmit(e) {
+    e.preventDefault();
+    
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) return;
+    
+    const useStream = document.getElementById('useStream').checked;
+    const sendBtn = document.getElementById('sendBtn');
+    
+    // 禁用按钮，显示加载状态
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '⏳ 发送中...';
+    
+    // 添加用户消息到界面
+    addMessageToChat('user', prompt);
+    
+    // 清空输入框
+    document.getElementById('prompt').value = '';
+    
+    if (useStream) {
+        await streamChat(prompt);
+    } else {
+        await normalChat(prompt);
+    }
+    
+    sendBtn.disabled = false;
+    sendBtn.innerHTML = '<span class="btn-icon">发送</span>';
+}
+
+function addMessageToChat(role, content, isStreaming = false) {
+    const chatMessages = document.getElementById('chatMessages');
+    
+    // 移除欢迎消息
+    const welcomeMsg = chatMessages.querySelector('.welcome-message');
+    if (welcomeMsg) welcomeMsg.remove();
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message-item message-${role}`;
+    
+    let contentHtml = content;
+    if (role === 'assistant') {
+        contentHtml = marked.parse(content);
+    }
+    
+    messageDiv.innerHTML = `
+        <div class="message-bubble ${isStreaming ? 'streaming' : ''}" ${role === 'assistant' ? `id="currentResponse"` : ''}>
+            ${contentHtml}
+        </div>
+        ${role === 'assistant' && !isStreaming ? `
+        <div class="message-actions">
+            <button class="msg-action-btn" onclick="copyMessage(this)">📋 复制</button>
+            <button class="msg-action-btn" onclick="exportMessage(this, 'markdown')">📥 导出MD</button>
+        </div>
+        ` : ''}
+    `;
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    // 代码高亮
+    messageDiv.querySelectorAll('pre code').forEach(block => {
+        hljs.highlightElement(block);
     });
     
-    // 保存回复表单提交处理
-    const saveForms = document.querySelectorAll('.save-form');
-    saveForms.forEach(form => {
-      form.addEventListener('submit', function(e) {
-        // 显示加载动画
-        showLoading();
+    return messageDiv;
+}
+
+async function streamChat(prompt) {
+    isStreaming = true;
+    const aiFunction = document.getElementById('ai_function').value;
+    const model = document.getElementById('model').value;
+    const temperature = document.getElementById('temperature').value;
+
+    // 显示打字指示器
+    const chatMessages = document.getElementById('chatMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'message-item message-assistant';
+    typingDiv.id = 'currentMessage';
+    typingDiv.innerHTML = `
+        <div class="message-bubble streaming" id="currentResponse">
+            <div class="typing-indicator">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+    `;
+    chatMessages.appendChild(typingDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 120000); // 2分钟超时
+
+        const response = await fetch('/api/ai/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt,
+                model: model,
+                temperature: temperature,
+                ai_function: aiFunction,
+                conversation_id: currentConversationId
+            }),
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        // 检查HTTP状态码
+        if (!response.ok) {
+            let errorMsg = `HTTP错误: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.message || errorData.error || errorMsg;
+            } catch (e) {}
+            throw new Error(errorMsg);
+        }
+
+        // 检查是否是SSE流
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('text/event-stream')) {
+            const text = await response.text();
+            try {
+                const data = JSON.parse(text);
+                throw new Error(data.message || data.error || '非流式响应');
+            } catch (e) {
+                if (e.message === '非流式响应') throw e;
+                throw new Error(text.substring(0, 200));
+            }
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+
+        // 替换打字指示器为空内容
+        const responseBubble = document.getElementById('currentResponse');
+        if (responseBubble) {
+            responseBubble.innerHTML = '';
+        }
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+
+                        if (data.error) {
+                            const bubble = document.getElementById('currentResponse');
+                            if (bubble) {
+                                bubble.innerHTML = `<span style="color: red; padding: 10px; display: block;">❌ 错误: ${data.error}</span>`;
+                            }
+                            return; // 结束流式读取
+                        }
+
+                        if (data.content) {
+                            fullResponse += data.content;
+                            const bubble = document.getElementById('currentResponse');
+                            if (bubble) {
+                                bubble.innerHTML = marked.parse(fullResponse);
+
+                                // 实时代码高亮
+                                bubble.querySelectorAll('pre code').forEach(block => {
+                                    hljs.highlightElement(block);
+                                });
+                            }
+
+                            chatMessages.scrollTop = chatMessages.scrollHeight;
+                        }
+
+                        if (data.done) {
+                            currentConversationId = data.conversation_id;
+
+                            // 添加操作按钮
+                            const msgDiv = document.getElementById('currentMessage');
+                            if (msgDiv) {
+                                const msgActions = document.createElement('div');
+                                msgActions.className = 'message-actions';
+                                msgActions.innerHTML = `
+                                    <button class="msg-action-btn" onclick="copyCurrentResponse()">📋 复制</button>
+                                    <button class="msg-action-btn" onclick="saveCurrentConversation()">💾 保存</button>
+                                    <button class="msg-action-btn" onclick="exportCurrentResponse('markdown')">📥 MD</button>
+                                `;
+                                const bubble = msgDiv.querySelector('.message-bubble');
+                                if (bubble && !bubble.nextElementSibling?.classList.contains('message-actions')) {
+                                    bubble.after(msgActions);
+                                }
+                            }
+
+                            // 刷新对话列表
+                            loadConversations();
+                        }
+                    } catch (e) {
+                        console.warn('解析SSE数据失败:', e);
+                    }
+                }
+            }
+        }
+
+    } catch (error) {
+        console.error('流式请求失败:', error);
+        const responseBubble = document.getElementById('currentResponse');
+        if (responseBubble) {
+            if (error.name === 'AbortError') {
+                responseBubble.innerHTML = `<span style="color: orange; padding: 10px; display: block;">⏱️ 请求超时（2分钟），请稍后重试</span>`;
+            } else {
+                responseBubble.innerHTML = `<span style="color: red; padding: 10px; display: block;">❌ 请求失败: ${error.message}</span>`;
+            }
+        }
+    } finally {
+        isStreaming = false;
+        // 重置发送按钮状态
+        const sendBtn = document.getElementById('sendBtn');
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = '<span class="btn-icon">发送</span>';
+        }
+    }
+}
+
+async function normalChat(prompt) {
+    const aiForm = document.getElementById('aiForm');
+    
+    try {
+        const formData = new FormData(aiForm);
+        const response = await fetch('/ai', {
+            method: 'POST',
+            body: formData
+        });
         
-        // 表单提交成功后隐藏加载动画并显示成功提示
-        setTimeout(() => {
-          hideLoading();
-          showToast('回复保存成功', 'success');
-        }, 500);
-      });
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        
+        const outputSection = doc.querySelector('.response-section .ai-output');
+        const errorSection = doc.querySelector('.error-message');
+        
+        if (outputSection) {
+            addMessageToChat('assistant', outputSection.textContent);
+        } else if (errorSection) {
+            addMessageToChat('assistant', errorSection.textContent);
+        } else {
+            addMessageToChat('assistant', '未收到有效回复');
+        }
+        
+    } catch (error) {
+        addMessageToChat('assistant', `请求失败: ${error.message}`);
+    }
+}
+
+// ==================== 对话历史管理 ====================
+
+async function loadConversations() {
+    try {
+        const response = await fetch('/api/ai/conversations');
+        const result = await response.json();
+        
+        const listContainer = document.getElementById('conversationList');
+        
+        if (result.success && result.data.conversations.length > 0) {
+            listContainer.innerHTML = result.data.conversations.map(conv => `
+                <div class="conversation-item ${conv.id === currentConversationId ? 'active' : ''}" 
+                     onclick="loadConversation('${conv.id}')"
+                     id="conv-${conv.id}">
+                    <div class="conv-title">${conv.title}</div>
+                    <div class="conv-meta">${conv.message_count} 条消息</div>
+                </div>
+            `).join('');
+        } else {
+            listContainer.innerHTML = '<p class="empty-conv">暂无对话记录</p>';
+        }
+    } catch (error) {
+        console.error('加载对话列表失败:', error);
+    }
+}
+
+async function loadConversation(convId) {
+    currentConversationId = convId;
+    
+    // 高亮当前选中
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
     });
-  });
+    document.getElementById(`conv-${convId}`)?.classList.add('active');
+    
+    try {
+        const response = await fetch(`/api/ai/conversation/${convId}`);
+        const result = await response.json();
+        
+        if (result.success) {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.innerHTML = '';
+            
+            result.data.messages.forEach(msg => {
+                if (msg.role !== 'system') {
+                    addMessageToChat(msg.role, msg.content);
+                }
+            });
+        }
+    } catch (error) {
+        console.error('加载对话失败:', error);
+    }
+}
+
+function newConversation() {
+    currentConversationId = null;
+    document.querySelectorAll('.conversation-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = `
+        <div class="welcome-message">
+            <div class="welcome-icon">🤖</div>
+            <h3>欢迎使用 AI 助手</h3>
+            <p>选择AI功能，输入您的问题开始对话</p>
+        </div>
+    `;
+}
+
+async function clearAllConversations() {
+    if (!confirm('确定要清空所有对话吗？')) return;
+    
+    try {
+        const response = await fetch('/api/ai/conversations/clear', { method: 'POST' });
+        const result = await response.json();
+        
+        if (result.success) {
+            newConversation();
+            loadConversations();
+            alert(result.message);
+        }
+    } catch (error) {
+        alert('清空失败: ' + error.message);
+    }
+}
+
+// ==================== 复制和导出功能 ====================
+
+function copyMessage(btn) {
+    const bubble = btn.closest('.message-item').querySelector('.message-bubble');
+    const text = bubble.innerText;
+    
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = '✅ 已复制';
+        setTimeout(() => btn.textContent = '📋 复制', 2000);
+    });
+}
+
+function copyCurrentResponse() {
+    const bubble = document.getElementById('currentResponse');
+    if (bubble) {
+        navigator.clipboard.writeText(bubble.innerText).then(() => {
+            alert('已复制到剪贴板');
+        });
+    }
+}
+
+async function saveCurrentConversation() {
+    const bubble = document.getElementById('currentResponse');
+    if (!bubble) return;
+    
+    const prompt = document.querySelectorAll('.message-user .message-bubble');
+    const lastPrompt = prompt.length > 0 ? prompt[prompt.length - 1].innerText : '';
+    const response = bubble.innerText;
+    const aiFunction = document.getElementById('ai_function').value;
+    
+    try {
+        const form = new FormData();
+        form.append('ai_function', aiFunction);
+        form.append('prompt', lastPrompt);
+        form.append('response', response);
+        
+        const res = await fetch('/save-ai-content', { method: 'POST', body: form });
+        const result = await res.json();
+        
+        alert(result.success ? '保存成功！' : result.message);
+    } catch (error) {
+        alert('保存失败: ' + error.message);
+    }
+}
+
+function exportMessage(btn, format) {
+    const bubble = btn.closest('.message-item').querySelector('.message-bubble');
+    const content = bubble.innerHTML;
+    
+    if (format === 'markdown') {
+        downloadFile(content, 'ai_content.md', 'text/markdown');
+    } else {
+        downloadFile(bubble.innerText, 'ai_content.txt', 'text/plain');
+    }
+}
+
+function exportCurrentResponse(format) {
+    const bubble = document.getElementById('currentResponse');
+    if (!bubble) return;
+    
+    if (format === 'markdown') {
+        downloadFile(bubble.innerHTML, `ai_conversation_${Date.now()}.md`, 'text/markdown');
+    } else {
+        downloadFile(bubble.innerText, `ai_conversation_${Date.now()}.txt`, 'text/plain');
+    }
+}
+
+function exportSelectedContent(format) {
+    window.location.href = `/api/ai/export/${format}?type=saved`;
+}
+
+function exportSingleContent(id, format) {
+    window.location.href = `/api/ai/export/${format}?id=${id}`;
+}
+
+function exportConversation(convId, format) {
+    window.location.href = `/api/ai/export/${format}?conversation_id=${convId}`;
+}
+
+function viewSavedContent(id) {
+    fetch(`/api/ai-content/${id}`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                const win = window.open('', '_blank');
+                win.document.write(`
+                    <html><head><title>AI内容详情</title>
+                    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.0/marked.min.js"><\/script>
+                    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"><\/script>
+                    <style>body{font-family:sans-serif;padding:40px;max-width:800px;margin:auto;line-height:1.6}
+                    h2{color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:10px}
+                    pre{background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;overflow-x:auto}
+                    code{font-family:monospace}</style></head>
+                    <body><h2>${result.data.ai_function}</h2>
+                    <h3>用户输入</h3><pre>${result.data.prompt}</pre>
+                    <h3>AI回复</h3><div id="content">${marked.parse(result.data.response)}</div>
+                    <script>document.querySelectorAll('pre code').forEach(hljs.highlightElement)<\/script></body></html>
+                `);
+            }
+        });
+}
+
+function copySavedContent(id) {
+    fetch(`/api/ai-content/${id}`)
+        .then(res => res.json())
+        .then(result => {
+            if (result.success) {
+                navigator.clipboard.writeText(result.data.response);
+                alert('已复制到剪贴板！');
+            }
+        });
+}
+
+function downloadFile(content, filename, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+}
 </script>
 {% endblock %}

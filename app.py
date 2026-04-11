@@ -1458,8 +1458,8 @@ def main():
         print("  按 Ctrl+C 停止服务器")
         print("=" * 60 + "\n")
         
-        # 启动Flask应用
-        app.run(debug=True, host='0.0.0.0', port=9876)
+        # 启动Flask应用（禁用reloader以支持SSE流式传输）
+        app.run(debug=True, host='0.0.0.0', port=9876, use_reloader=False)
         
     except KeyboardInterrupt:
         print("\n\n[停止] 服务器已正常停止")

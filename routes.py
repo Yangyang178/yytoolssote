@@ -758,12 +758,555 @@ def send_email_code():
         return api_response(success=False, message=f'发送验证码失败: {str(e)}', code=500)
 
 # AI页面
-@app.route('/ai')
+@app.route('/ai', methods=['GET', 'POST'])
 def ai():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
     
-    return render_template('ai_page.html', username=session.get('username'))
+    conn = get_db()
+    saved_contents = []
+    
+    try:
+        # 获取用户保存的AI内容
+        rows = conn.execute('''SELECT id, ai_function, prompt, response, created_at 
+                          FROM ai_contents 
+                          WHERE user_id = ? 
+                          ORDER BY created_at DESC''', (session['user_id'],)).fetchall()
+        
+        saved_contents = [{
+            'id': row['id'],
+            'ai_function': row['ai_function'],
+            'prompt': row['prompt'],
+            'response': row['response'],
+            'created_at': row['created_at']
+        } for row in rows]
+    except Exception as e:
+        print(f"获取AI内容失败: {e}")
+    finally:
+        conn.close()
+    
+    # POST请求处理
+    if request.method == 'POST':
+        return handle_ai_request()
+    
+    return render_template('ai_page.html', username=session.get('username'), saved_contents=saved_contents)
+
+
+def handle_ai_request():
+    """处理AI请求"""
+    from app import deepseek_chat
+    import uuid
+    
+    ai_function = request.form.get('ai_function', 'chat')
+    prompt = request.form.get('prompt', '').strip()
+    model = request.form.get('model', 'deepseek-chat')
+    temperature = request.form.get('temperature', '0.5')
+    
+    if not prompt:
+        return render_template('ai_page.html', 
+                            username=session.get('username'),
+                            saved_contents=get_saved_ai_contents(),
+                            ai_error='请输入问题或内容')
+    
+    try:
+        # 根据功能类型构建消息
+        messages = build_ai_messages(ai_function, prompt)
+        
+        # 调用DeepSeek API
+        result = deepseek_chat(messages, model, temperature)
+        
+        # 解析回复
+        if result and 'choices' in result and len(result['choices']) > 0:
+            ai_output = result['choices'][0]['message']['content']
+        else:
+            raise Exception("AI返回格式异常")
+        
+        return render_template('ai_page.html',
+                            username=session.get('username'),
+                            saved_contents=get_saved_ai_contents(),
+                            ai_output=ai_output,
+                            last_request={
+                                'ai_function': ai_function,
+                                'prompt': prompt,
+                                'model': model,
+                                'temperature': temperature
+                            })
+    
+    except Exception as e:
+        error_msg = str(e)
+        if 'API_KEY' in error_msg or '401' in error_msg:
+            error_msg = 'API密钥配置错误或无效，请联系管理员'
+        elif 'timeout' in error_msg.lower() or '连接' in error_msg.lower():
+            error_msg = 'AI服务连接超时，请稍后重试'
+        elif '429' in error_msg or 'rate' in error_msg.lower():
+            error_msg = '请求过于频繁，请稍后重试'
+        else:
+            error_msg = f'AI请求失败: {error_msg}'
+        
+        return render_template('ai_page.html',
+                            username=session.get('username'),
+                            saved_contents=get_saved_ai_contents(),
+                            ai_error=error_msg)
+
+
+def build_ai_messages(ai_function, prompt):
+    """根据AI功能类型构建消息"""
+    system_prompts = {
+        'chat': '你是一个专业的AI助手，请用中文回答用户的问题，回答要准确、详细、有条理。',
+        'file_analysis': '你是一个专业的文件内容分析专家，请仔细分析用户提供的内容，给出详细的解读和建议。',
+        'smart_categorization': '你是一个文本分类专家，请对用户提供的文本进行智能分类，并说明分类依据。',
+        'text_summarization': '你是一个文本摘要专家，请为用户提供的长文本生成简洁、准确的摘要，保留关键信息。',
+        'code_explanation': '你是一个编程专家，请详细解释用户提供的代码，包括功能、逻辑、使用场景等。'
+    }
+    
+    system_prompt = system_prompts.get(ai_function, system_prompts['chat'])
+    
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt}
+    ]
+    
+    return messages
+
+
+def get_saved_ai_contents():
+    """获取用户保存的AI内容"""
+    if 'user_id' not in session:
+        return []
+    
+    conn = get_db()
+    try:
+        rows = conn.execute('''SELECT id, ai_function, prompt, response, created_at 
+                          FROM ai_contents 
+                          WHERE user_id = ? 
+                          ORDER BY created_at DESC''', (session['user_id'],)).fetchall()
+        
+        return [{
+            'id': row['id'],
+            'ai_function': row['ai_function'],
+            'prompt': row['prompt'],
+            'response': row['response'],
+            'created_at': row['created_at']
+        } for row in rows]
+    finally:
+        conn.close()
+
+
+# 保存AI内容
+@app.route('/save-ai-content', methods=['POST'])
+def save_ai_content():
+    if 'user_id' not in session:
+        if request.is_json:
+            return api_response(success=False, message='请先登录', code=401)
+        return redirect(url_for('auth'))
+    
+    data = request.form if request.method == 'POST' and not request.is_json else (request.get_json(silent=True) or {})
+    
+    ai_function = data.get('ai_function', 'chat')
+    prompt = data.get('prompt', '')
+    response = data.get('response', '')
+    
+    if not prompt or not response:
+        if request.is_json:
+            return api_response(success=False, message='参数不完整')
+        flash('保存失败：缺少必要参数')
+        return redirect(url_for('ai'))
+    
+    import uuid
+    content_id = str(uuid.uuid4())
+    
+    conn = get_db()
+    try:
+        conn.execute('''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response) 
+                       VALUES (?, ?, ?, ?, ?)''', 
+                   (content_id, session['user_id'], ai_function, prompt, response))
+        conn.commit()
+        
+        if request.is_json:
+            return api_response(success=True, message='保存成功')
+        flash('AI内容保存成功')
+        return redirect(url_for('ai'))
+    
+    except Exception as e:
+        if request.is_json:
+            return api_response(success=False, message=f'保存失败: {str(e)}')
+        flash(f'保存失败: {str(e)}')
+        return redirect(url_for('ai'))
+    finally:
+        conn.close()
+
+
+# 删除AI内容
+@app.route('/delete-ai-content', methods=['POST'])
+def delete_ai_content():
+    if 'user_id' not in session:
+        if request.is_json:
+            return api_response(success=False, message='请先登录', code=401)
+        return redirect(url_for('auth'))
+    
+    data = request.form if request.method == 'POST' and not request.is_json else (request.get_json(silent=True) or {})
+    content_id = data.get('content_id')
+    
+    if not content_id:
+        if request.is_json:
+            return api_response(success=False, message='缺少内容ID')
+        flash('删除失败：缺少内容ID')
+        return redirect(url_for('ai'))
+    
+    conn = get_db()
+    try:
+        # 验证内容属于当前用户
+        content = conn.execute('SELECT * FROM ai_contents WHERE id = ? AND user_id = ?', 
+                             (content_id, session['user_id'])).fetchone()
+        
+        if not content:
+            if request.is_json:
+                return api_response(success=False, message='内容不存在或无权删除')
+            flash('内容不存在或无权删除')
+            return redirect(url_for('ai'))
+        
+        conn.execute('DELETE FROM ai_contents WHERE id = ? AND user_id = ?', 
+                   (content_id, session['user_id']))
+        conn.commit()
+        
+        if request.is_json:
+            return api_response(success=True, message='删除成功')
+        flash('AI内容已删除')
+        return redirect(url_for('ai'))
+    
+    except Exception as e:
+        if request.is_json:
+            return api_response(success=False, message=f'删除失败: {str(e)}')
+        flash(f'删除失败: {str(e)}')
+        return redirect(url_for('ai'))
+    finally:
+        conn.close()
+
+
+# 查看AI内容详情（返回JSON）
+@app.route('/api/ai-content/<content_id>')
+def get_ai_content_detail(content_id):
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        content = conn.execute('''SELECT * FROM ai_contents 
+                                  WHERE id = ? AND user_id = ?''', 
+                             (content_id, session['user_id'])).fetchone()
+        
+        if not content:
+            return api_response(success=False, message='内容不存在')
+        
+        return api_response(success=True, data={
+            'id': content['id'],
+            'ai_function': content['ai_function'],
+            'prompt': content['prompt'],
+            'response': content['response'],
+            'created_at': content['created_at']
+        })
+    finally:
+        conn.close()
+
+
+# ==================== AI功能增强 - 第二阶段 ====================
+
+# API: 流式AI对话 (SSE)
+@app.route('/api/ai/chat/stream', methods=['POST'])
+def ai_chat_stream():
+    """流式AI对话接口 - Server-Sent Events"""
+    print(f"[AI Stream] === New Request ===")
+
+    # 检查登录状态
+    if 'user_id' not in session:
+        print(f"[AI Stream] ERROR: User not logged in")
+        return api_response(success=False, message='请先登录', code=401)
+
+    print(f"[AI Stream] User ID: {session.get('user_id')}")
+
+    from app import DEEPSEEK_BASE, DEEPSEEK_API_KEY
+    import requests
+    import json
+
+    # 检查API Key
+    if not DEEPSEEK_API_KEY:
+        print(f"[AI Stream] ERROR: API Key not configured")
+        return api_response(success=False, message='DeepSeek API Key未配置，请在.env文件中设置DEEPSEEK_API_KEY')
+
+    data = request.get_json(silent=True) or {}
+
+    prompt = data.get('prompt', '').strip()
+    model = data.get('model', 'deepseek-chat')
+    temperature = float(data.get('temperature', '0.5'))
+    ai_function = data.get('ai_function', 'chat')
+    conversation_id = data.get('conversation_id')
+
+    if not prompt:
+        return api_response(success=False, message='请输入内容')
+
+    print(f"[AI Stream] Prompt: {prompt[:50]}...")
+    print(f"[AI Stream] Model: {model}, Temperature: {temperature}")
+    print(f"[AI Stream] API Key: {DEEPSEEK_API_KEY[:10]}...{DEEPSEEK_API_KEY[-4:]}")
+
+    # 获取或创建对话上下文
+    if conversation_id and 'ai_conversations' in session:
+        conversations = session.get('ai_conversations', {})
+        messages = conversations.get(conversation_id, [])
+        print(f"[AI Stream] Loaded existing conversation: {conversation_id[:8]}... ({len(messages)} messages)")
+    else:
+        messages = []
+        conversation_id = str(uuid.uuid4())
+        print(f"[AI Stream] Creating new conversation: {conversation_id[:8]}...")
+
+    # 添加系统提示
+    try:
+        system_prompt = build_ai_messages(ai_function, '')[0]['content']
+    except Exception as e:
+        print(f"[AI Stream] ERROR building system prompt: {e}")
+        system_prompt = "你是一个有用的AI助手。"
+
+    # 构建消息列表
+    full_messages = [{"role": "system", "content": system_prompt}]
+    full_messages.extend(messages)
+    full_messages.append({"role": "user", "content": prompt})
+
+    def generate():
+        try:
+            print(f"[AI Stream] Starting request to DeepSeek API...")
+            url = f"{DEEPSEEK_BASE}/chat/completions"
+            headers = {
+                'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+                'Content-Type': 'application/json'
+            }
+            payload = {
+                "model": model,
+                "messages": full_messages,
+                "stream": True,
+                "temperature": temperature
+            }
+
+            response = requests.post(url, headers=headers, json=payload, stream=True, timeout=60)
+
+            if response.status_code != 200:
+                error_msg = f'API错误 ({response.status_code}): {response.text[:200]}'
+                print(f"[AI Stream] ERROR: {error_msg}")
+                yield f"data: {json.dumps({'error': error_msg}, ensure_ascii=False)}\n\n"
+                return
+
+            print(f"[AI Stream] Connected! Status: {response.status_code}")
+            full_response = ""
+            chunk_count = 0
+
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: ') and line != 'data: [DONE]':
+                        chunk_data = line[6:]
+                        try:
+                            chunk = json.loads(chunk_data)
+                            content = chunk['choices'][0].get('delta', {}).get('content', '')
+                            if content:
+                                full_response += content
+                                chunk_count += 1
+                                yield f"data: {json.dumps({'content': content, 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+                        except Exception as e:
+                            print(f"[AI Stream] Chunk parse error: {e}")
+
+            print(f"[AI Stream] Completed! Chunks: {chunk_count}, Length: {len(full_response)}")
+            yield f"data: {json.dumps({'done': True, 'full_response': full_response, 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+
+            # 保存到对话历史
+            try:
+                if 'ai_conversations' not in session:
+                    session['ai_conversations'] = {}
+
+                messages.append({"role": "user", "content": prompt})
+                messages.append({"role": "assistant", "content": full_response})
+
+                # 保持最近20轮对话
+                if len(messages) > 40:
+                    messages = messages[-40:]
+
+                session['ai_conversations'][conversation_id] = messages
+                session.modified = True
+                print(f"[AI Stream] Conversation saved: {conversation_id[:8]}...")
+            except Exception as e:
+                print(f"[AI Stream] Session save error: {e}")
+
+        except requests.exceptions.Timeout:
+            error_msg = '请求超时（60秒），请稍后重试'
+            print(f"[AI Stream] Timeout error")
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f'网络连接失败，请检查网络: {str(e)[:100]}'
+            print(f"[AI Stream] Connection error: {e}")
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+        except Exception as e:
+            error_msg = f'服务器内部错误: {type(e).__name__}: {str(e)[:100]}'
+            print(f"[AI Stream] Unexpected error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {json.dumps({'error': error_msg})}\n\n"
+
+    from flask import Response
+    return Response(generate(), mimetype='text/event-stream',
+                   headers={'Cache-Control': 'no-cache',
+                           'X-Accel-Buffering': 'no',
+                           'Connection': 'keep-alive'})
+
+
+# API: 获取对话列表
+@app.route('/api/ai/conversations')
+def get_ai_conversations():
+    """获取用户的AI对话列表"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conversations = session.get('ai_conversations', {})
+    
+    result = []
+    for conv_id, messages in conversations.items():
+        if messages:
+            first_user_msg = next((m['content'] for m in messages if m['role'] == 'user'), '新对话')
+            result.append({
+                'id': conv_id,
+                'title': first_user_msg[:50] + ('...' if len(first_user_msg) > 50 else ''),
+                'message_count': len([m for m in messages if m['role'] == 'user']),
+                'created_at': messages[0].get('timestamp', '')
+            })
+    
+    return api_response(success=True, data={'conversations': result})
+
+
+# API: 获取对话详情
+@app.route('/api/ai/conversation/<conv_id>')
+def get_ai_conversation_detail(conv_id):
+    """获取指定对话的详细消息"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conversations = session.get('ai_conversations', {})
+    messages = conversations.get(conv_id, [])
+    
+    return api_response(success=True, data={
+        'id': conv_id,
+        'messages': messages
+    })
+
+
+# API: 删除对话
+@app.route('/api/ai/conversation/<conv_id>', methods=['DELETE'])
+def delete_ai_conversation(conv_id):
+    """删除指定对话"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conversations = session.get('ai_conversations', {})
+    
+    if conv_id in conversations:
+        del conversations[conv_id]
+        session['ai_conversations'] = conversations
+        session.modified = True
+    
+    return api_response(success=True, message='删除成功')
+
+
+# API: 清空所有对话
+@app.route('/api/ai/conversations/clear', methods=['POST'])
+def clear_all_conversations():
+    """清空所有AI对话"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    session['ai_conversations'] = {}
+    session.modified = True
+    
+    return api_response(success=True, message='已清空所有对话')
+
+
+# API: 导出对话为Markdown
+@app.route('/api/ai/export/<format_type>')
+def export_ai_content(format_type):
+    """导出AI内容为指定格式"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    content_id = request.args.get('id')
+    conv_id = request.args.get('conversation_id')
+    
+    if format_type == 'markdown':
+        if conv_id:
+            conversations = session.get('ai_conversations', {})
+            messages = conversations.get(conv_id, [])
+            
+            md_content = "# AI对话记录\n\n"
+            for msg in messages:
+                role = "用户" if msg['role'] == 'user' else "AI助手"
+                md_content += f"## {role}\n\n{msg['content']}\n\n---\n\n"
+            
+            from flask import Response as FlaskResponse
+            response = FlaskResponse(md_content, mimetype='text/markdown')
+            response.headers['Content-Disposition'] = f'attachment; filename=ai_conversation_{conv_id[:8]}.md'
+            return response
+        
+        elif content_id:
+            conn = get_db()
+            try:
+                content = conn.execute('''SELECT * FROM ai_contents 
+                                          WHERE id = ? AND user_id = ?''', 
+                                     (content_id, session['user_id'])).fetchone()
+                
+                if content:
+                    md_content = f"# AI{content['ai_function']}记录\n\n"
+                    md_content += f"**时间**: {content['created_at']}\n\n"
+                    md_content += f"## 用户输入\n\n{content['prompt']}\n\n---\n\n"
+                    md_content += f"## AI回复\n\n{content['response']}\n"
+                    
+                    from flask import Response as FlaskResponse
+                    response = FlaskResponse(md_content, mimetype='text/markdown')
+                    response.headers['Content-Disposition'] = f'attachment; filename=ai_content_{content_id[:8]}.md'
+                    return response
+            finally:
+                conn.close()
+    
+    elif format_type == 'txt':
+        if conv_id:
+            conversations = session.get('ai_conversations', {})
+            messages = conversations.get(conv_id, [])
+            
+            txt_content = "AI对话记录\n" + "=" * 30 + "\n\n"
+            for msg in messages:
+                role = "用户" if msg['role'] == 'user' else "AI助手"
+                txt_content += f"[{role}]\n{msg['content']}\n\n"
+            
+            from flask import Response as FlaskResponse
+            response = FlaskResponse(txt_content, mimetype='text/plain')
+            response.headers['Content-Disposition'] = f'attachment; filename=ai_conversation_{conv_id[:8]}.txt'
+            return response
+        
+        elif content_id:
+            conn = get_db()
+            try:
+                content = conn.execute('''SELECT * FROM ai_contents 
+                                          WHERE id = ? AND user_id = ?''', 
+                                     (content_id, session['user_id'])).fetchone()
+                
+                if content:
+                    txt_content = f"AI{content['ai_function']}记录\n"
+                    txt_content += "=" * 30 + "\n"
+                    txt_content += f"时间: {content['created_at']}\n\n"
+                    txt_content += "[用户输入]\n{content['prompt']}\n\n"
+                    txt_content += "[AI回复]\n{content['response']}\n"
+                    
+                    from flask import Response as FlaskResponse
+                    response = FlaskResponse(txt_content, mimetype='text/plain')
+                    response.headers['Content-Disposition'] = f'attachment; filename=ai_content_{content_id[:8]}.txt'
+                    return response
+            finally:
+                conn.close()
+    
+    return api_response(success=False, message='不支持的导出格式')
+
 
 # 博客页面
 @app.route('/blog')
