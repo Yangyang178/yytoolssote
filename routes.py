@@ -1308,6 +1308,246 @@ def export_ai_content(format_type):
     return api_response(success=False, message='不支持的导出格式')
 
 
+# ==================== 数据库优化管理API ====================
+
+@app.route('/api/db/stats')
+def get_db_stats():
+    """获取数据库统计信息（需要管理员权限）"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_database_stats, query_monitor
+        stats = get_database_stats()
+        return api_response(success=True, data=stats)
+    except Exception as e:
+        return api_response(success=False, message=f'获取统计失败: {str(e)}')
+
+
+@app.route('/api/db/optimize', methods=['POST'])
+def optimize_db():
+    """执行数据库优化（VACUUM + ANALYZE）"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import optimize_database
+        result = optimize_database()
+
+        if result.get('success'):
+            return api_response(
+                success=True,
+                message=result.get('message', '优化完成'),
+                data={
+                    'vacuum_time': result.get('vacuum_time'),
+                    'analyze_time': result.get('analyze_time'),
+                    'db_size_mb': result.get('db_size_mb')
+                }
+            )
+        else:
+            return api_response(success=False, message=result.get('error', '优化失败'))
+
+    except Exception as e:
+        return api_response(success=False, message=f'优化失败: {str(e)}')
+
+
+@app.route('/api/db/archive', methods=['POST'])
+def archive_logs():
+    """执行数据归档"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    data = request.get_json(silent=True) or {}
+    days_to_keep = int(data.get('days_to_keep', 90))
+
+    try:
+        from app import archive_old_logs
+        result = archive_old_logs(days_to_keep=days_to_keep)
+
+        if result.get('success'):
+            return api_response(
+                success=True,
+                message=f"归档完成，共处理 {result.get('archived_count', 0)} 条记录",
+                data=result
+            )
+        else:
+            return api_response(success=False, message=result.get('error', '归档失败'))
+
+    except Exception as e:
+        return api_response(success=False, message=f'归档失败: {str(e)}')
+
+
+@app.route('/api/db/cleanup-archive', methods=['POST'])
+def cleanup_archive():
+    """清理过期归档数据"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    data = request.get_json(silent=True) or {}
+    max_age_days = int(data.get('max_age_days', 365))
+
+    try:
+        from app import cleanup_archive_tables
+        result = cleanup_archive_tables(max_age_days=max_age_days)
+
+        if result.get('success'):
+            return api_response(
+                success=True,
+                message=f"已删除 {result.get('total_deleted', 0)} 条过期归档",
+                data=result
+            )
+        else:
+            return api_response(success=False, message=result.get('error', '清理失败'))
+
+    except Exception as e:
+        return api_response(success=False, message=f'清理失败: {str(e)}')
+
+
+@app.route('/api/db/query-stats')
+def get_query_stats():
+    """获取查询性能统计"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import query_monitor
+        stats = query_monitor.get_stats()
+        return api_response(success=True, data=stats)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/db/reset-query-stats', methods=['POST'])
+def reset_query_stats():
+    """重置查询性能统计"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import query_monitor
+        query_monitor.reset_stats()
+        return api_response(success=True, message='查询统计已重置')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+# ==================== 缓存管理API ====================
+
+@app.route('/api/cache/stats')
+def get_cache_stats():
+    """获取缓存统计信息"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_cache
+        cache = get_cache()
+        stats = cache.get_stats()
+
+        # 添加热点数据统计
+        if 'hot_data_cache' in dir():
+            from app import hot_data_cache
+            if hot_data_cache:
+                stats['hot_data'] = hot_data_cache.get_top_hot_data(10)
+
+        return api_response(success=True, data=stats)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_all_cache():
+    """清空所有缓存"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_cache, hot_data_cache
+        cache = get_cache()
+
+        cleared = cache.clear()
+        if hot_data_cache:
+            hot_data_cache.clear_access_stats()
+
+        return api_response(
+            success=True,
+            message=f'缓存已清空',
+            data={'cleared': True}
+        )
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/cache/invalidate', methods=['POST'])
+def invalidate_cache_pattern():
+    """批量清除匹配模式的缓存"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    data = request.get_json(silent=True) or {}
+    pattern = data.get('pattern', '')
+
+    if not pattern:
+        return api_response(success=False, message='请提供pattern参数')
+
+    try:
+        from app import get_cache
+        cache = get_cache()
+        deleted_count = cache.invalidate_pattern(pattern)
+
+        return api_response(
+            success=True,
+            message=f'已删除 {deleted_count} 个匹配缓存项',
+            data={'deleted_count': deleted_count}
+        )
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/cache/preview/cleanup', methods=['POST'])
+def cleanup_preview_cache():
+    """清理过期预览文件"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    data = request.get_json(silent=True) or {}
+    days = int(data.get('days', 7))
+
+    try:
+        from app import preview_cache
+        if preview_cache:
+            deleted = preview_cache.clear_old_previews(days=days)
+            return api_response(
+                success=True,
+                message=f'已清理 {deleted} 个过期预览文件',
+                data={'deleted_count': deleted}
+            )
+        else:
+            return api_response(success=False, message='预览缓存未初始化')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/cache/hot-data')
+def get_hot_data_stats():
+    """获取热点数据统计"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import hot_data_cache
+        if hot_data_cache:
+            top_data = hot_data_cache.get_top_hot_data(20)
+            return api_response(
+                success=True,
+                data={'hot_data': top_data, 'total_tracked': len(hot_data_cache.access_counts)}
+            )
+        else:
+            return api_response(success=False, message='热点数据缓存未初始化')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
 # 博客页面
 @app.route('/blog')
 def blog_page():

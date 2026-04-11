@@ -7,14 +7,733 @@ import random
 import time
 import re
 import hashlib
+import threading
+import functools
 from datetime import datetime, timedelta
 from pathlib import Path
-from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory, jsonify, session
+from flask import Flask, request, render_template, redirect, url_for, flash, send_from_directory, jsonify, session, g, make_response
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+
+# ==================== 缓存系统实现 ====================
+
+class CacheBackend:
+    """缓存后端抽象基类"""
+    def get(self, key):
+        raise NotImplementedError
+
+    def set(self, key, value, timeout=None):
+        raise NotImplementedError
+
+    def delete(self, key):
+        raise NotImplementedError
+
+    def exists(self, key):
+        raise NotImplementedError
+
+    def clear(self):
+        raise NotImplementedError
+
+
+class MemoryCache(CacheBackend):
+    """内存缓存实现（线程安全）"""
+
+    def __init__(self):
+        self._cache = {}
+        self._lock = threading.Lock()
+        self._stats = {'hits': 0, 'misses': 0}
+
+    def get(self, key):
+        with self._lock:
+            if key in self._cache:
+                item = self._cache[key]
+                if item['expires'] is None or time.time() < item['expires']:
+                    self._stats['hits'] += 1
+                    return item['value']
+                else:
+                    del self._cache[key]
+            self._stats['misses'] += 1
+            return None
+
+    def set(self, key, value, timeout=None):
+        with self._lock:
+            expires = time.time() + timeout if timeout else None
+            self._cache[key] = {
+                'value': value,
+                'expires': expires,
+                'created_at': time.time()
+            }
+
+    def delete(self, key):
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+
+    def exists(self, key):
+        with self._lock:
+            if key in self._cache:
+                item = self._cache[key]
+                if item['expires'] is None or time.time() < item['expires']:
+                    return True
+                else:
+                    del self._cache[key]
+            return False
+
+    def clear(self):
+        with self._lock:
+            self._cache.clear()
+
+    def get_stats(self):
+        total = self._stats['hits'] + self._stats['misses']
+        return {
+            **self._stats,
+            'hit_rate': round(self._stats['hits'] / max(total, 1) * 100, 2),
+            'size': len(self._cache)
+        }
+
+
+class RedisCache(CacheBackend):
+    """Redis缓存实现（如果可用）"""
+
+    def __init__(self, host='localhost', port=6379, db=0, password=None):
+        try:
+            import redis
+            self.client = redis.Redis(
+                host=host,
+                port=port,
+                db=db,
+                password=password,
+                decode_responses=True,
+                socket_timeout=5,
+                socket_connect_timeout=5
+            )
+            # 测试连接
+            self.client.ping()
+            self._available = True
+            print("[缓存] Redis连接成功")
+        except Exception as e:
+            self._available = False
+            print(f"[缓存] Redis不可用: {e}")
+
+    def _serialize(self, value):
+        """序列化值"""
+        if isinstance(value, (dict, list)):
+            return json.dumps(value)
+        return str(value)
+
+    def _deserialize(self, value):
+        """反序列化值"""
+        if value is None:
+            return None
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return value
+
+    def get(self, key):
+        if not self._available:
+            return None
+        try:
+            value = self.client.get(key)
+            return self._deserialize(value)
+        except Exception as e:
+            print(f"[Redis] GET错误: {e}")
+            return None
+
+    def set(self, key, value, timeout=None):
+        if not self._available:
+            return False
+        try:
+            serialized = self._serialize(value)
+            return self.client.setex(key, timeout or 3600, serialized)
+        except Exception as e:
+            print(f"[Redis] SET错误: {e}")
+            return False
+
+    def delete(self, key):
+        if not self._available:
+            return False
+        try:
+            return bool(self.client.delete(key))
+        except Exception as e:
+            print(f"[Redis] DELETE错误: {e}")
+            return False
+
+    def exists(self, key):
+        if not self._available:
+            return False
+        try:
+            return bool(self.client.exists(key))
+        except Exception as e:
+            print(f"[Redis] EXISTS错误: {e}")
+            return False
+
+    def clear(self):
+        if not self._available:
+            return False
+        try:
+            return self.client.flushdb()
+        except Exception as e:
+            print(f"[Redis] FLUSH错误: {e}")
+            return False
+
+
+class UnifiedCache:
+    """统一缓存管理器（自动选择后端）"""
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialize()
+        return cls._instance
+
+    def _initialize(self):
+        """初始化缓存系统"""
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent / ".env")
+
+        # 尝试使用Redis
+        redis_host = os.getenv('REDIS_HOST', 'localhost')
+        redis_port = int(os.getenv('REDIS_PORT', 6379))
+        redis_db = int(os.getenv('REDIS_DB', 0))
+        redis_pass = os.getenv('REDIS_PASSWORD')
+
+        self.redis_cache = RedisCache(redis_host, redis_port, redis_db, redis_pass)
+
+        if self.redis_cache._available:
+            self.backend = self.redis_cache
+            self.cache_type = "redis"
+            print("[缓存系统] 使用 Redis 后端")
+        else:
+            self.backend = MemoryCache()
+            self.cache_type = "memory"
+            print("[缓存系统] 使用 内存 后端")
+
+        # 缓存配置
+        self.config = {
+            'default_timeout': 3600,      # 默认1小时
+            'user_data_timeout': 1800,     # 用户数据30分钟
+            'file_list_timeout': 300,      # 文件列表5分钟
+            'api_response_timeout': 60,     # API响应1分钟
+            'static_resource_timeout': 86400,  # 静态资源24小时
+            'preview_timeout': 3600,       # 文件预览1小时
+            'hot_data_timeout': 600,        # 热点数据10分钟
+        }
+
+        print(f"[缓存系统] 初始化完成 (类型: {self.cache_type})")
+
+    def get(self, key):
+        """获取缓存"""
+        return self.backend.get(key)
+
+    def set(self, key, value, timeout=None):
+        """设置缓存"""
+        timeout = timeout or self.config['default_timeout']
+        return self.backend.set(key, value, timeout)
+
+    def delete(self, key):
+        """删除缓存"""
+        return self.backend.delete(key)
+
+    def exists(self, key):
+        """检查缓存是否存在"""
+        return self.backend.exists(key)
+
+    def clear(self):
+        """清空所有缓存"""
+        return self.backend.clear()
+
+    def get_or_set(self, key, factory, timeout=None):
+        """
+        获取缓存，如果不存在则调用factory函数生成并缓存
+
+        参数:
+            key: 缓存键
+            factory: 缓存未命中时的回调函数
+            timeout: 过期时间（秒）
+        """
+        value = self.get(key)
+        if value is not None:
+            return value
+
+        value = factory()
+        if value is not None:
+            self.set(key, value, timeout)
+
+        return value
+
+    def invalidate_pattern(self, pattern):
+        """批量删除匹配模式的缓存（仅内存缓存支持）"""
+        if self.cache_type == "memory":
+            keys_to_delete = [k for k in list(self.backend._cache.keys()) if pattern in k]
+            for key in keys_to_delete:
+                self.delete(key)
+            return len(keys_to_delete)
+        elif self.cache_type == "redis" and self.redis_cache._available:
+            try:
+                import redis
+                cursor = '0'
+                deleted = 0
+                while True:
+                    cursor, keys = self.redis_cache.client.scan(cursor=cursor, match=pattern, count=100)
+                    if keys:
+                        deleted += self.redis_cache.client.delete(*keys)
+                    if cursor == '0':
+                        break
+                return deleted
+            except Exception as e:
+                print(f"[缓存] 批量删除错误: {e}")
+                return 0
+        return 0
+
+    def get_stats(self):
+        """获取缓存统计信息"""
+        stats = {
+            'type': self.cache_type,
+            'config': self.config.copy(),
+        }
+
+        if self.cache_type == "memory":
+            stats.update(self.backend.get_stats())
+        elif self.cache_type == "redis":
+            stats['available'] = self.redis_cache._available
+
+        return stats
+
+
+# 全局缓存实例
+cache_manager = None
+
+
+def init_cache():
+    """初始化全局缓存实例"""
+    global cache_manager
+    cache_manager = UnifiedCache()
+    return cache_manager
+
+
+def get_cache():
+    """获取缓存实例（延迟初始化）"""
+    global cache_manager
+    if cache_manager is None:
+        init_cache()
+    return cache_manager
+
+
+# ==================== API响应缓存装饰器 ====================
+
+def cached_api(timeout=None, key_prefix='api'):
+    """
+    API响应缓存装饰器
+
+    使用方法:
+        @cached_api(timeout=60)
+        def my_api():
+            return expensive_operation()
+
+    参数:
+        timeout: 缓存过期时间（秒）
+        key_prefix: 缓存键前缀
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            # 生成缓存键（基于函数名+参数+请求路径）
+            cache_key = f"{key_prefix}:{func.__name__}:{request.path}"
+
+            # 添加查询参数到键中
+            if request.args:
+                sorted_args = sorted(request.args.items())
+                args_hash = hashlib.md5(str(sorted_args).encode()).hexdigest()[:12]
+                cache_key += f":{args_hash}"
+
+            # 检查是否是POST/PUT/DELETE请求（不缓存写操作）
+            if request.method not in ['GET', 'HEAD']:
+                result = func(*args, **kwargs)
+                # 写操作后清除相关缓存
+                cache = get_cache()
+                cache.invalidate_pattern(f"{key_prefix}:*")
+                return result
+
+            # 尝试从缓存获取
+            cache = get_cache()
+            cached_result = cache.get(cache_key)
+
+            if cached_result is not None:
+                # 添加缓存头标识
+                if isinstance(cached_result, dict):
+                    cached_result['_cached'] = True
+                    cached_result['_cache_time'] = datetime.now().isoformat()
+                return cached_result
+
+            # 执行原始函数
+            result = func(*args, **kwargs)
+
+            # 只缓存成功的JSON响应
+            if result and isinstance(result, dict):
+                cache.set(cache_key, result, timeout or cache.config['api_response_timeout'])
+
+            return result
+
+        return wrapper
+    return decorator
+
+
+# ==================== 页面渲染缓存装饰器 ====================
+
+def cached_page(timeout=300, vary_by_user=False):
+    """
+    页面渲染缓存装饰器
+
+    使用方法:
+        @cached_page(timeout=300)
+        def my_page():
+            return render_template('page.html')
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            cache = get_cache()
+
+            # 生成缓存键
+            cache_key = f"page:{request.endpoint}"
+            if vary_by_user and 'user_id' in session:
+                cache_key += f":user_{session['user_id']}"
+            if request.args:
+                args_str = '&'.join(f"{k}={v}" for k, v in sorted(request.args.items()))
+                cache_key += f"?{args_str}"
+
+            # 检查缓存
+            cached_html = cache.get(cache_key)
+            if cached_html is not None:
+                response = make_response(cached_html)
+                response.headers['X-Cache'] = 'HIT'
+                return response
+
+            # 渲染页面
+            html_content = func(*args, **kwargs)
+
+            # 缓存HTML内容
+            if html_content:
+                cache.set(cache_key, html_content, timeout)
+                response = make_response(html_content)
+                response.headers['X-Cache'] = 'MISS'
+                return response
+
+            return html_content
+
+        return wrapper
+    return decorator
+
+
+# ==================== 文件预览缓存系统 ====================
+
+class FilePreviewCache:
+    """文件预览缓存管理器"""
+
+    def __init__(self, cache_instance=None):
+        self.cache = cache_instance or get_cache()
+        self.preview_dir = Path(__file__).parent / "data" / "previews"
+        self.preview_dir.mkdir(parents=True, exist_ok=True)
+
+    def get_preview_path(self, file_id, file_ext):
+        """获取预览文件的存储路径"""
+        preview_filename = f"preview_{file_id}{file_ext}"
+        return self.preview_dir / preview_filename
+
+    def has_preview(self, file_id, file_ext):
+        """检查预览是否存在（在缓存或磁盘）"""
+        cache_key = f"preview:exists:{file_id}"
+
+        # 先查内存缓存
+        cached_exists = self.cache.get(cache_key)
+        if cached_exists is not None:
+            return cached_exists
+
+        # 再查磁盘
+        preview_path = self.get_preview_path(file_id, file_ext)
+        exists = preview_path.exists()
+
+        # 缓存结果（10分钟）
+        self.cache.set(cache_key, exists, 600)
+
+        return exists
+
+    def save_preview(self, file_id, file_ext, content, content_type='text/plain'):
+        """
+        保存预览内容到缓存和磁盘
+
+        参数:
+            file_id: 原始文件ID
+            file_ext: 预览文件扩展名
+            content: 预览内容（文本或base64编码的图片）
+            content_type: 内容类型
+        """
+        preview_path = self.get_preview_path(file_id, file_ext)
+
+        # 保存到磁盘
+        mode = 'wb' if content_type.startswith('image/') else 'w'
+        encoding = None if content_type.startswith('image/') else 'utf-8'
+
+        with open(preview_path, mode, encoding=encoding) as f:
+            f.write(content)
+
+        # 更新缓存
+        cache_key = f"preview:content:{file_id}"
+        self.cache.set(cache_key, {
+            'content': content[:10000],  # 只缓存前10KB用于快速访问
+            'content_type': content_type,
+            'path': str(preview_path),
+            'created_at': datetime.now().isoformat()
+        }, timeout=self.cache.config['preview_timeout'])
+
+        exists_key = f"preview:exists:{file_id}"
+        self.cache.set(exists_key, True, 600)
+
+        return str(preview_path)
+
+    def get_preview(self, file_id, file_ext):
+        """获取预览内容"""
+        cache_key = f"preview:content:{file_id}"
+
+        # 先查缓存
+        cached_preview = self.cache.get(cache_key)
+        if cached_preview:
+            return cached_preview
+
+        # 再查磁盘
+        preview_path = self.get_preview_path(file_id, file_ext)
+        if preview_path.exists():
+            try:
+                with open(preview_path, 'r', encoding='utf-8') as f:
+                    content = f.read(10000)  # 读取前10KB
+
+                preview_data = {
+                    'content': content,
+                    'content_type': 'text/plain',
+                    'path': str(preview_path),
+                    'created_at': datetime.fromtimestamp(preview_path.stat().st_mtime).isoformat()
+                }
+                self.cache.set(cache_key, preview_data, self.cache.config['preview_timeout'])
+                return preview_data
+            except Exception as e:
+                print(f"[预览缓存] 读取失败: {e}")
+
+        return None
+
+    def delete_preview(self, file_id, ext=None):
+        """删除指定文件的预览"""
+        # 清除缓存
+        self.cache.delete(f"preview:content:{file_id}")
+        self.cache.delete(f"preview:exists:{file_id}")
+
+        # 删除磁盘文件
+        if ext:
+            preview_path = self.get_preview_path(file_id, ext)
+            if preview_path.exists():
+                preview_path.unlink()
+        else:
+            # 删除该文件的所有预览
+            for preview_file in self.preview_dir.glob(f"preview_{file_id}.*"):
+                preview_file.unlink()
+
+    def clear_old_previews(self, days=7):
+        """清理超过指定天数的预览文件"""
+        cutoff_time = time.time() - (days * 86400)
+        deleted_count = 0
+
+        for preview_file in self.preview_dir.iterdir():
+            if preview_file.is_file() and preview_file.stat().st_mtime < cutoff_time:
+                preview_file.unlink()
+                deleted_count += 1
+
+        if deleted_count > 0:
+            print(f"[预览缓存] 已清理 {deleted_count} 个过期预览文件")
+
+        return deleted_count
+
+
+# 全局预览缓存实例
+preview_cache = None
+
+
+def init_preview_cache():
+    """初始化文件预览缓存"""
+    global preview_cache
+    preview_cache = FilePreviewCache(get_cache())
+    return preview_cache
+
+
+# ==================== CDN静态资源配置 ====================
+
+def configure_cdn(app, cdn_url=None, static_version=None):
+    """
+    配置CDN加速静态资源
+
+    参数:
+        app: Flask应用实例
+        cdn_url: CDN基础URL（如 https://cdn.example.com）
+        static_version: 静态资源版本号（用于缓存破坏）
+    """
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+
+    # 从环境变量读取CDN配置
+    cdn_base = cdn_url or os.getenv('CDN_URL', '')
+    version = static_version or os.getenv('STATIC_VERSION', 'v1')
+
+    app.config['CDN_URL'] = cdn_base
+    app.config['STATIC_VERSION'] = version
+    app.config['USE_CDN'] = bool(cdn_base)
+
+    if cdn_base:
+        print(f"[CDN] 已启用: {cdn_base} (版本: {version})")
+    else:
+        print("[CDN] 未配置，使用本地静态资源")
+
+
+def url_for_static(filename):
+    """
+    生成带版本号的静态资源URL（支持CDN）
+
+    使用方法:
+        在模板中: {{ url_for_static('css/style.css') }}
+    """
+    from flask import url_for
+
+    # 获取版本号
+    version = current_app.config.get('STATIC_VERSION', 'v1')
+
+    # 如果配置了CDN，使用CDN URL
+    cdn_url = current_app.config.get('CDN_URL', '')
+
+    if cdn_url:
+        # 返回CDN URL（带版本号参数）
+        return f"{cdn_url.rstrip('/')}/static/{filename}?v={version}"
+    else:
+        # 返回本地URL（Flask会自动处理）
+        return url_for('static', filename=filename, v=version)
+
+
+# ==================== 热点数据自动缓存 ====================
+
+class HotDataCache:
+    """热点数据缓存管理器"""
+
+    def __init__(self, cache_instance=None):
+        self.cache = cache_instance or get_cache()
+        self.access_counts = {}  # 访问计数
+        self.lock = threading.Lock()
+
+    def record_access(self, data_type, data_id):
+        """记录数据访问（用于识别热点）"""
+        key = f"{data_type}:{data_id}"
+
+        with self.lock:
+            if key not in self.access_counts:
+                self.access_counts[key] = {
+                    'count': 0,
+                    'last_access': time.time()
+                }
+
+            self.access_counts[key]['count'] += 1
+            self.access_counts[key]['last_access'] = time.time()
+
+            # 如果访问次数达到阈值，自动延长缓存时间
+            count = self.access_counts[key]['count']
+            if count >= 10 and count % 10 == 0:  # 每10次访问检查一次
+                cache_key = f"hot:{key}"
+                if self.cache.exists(cache_key):
+                    # 延长缓存时间到1小时
+                    existing = self.cache.get(cache_key)
+                    if existing:
+                        self.cache.set(cache_key, existing, 3600)
+
+    def get_hot_data(self, data_type, data_id, factory=None):
+        """获取热点数据（优先从缓存）"""
+        cache_key = f"hot:{data_type}:{data_id}"
+
+        # 记录访问
+        self.record_access(data_type, data_id)
+
+        # 尝试从缓存获取
+        data = self.cache.get(cache_key)
+        if data is not None:
+            return data
+
+        # 缓存未命中，调用工厂函数
+        if factory:
+            data = factory()
+            if data is not None:
+                # 根据访问频率设置不同的缓存时间
+                access_key = f"{data_type}:{data_id}"
+                access_info = self.access_counts.get(access_key, {})
+                count = access_info.get('count', 0)
+
+                if count >= 50:
+                    timeout = 1800  # 高频访问：30分钟
+                elif count >= 20:
+                    timeout = 900   # 中频：15分钟
+                else:
+                    timeout = 300   # 低频：5分钟
+
+                self.cache.set(cache_key, data, timeout)
+
+            return data
+
+        return None
+
+    def invalidate_hot_data(self, data_type, data_id=None):
+        """使热点数据失效"""
+        if data_id:
+            cache_key = f"hot:{data_type}:{data_id}"
+            self.cache.delete(cache_key)
+        else:
+            # 使该类型所有热点数据失效
+            self.cache.invalidate_pattern(f"hot:{data_type}:*")
+
+    def get_top_hot_data(self, limit=10):
+        """获取最热门的数据（按访问量排序）"""
+        with self.lock:
+            sorted_data = sorted(
+                self.access_counts.items(),
+                key=lambda x: x[1]['count'],
+                reverse=True
+            )[:limit]
+
+            return [
+                {
+                    'key': key,
+                    'type': key.split(':')[0],
+                    'id': key.split(':')[1],
+                    **info
+                }
+                for key, info in sorted_data
+            ]
+
+    def clear_access_stats(self):
+        """清空访问统计"""
+        with self.lock:
+            self.access_counts.clear()
+
+
+# 全局热点数据缓存实例
+hot_data_cache = None
+
+
+def init_hot_data_cache():
+    """初始化热点数据缓存"""
+    global hot_data_cache
+    hot_data_cache = HotDataCache(get_cache())
+    return hot_data_cache
 
 # 计算文件的MD5哈希值
 def calculate_file_hash(file_path):
@@ -73,6 +792,17 @@ app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
 # 静态文件缓存配置
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=30)  # 静态文件默认缓存30天
+
+# 注册CDN辅助函数到模板上下文
+@app.context_processor
+def inject_cdn_helpers():
+    """向模板注入CDN辅助函数"""
+    return {
+        'url_for_static': url_for_static,
+        'cdn_enabled': app.config.get('USE_CDN', False),
+        'cdn_url': app.config.get('CDN_URL', ''),
+        'static_version': app.config.get('STATIC_VERSION', 'v1'),
+    }
 
 # 添加缓存控制头的中间件
 @app.after_request
@@ -136,16 +866,244 @@ def validate_password(password):
 
 
 
+# ==================== 数据库查询性能监控 ====================
+
+class QueryMonitor:
+    """数据库查询性能监控器"""
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance.slow_queries = []
+                    cls._instance.query_count = 0
+                    cls._instance.total_time = 0.0
+                    cls._instance.slow_threshold = 0.5  # 慢查询阈值（秒）
+        return cls._instance
+
+    def log_query(self, sql, params, duration):
+        """记录查询"""
+        self.query_count += 1
+        self.total_time += duration
+
+        if duration > self.slow_threshold:
+            query_info = {
+                'timestamp': datetime.now().isoformat(),
+                'sql': sql[:200],  # 截断过长的SQL
+                'params': str(params)[:100] if params else None,
+                'duration': round(duration, 4),
+                'traceback': ''
+            }
+            import traceback
+            query_info['traceback'] = ''.join(traceback.format_stack()[-5:-1])
+            self.slow_queries.append(query_info)
+
+            # 只保留最近100条慢查询
+            if len(self.slow_queries) > 100:
+                self.slow_queries = self.slow_queries[-100:]
+
+            print(f"[慢查询警告] 耗时 {duration:.3f}s: {sql[:80]}...")
+
+    def get_stats(self):
+        """获取统计信息"""
+        return {
+            'total_queries': self.query_count,
+            'total_time': round(self.total_time, 4),
+            'avg_time': round(self.total_time / max(self.query_count, 1), 4),
+            'slow_query_count': len(self.slow_queries),
+            'recent_slow_queries': self.slow_queries[-10:]  # 最近10条慢查询
+        }
+
+    def reset_stats(self):
+        """重置统计"""
+        self.slow_queries = []
+        self.query_count = 0
+        self.total_time = 0.0
+
+
+class MonitoredConnection(sqlite3.Connection):
+    """带监控的数据库连接"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.monitor = QueryMonitor()
+
+    def execute(self, sql, parameters=None):
+        start_time = time.time()
+        try:
+            if parameters:
+                cursor = super().execute(sql, parameters)
+            else:
+                cursor = super().execute(sql)
+
+            duration = time.time() - start_time
+            self.monitor.log_query(sql, parameters, duration)
+
+            return cursor
+        except Exception as e:
+            duration = time.time() - start_time
+            print(f"[查询错误] 耗时 {duration:.3f}s: {sql[:80]}...")
+            raise
+
+
 def get_db():
-    conn = sqlite3.connect(str(DB_FILE))
-    conn.row_factory = sqlite3.Row
-    return conn
+    """获取数据库连接（带性能监控）"""
+    if 'db' not in g:
+        g.db = sqlite3.connect(
+            str(DB_FILE),
+            factory=MonitoredConnection,
+            timeout=30,  # 30秒超时
+            check_same_thread=False  # 允许跨线程使用
+        )
+        g.db.row_factory = sqlite3.Row
+
+        # 启用WAL模式提升并发性能
+        g.db.execute('PRAGMA journal_mode=WAL')
+
+        # 设置缓存大小（负值表示KB）
+        g.db.execute('PRAGMA cache_size=-10000')  # 10MB缓存
+
+        # 设置临时存储为内存
+        g.db.execute('PRAGMA temp_store=MEMORY')
+
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(exception):
+    """请求结束后关闭数据库连接"""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+
+# 全局监控器实例（用于API访问）
+query_monitor = QueryMonitor()
+
+
+# ==================== 数据库连接池 ====================
+
+class DatabaseConnectionPool:
+    """SQLite数据库连接池（线程安全）"""
+
+    def __init__(self, db_path, pool_size=5):
+        self.db_path = db_path
+        self.pool_size = pool_size
+        self._local = threading.local()
+        self._lock = threading.Lock()
+        self._connections = []
+        self._created_count = 0
+        print(f"[连接池] 初始化完成，池大小: {pool_size}")
+
+    def get_connection(self):
+        """从池中获取连接"""
+        if not hasattr(self._local, 'connection') or self._local.connection is None:
+            with self._lock:
+                if len(self._connections) > 0:
+                    conn = self._connections.pop()
+                    try:
+                        conn.execute('SELECT 1')  # 测试连接是否有效
+                        self._local.connection = conn
+                        return conn
+                    except:
+                        pass
+
+            # 创建新连接
+            conn = sqlite3.connect(
+                str(self.db_path),
+                factory=MonitoredConnection,
+                timeout=30,
+                check_same_thread=False
+            )
+            conn.row_factory = sqlite3.Row
+            self._optimize_connection(conn)
+            self._local.connection = conn
+            self._created_count += 1
+
+        return self._local.connection
+
+    def _optimize_connection(self, conn):
+        """优化连接配置"""
+        # WAL模式 - 提升并发读写性能
+        conn.execute('PRAGMA journal_mode=WAL')
+
+        # 外键约束检查
+        conn.execute('PRAGMA foreign_keys=ON')
+
+        # 同步模式：NORMAL（平衡性能和安全）
+        conn.execute('PRAGMA synchronous=NORMAL')
+
+        # 缓存大小：10MB
+        conn.execute('PRAGMA cache_size=-10000')
+
+        # 临时表使用内存
+        conn.execute('PRAGMA temp_store=MEMORY')
+
+        # 忙等待超时：5秒
+        conn.execute('PRAGMA busy_timeout=5000')
+
+        # MMAP大小：20MB（加速大查询）
+        try:
+            conn.execute('PRAGMA mmap_size=20971520')
+        except:
+            pass
+
+    def return_connection(self, conn):
+        """归还连接到池中"""
+        if hasattr(self._local, 'connection'):
+            self._local.connection = None
+
+        with self._lock:
+            if len(self._connections) < self.pool_size:
+                self._connections.append(conn)
+            else:
+                conn.close()
+
+    def close_all(self):
+        """关闭所有连接"""
+        with self._lock:
+            for conn in self._connections:
+                try:
+                    conn.close()
+                except:
+                    pass
+            self._connections.clear()
+
+        self._local.connection = None
+        print("[连接池] 所有连接已关闭")
+
+    def get_stats(self):
+        """获取连接池统计信息"""
+        return {
+            'pool_size': self.pool_size,
+            'available_connections': len(self._connections),
+            'total_created': self._created_count,
+            'db_path': str(self.db_path)
+        }
+
+
+# 全局连接池实例
+db_pool = None
+
+
+def init_db_pool():
+    """初始化数据库连接池"""
+    global db_pool
+    ensure_dirs()
+    db_pool = DatabaseConnectionPool(DB_FILE, pool_size=10)
+    print(f"[数据库] 连接池已就绪")
+    return db_pool
 
 
 
 def init_db():
     ensure_dirs()
-    conn = get_db()
+    # 初始化时使用直接连接（不使用Flask g对象）
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
     try:
         conn.execute('''CREATE TABLE IF NOT EXISTS users (
                         id TEXT PRIMARY KEY,
@@ -155,7 +1113,7 @@ def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         role TEXT DEFAULT "user"
                     )''')
-        
+
         # 检查并添加password字段到现有users表
         try:
             conn.execute('ALTER TABLE users ADD COLUMN password TEXT NOT NULL DEFAULT ""')
@@ -413,12 +1371,103 @@ def init_db():
                         original_folder_name TEXT,
                         deleted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         expire_at TIMESTAMP,
-                        FOREIGN KEY (user_id) REFERENCES users (id)
+                        FOREIGN KEY (user_id) REFERENCES users(id)
                     )''')
-        
+
         conn.commit()
-    finally:
-        conn.close()
+
+    except Exception as e:
+        print(f"[数据库] 初始化错误: {e}")
+        conn.rollback()
+        raise
+
+    # ==================== 数据库优化 - 索引创建 ====================
+    try:
+        create_database_indexes(conn)
+    except Exception as e:
+        print(f"[数据库] 索引创建警告: {e}")
+
+    conn.close()
+
+
+def create_database_indexes(conn):
+    """创建数据库索引以优化查询性能"""
+    print("[数据库] 正在优化索引...")
+
+    indexes = [
+        # users表索引
+        ("idx_users_email", "CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)"),
+        ("idx_users_username", "CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)"),
+
+        # files表索引（高频查询字段）
+        ("idx_files_user_id", "CREATE INDEX IF NOT EXISTS idx_files_user_id ON files(user_id)"),
+        ("idx_files_folder_id", "CREATE INDEX IF NOT EXISTS idx_files_folder_id ON files(folder_id)"),
+        ("idx_files_filename", "CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename)"),
+        ("idx_files_is_deleted", "CREATE INDEX IF NOT EXISTS idx_files_is_deleted ON files(is_deleted)"),
+        ("idx_files_created_at", "CREATE INDEX IF NOT EXISTS idx_files_created_at ON files(created_at)"),
+        ("idx_files_user_folder", "CREATE INDEX IF NOT EXISTS idx_files_user_folder ON files(user_id, folder_id)"),
+
+        # folders表索引
+        ("idx_folders_user_id", "CREATE INDEX IF NOT EXISTS folders_user_id ON folders(user_id)"),
+        ("idx_folders_parent_id", "CREATE INDEX IF NOT EXISTS folders_parent_id ON folders(parent_id)"),
+
+        # access_logs表索引
+        ("idx_access_logs_file_id", "CREATE INDEX IF NOT EXISTS idx_access_logs_file_id ON access_logs(file_id)"),
+        ("idx_access_logs_user_id", "CREATE INDEX IF NOT EXISTS idx_access_logs_user_id ON access_logs(user_id)"),
+        ("idx_access_logs_time", "CREATE INDEX IF NOT EXISTS idx_access_logs_time ON access_logs(access_time)"),
+
+        # operation_logs表索引
+        ("idx_op_logs_user_id", "CREATE INDEX IF NOT EXISTS idx_op_logs_user_id ON operation_logs(user_id)"),
+        ("idx_op_logs_action", "CREATE INDEX IF NOT EXISTS idx_op_logs_action ON operation_logs(action)"),
+        ("idx_op_logs_time", "CREATE INDEX IF NOT EXISTS idx_op_logs_time ON operation_logs(created_at)"),
+
+        # likes表索引
+        ("idx_likes_file_user", "CREATE INDEX IF NOT EXISTS idx_likes_file_user ON likes(file_id, user_id)"),
+        ("idx_likes_user_id", "CREATE INDEX IF NOT EXISTS idx_likes_user_id ON likes(user_id)"),
+
+        # favorites表索引
+        ("idx_fav_file_user", "CREATE INDEX IF NOT EXISTS idx_fav_file_user ON favorites(file_id, user_id)"),
+        ("idx_fav_user_id", "CREATE INDEX IF NOT EXISTS idx_fav_user_id ON favorites(user_id)"),
+
+        # tags表索引
+        ("idx_tags_name_user", "CREATE INDEX IF NOT EXISTS idx_tags_name_user ON tags(name, user_id)"),
+        ("idx_tags_user_id", "CREATE INDEX IF NOT EXISTS idx_tags_user_id ON tags(user_id)"),
+
+        # file_tags关联表索引
+        ("idx_file_tags_file_id", "CREATE INDEX IF NOT EXISTS idx_file_tags_file_id ON file_tags(file_id)"),
+        ("idx_file_tags_tag_id", "CREATE INDEX IF NOT EXISTS idx_file_tags_tag_id ON file_tags(tag_id)"),
+
+        # file_categories关联表索引
+        ("idx_fc_file_id", "CREATE INDEX IF NOT EXISTS idx_fc_file_id ON file_categories(file_id)"),
+        ("idx_fc_category_id", "CREATE INDEX IF NOT EXISTS idx_fc_category_id ON file_categories(category_id)"),
+
+        # ai_contents表索引
+        ("idx_ai_contents_user", "CREATE INDEX IF NOT EXISTS idx_ai_contents_user ON ai_contents(user_id)"),
+        ("idx_ai_contents_function", "CREATE INDEX IF NOT EXISTS idx_ai_contents_function ON ai_contents(ai_function)"),
+        ("idx_ai_contents_created", "CREATE INDEX IF NOT EXISTS idx_ai_contents_created ON ai_contents(created_at)"),
+
+        # file_shares表索引
+        ("idx_shares_share_code", "CREATE INDEX IF NOT EXISTS idx_shares_share_code ON file_shares(share_code)"),
+        ("idx_shares_user_id", "CREATE INDEX IF NOT EXISTS idx_shares_user_id ON file_shares(user_id)"),
+
+        # trash表索引
+        ("idx_trash_user_id", "CREATE INDEX IF NOT EXISTS idx_trash_user_id ON trash(user_id)"),
+        ("idx_trash_expire", "CREATE INDEX IF NOT EXISTS idx_trash_expire ON trash(expire_at)"),
+
+        # file_versions表索引
+        ("idx_versions_file_id", "CREATE INDEX IF NOT EXISTS idx_versions_file_id ON file_versions(file_id)"),
+    ]
+
+    created_count = 0
+    for index_name, sql in indexes:
+        try:
+            conn.execute(sql)
+            created_count += 1
+        except Exception as e:
+            print(f"[数据库] 索引 {index_name} 创建失败: {e}")
+
+    conn.commit()
+    print(f"[数据库] 索引优化完成！已创建/更新 {created_count} 个索引")
 
 
 
@@ -1031,13 +2080,14 @@ def cleanup_old_logs():
 
 def cleanup_expired_trash():
     """清理回收站中过期的文件（超过30天）"""
-    conn = get_db()
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
     try:
         expired_items = conn.execute('''
-            SELECT * FROM trash 
+            SELECT * FROM trash
             WHERE expire_at < datetime('now')
         ''').fetchall()
-        
+
         deleted_count = 0
         for item in expired_items:
             if os.path.exists(item['file_path']):
@@ -1045,17 +2095,269 @@ def cleanup_expired_trash():
                     os.unlink(item['file_path'])
                 except Exception as e:
                     print(f"删除文件失败: {item['file_path']}, 错误: {str(e)}")
-            
+
             conn.execute('DELETE FROM files WHERE id = ?', (item['file_id'],))
             conn.execute('DELETE FROM trash WHERE id = ?', (item['id'],))
             deleted_count += 1
-        
+
         conn.commit()
         if deleted_count > 0:
             print(f"已清理 {deleted_count} 个过期回收站文件")
     except Exception as e:
         print(f"清理回收站失败: {str(e)}")
         conn.rollback()
+    finally:
+        conn.close()
+
+
+# ==================== 数据归档机制 ====================
+
+def archive_old_logs(days_to_keep=90):
+    """
+    归档旧日志数据到归档表
+
+    参数:
+        days_to_keep: 保留最近N天的日志，默认90天
+    """
+    print(f"[数据归档] 开始清理 {days_to_keep} 天前的日志数据...")
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
+    total_archived = 0
+
+    try:
+        # 创建归档表（如果不存在）
+        conn.execute('''CREATE TABLE IF NOT EXISTS access_logs_archive (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_id TEXT,
+                        user_id TEXT,
+                        action TEXT,
+                        ip_address TEXT,
+                        user_agent TEXT,
+                        access_time TIMESTAMP,
+                        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS operation_logs_archive (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT,
+                        action TEXT,
+                        target_id TEXT,
+                        target_type TEXT,
+                        message TEXT,
+                        details TEXT,
+                        created_at TIMESTAMP,
+                        archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )''')
+
+        # 归档旧的访问日志
+        cutoff_date = (datetime.now() - timedelta(days=days_to_keep)).strftime('%Y-%m-%d %H:%M:%S')
+        
+        old_access_logs = conn.execute('''
+            SELECT * FROM access_logs 
+            WHERE access_time < ?
+        ''', (cutoff_date,)).fetchall()
+
+        for log in old_access_logs:
+            conn.execute('''
+                INSERT INTO access_logs_archive 
+                (file_id, user_id, action, ip_address, user_agent, access_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (log['file_id'], log['user_id'], log['action'],
+                  log['ip_address'], log['user_agent'], log['access_time']))
+            total_archived += 1
+
+        # 删除已归档的访问日志
+        if old_access_logs:
+            conn.execute('DELETE FROM access_logs WHERE access_time < ?', (cutoff_date,))
+            print(f"  - 访问日志：归档 {len(old_access_logs)} 条")
+
+        # 归档旧的操作日志
+        old_op_logs = conn.execute('''
+            SELECT * FROM operation_logs 
+            WHERE created_at < ?
+        ''', (cutoff_date,)).fetchall()
+
+        for log in old_op_logs:
+            conn.execute('''
+                INSERT INTO operation_logs_archive
+                (user_id, action, target_id, target_type, message, details, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            ''', (log['user_id'], log['action'], log['target_id'],
+                  log['target_type'], log['message'], log['details'], log['created_at']))
+            total_archived += 1
+
+        # 删除已归档的操作日志
+        if old_op_logs:
+            conn.execute('DELETE FROM operation_logs WHERE created_at < ?', (cutoff_date,))
+            print(f"  - 操作日志：归档 {len(old_op_logs)} 条")
+
+        # 清理过期的验证码（超过24小时）
+        conn.execute('''
+            DELETE FROM verification_codes 
+            WHERE expires_at < datetime('now')
+        ''')
+
+        # 清理过期的分享链接
+        conn.execute('''
+            DELETE FROM file_shares 
+            WHERE expires_at IS NOT NULL AND expires_at < datetime('now')
+        ''')
+
+        conn.commit()
+        print(f"[数据归档] 完成！共归档 {total_archived} 条记录")
+
+        return {
+            'success': True,
+            'archived_count': total_archived,
+            'access_logs': len(old_access_logs) if 'old_access_logs' in dir() else 0,
+            'operation_logs': len(old_op_logs) if 'old_op_logs' in dir() else 0
+        }
+
+    except Exception as e:
+        print(f"[数据归档] 错误: {e}")
+        conn.rollback()
+        return {
+            'success': False,
+            'error': str(e)
+        }
+    finally:
+        conn.close()
+
+
+def cleanup_archive_tables(max_age_days=365):
+    """
+    清理归档表中超过指定时间的数据
+
+    参数:
+        max_age_days: 归档数据最大保留天数，默认1年
+    """
+    print(f"[归档清理] 清理超过 {max_age_days} 天的归档数据...")
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
+
+    try:
+        cutoff_date = (datetime.now() - timedelta(days=max_age_days)).strftime('%Y-%m-%d %H:%M:%S')
+
+        deleted_access = conn.execute('''
+            DELETE FROM access_logs_archive WHERE access_time < ?
+        ''', (cutoff_date,)).rowcount
+
+        deleted_ops = conn.execute('''
+            DELETE FROM operation_logs_archive WHERE created_at < ?
+        ''', (cutoff_date,)).rowcount
+
+        conn.commit()
+        total_deleted = deleted_access + deleted_ops
+
+        if total_deleted > 0:
+            print(f"[归档清理] 已删除 {total_deleted} 条过期归档数据")
+            print(f"  - 访问日志归档：{deleted_access} 条")
+            print(f"  - 操作日志归档：{deleted_ops} 条")
+
+        return {
+            'success': True,
+            'deleted_access_logs': deleted_access,
+            'deleted_operation_logs': deleted_ops,
+            'total_deleted': total_deleted
+        }
+
+    except Exception as e:
+        print(f"[归档清理] 错误: {e}")
+        conn.rollback()
+        return {
+            'success': False,
+            'error': str(e)
+        }
+    finally:
+        conn.close()
+
+
+def get_database_stats():
+    """获取数据库统计信息"""
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
+    stats = {}
+
+    try:
+        # 获取各表的行数
+        tables = ['users', 'files', 'folders', 'access_logs', 'operation_logs',
+                  'likes', 'favorites', 'tags', 'categories', 'ai_contents',
+                  'trash', 'file_shares', 'file_versions',
+                  'access_logs_archive', 'operation_logs_archive']
+
+        table_stats = {}
+        for table in tables:
+            try:
+                count = conn.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0]
+                table_stats[table] = count
+            except Exception as e:
+                table_stats[table] = f"错误: {e}"
+
+        stats['tables'] = table_stats
+
+        # 数据库文件大小
+        db_size = os.path.getsize(DB_FILE) if os.path.exists(DB_FILE) else 0
+        stats['db_size_bytes'] = db_size
+        stats['db_size_mb'] = round(db_size / (1024 * 1024), 2)
+
+        # 索引信息
+        indexes = conn.execute("SELECT name FROM sqlite_master WHERE type='index'").fetchall()
+        stats['index_count'] = len(indexes)
+
+        # 查询监控统计
+        stats['query_monitor'] = query_monitor.get_stats()
+
+        # 连接池状态
+        if db_pool:
+            stats['connection_pool'] = db_pool.get_stats()
+
+        return stats
+
+    except Exception as e:
+        print(f"[数据库统计] 错误: {e}")
+        return {'error': str(e)}
+    finally:
+        conn.close()
+
+
+def optimize_database():
+    """执行数据库优化操作"""
+    print("[数据库优化] 开始执行VACUUM和ANALYZE...")
+    conn = sqlite3.connect(str(DB_FILE))
+    conn.row_factory = sqlite3.Row
+
+    try:
+        # VACUUM - 重建数据库文件，释放空间
+        start_time = time.time()
+        conn.execute('VACUUM')
+        vacuum_time = time.time() - start_time
+        print(f"  VACUUM完成，耗时: {vacuum_time:.2f}s")
+
+        # ANALYZE - 更新统计信息以优化查询计划
+        start_time = time.time()
+        conn.execute('ANALYZE')
+        analyze_time = time.time() - start_time
+        print(f"  ANALYZE完成，耗时: {analyze_time:.2f}s")
+
+        conn.commit()
+
+        # 获取优化后的数据库大小
+        db_size = os.path.getsize(DB_FILE) if os.path.exists(DB_FILE) else 0
+
+        return {
+            'success': True,
+            'vacuum_time': round(vacuum_time, 2),
+            'analyze_time': round(analyze_time, 2),
+            'db_size_mb': round(db_size / (1024 * 1024), 2),
+            'message': '数据库优化完成'
+        }
+
+    except Exception as e:
+        print(f"[数据库优化] 错误: {e}")
+        return {
+            'success': False,
+            'error': str(e)
+        }
     finally:
         conn.close()
 
@@ -1420,29 +2722,61 @@ def main():
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-    
+
     try:
         print("\n" + "=" * 60)
         print("[启动] 正在初始化...")
         print("=" * 60 + "\n")
-        
-        # 初始化数据库
+
+        # 初始化数据库（不依赖Flask上下文）
         print("[数据库] 初始化中...")
         init_db()
         print("  [OK] 数据库就绪")
-        
-        # 清理过期数据
+
+        # 初始化连接池（不依赖Flask上下文）
+        print("[连接池] 初始化中...")
+        init_db_pool()
+        print("  [OK] 连接池就绪")
+
+        # 初始化缓存系统
+        print("[缓存] 初始化中...")
+        init_cache()
+        init_preview_cache()
+        init_hot_data_cache()
+
+        # 配置CDN（如果环境变量中有配置）
+        with app.app_context():
+            configure_cdn(app)
+
+        cache_stats = get_cache().get_stats()
+        print(f"  [OK] 缓存就绪 (类型: {cache_stats['type']})")
+
+        # 清理过期预览文件
+        if preview_cache:
+            preview_cache.clear_old_previews(days=7)
+
+        # 清理过期数据（使用应用上下文）
         print("[清理] 清理过期数据...")
-        cleanup_old_logs()
-        cleanup_expired_trash()
+        with app.app_context():
+            cleanup_old_logs()
+            cleanup_expired_trash()
+
+            # 执行定期归档（可选，默认保留90天）
+            try:
+                archive_result = archive_old_logs(days_to_keep=90)
+                if archive_result.get('success'):
+                    print(f"  [OK] 日志归档完成: {archive_result.get('archived_count', 0)} 条")
+            except Exception as e:
+                print(f"  [WARN] 日志归档跳过: {e}")
+
         print("  [OK] 清理完成\n")
-        
+
         # 显示启动信息
         print("=" * 60)
         print("[就绪] 服务器准备就绪！")
         print("=" * 60)
         print(f"  [本地] http://127.0.0.1:9876")
-        
+
         # 获取局域网IP
         import socket
         try:
@@ -1453,11 +2787,23 @@ def main():
             print(f"  [局域网] http://{local_ip}:9876")
         except Exception:
             pass
-        
+
+        # 显示数据库优化状态
+        print("-" * 60)
+        print("[数据库优化]")
+        with app.app_context():
+            stats = get_database_stats()
+        if 'db_size_mb' in stats:
+            print(f"  数据库大小: {stats['db_size_mb']} MB")
+        if 'index_count' in stats:
+            print(f"  索引数量: {stats['index_count']}")
+        if db_pool:
+            pool_stats = db_pool.get_stats()
+            print(f"  连接池: {pool_stats['available_connections']}/{pool_stats['pool_size']} 可用")
         print("-" * 60)
         print("  按 Ctrl+C 停止服务器")
         print("=" * 60 + "\n")
-        
+
         # 启动Flask应用（禁用reloader以支持SSE流式传输）
         app.run(debug=True, host='0.0.0.0', port=9876, use_reloader=False)
         
