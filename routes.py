@@ -1548,6 +1548,261 @@ def get_hot_data_stats():
         return api_response(success=False, message=str(e))
 
 
+# ==================== 文件存储优化API ====================
+
+@app.route('/api/storage/info')
+def get_storage_info():
+    """获取存储系统信息"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_storage
+        storage = get_storage()
+
+        info = {
+            'storage_type': storage.storage_type,
+            'primary': str(type(storage.primary).__name__),
+            'has_fallback': storage.fallback is not None,
+            'chunk_temp_dir': str(storage.chunk_temp_dir)
+        }
+
+        if hasattr(storage, 'oss_storage') and storage.oss_storage:
+            info['oss_available'] = storage.oss_storage._available
+
+        return api_response(success=True, data=info)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/session', methods=['POST'])
+def create_chunk_upload_session():
+    """创建分片上传会话"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        data = request.get_json(silent=True) or {}
+        file_id = data.get('file_id') or str(uuid.uuid4())
+        filename = data.get('filename', 'unknown')
+        total_size = int(data.get('total_size', 0))
+        chunk_count = int(data.get('chunk_count', 1))
+        file_hash = data.get('file_hash')
+
+        session = chunk_mgr.create_session(
+            file_id=file_id,
+            filename=filename,
+            total_size=total_size,
+            chunk_count=chunk_count,
+            file_hash=file_hash
+        )
+
+        return api_response(success=True, data=session)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/<file_id>/<int:chunk_index>', methods=['POST'])
+def upload_chunk(file_id, chunk_index):
+    """上传单个分片"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        # 获取分片数据
+        if 'chunk' in request.files:
+            chunk_data = request.files['chunk'].read()
+        elif request.data:
+            chunk_data = request.data
+        else:
+            return api_response(success=False, message='未找到分片数据')
+
+        result = chunk_mgr.upload_chunk(file_id, chunk_index, chunk_data)
+        return api_response(success=result['success'], data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/<file_id>/progress')
+def get_chunk_upload_progress(file_id):
+    """获取分片上传进度"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        result = chunk_mgr.get_upload_progress(file_id)
+        return api_response(success=result.get('success', True), data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/<file_id>/merge', methods=['POST'])
+def merge_uploaded_chunks(file_id):
+    """合并已上传的分片"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        data = request.get_json(silent=True) or {}
+        target_path = data.get('target_path')
+
+        result = chunk_mgr.merge_chunks(file_id, target_path)
+        return api_response(success=result['success'], data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/<file_id>/resume')
+def resume_chunk_upload(file_id):
+    """断点续传：获取上传状态"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        result = chunk_mgr.resume_upload(file_id)
+        return api_response(success=result.get('success', True), data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/upload/chunk/<file_id>', methods=['DELETE'])
+def cancel_chunk_upload(file_id):
+    """取消分片上传"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import get_chunk_manager
+        chunk_mgr = get_chunk_manager()
+
+        result = chunk_mgr.cancel_upload(file_id)
+        return api_response(success=result['success'], data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/image/process', methods=['POST'])
+def process_image():
+    """图片处理（压缩/转换/缩放）"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import ImageProcessor
+
+        data = request.get_json(silent=True) or {}
+        image_path = data.get('image_path')
+
+        if not image_path:
+            # 如果提供了图片文件
+            if 'image' in request.files:
+                image_file = request.files['image']
+                temp_path = UPLOAD_DIR / f"temp_{uuid.uuid4()}{Path(image_file.filename).suffix}"
+                image_file.save(str(temp_path))
+
+                options = {
+                    'quality': int(data.get('quality', 85)),
+                    'format': data.get('format'),
+                    'max_width': int(data.get('max_width', 1920)),
+                    'max_height': int(data.get('max_height', 1920)),
+                    'thumbnail': data.get('thumbnail', False),
+                    'thumbnail_size': tuple(map(int, data.get('thumbnail_size', '200,200').split(',')))
+                    if data.get('thumbnail_size') else (200, 200)
+                }
+
+                result = ImageProcessor.process_image(temp_path, **options)
+
+                # 清理临时文件
+                if temp_path.exists():
+                    temp_path.unlink()
+            else:
+                return api_response(success=False, message='请提供图片文件或路径')
+        else:
+            full_path = UPLOAD_DIR / image_path
+            options = {
+                'quality': int(data.get('quality', 85)),
+                'format': data.get('format'),
+                'max_width': int(data.get('max_width', 1920)),
+                'max_height': int(data.get('max_height', 1920)),
+                'thumbnail': data.get('thumbnail', False)
+            }
+
+            result = ImageProcessor.process_image(full_path, **options)
+
+        return api_response(success=result.get('success', False), data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/image/thumbnail/<path:image_path>')
+def generate_thumbnail(image_path):
+    """生成并返回缩略图"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import ImageProcessor
+
+        full_path = UPLOAD_DIR / image_path
+        size = request.args.get('size', '200x200')
+        width, height = map(int, size.split('x'))
+
+        result = ImageProcessor.generate_thumbnail(full_path, (width, height))
+
+        if result.get('success') and result.get('thumbnail_path'):
+            thumb_path = Path(result['thumbnail_path'])
+            return send_from_directory(thumb_path.parent, thumb_path.name)
+        else:
+            return jsonify(result), 400
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/storage/test-oss', methods=['POST'])
+def test_oss_connection():
+    """测试OSS连接（仅管理员）"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import OSSStorage
+        oss = OSSStorage()
+
+        if oss._available:
+            # 测试上传
+            test_key = f"test/connection_test_{int(time.time())}.txt"
+            oss.client.put_object(test_key, b"connection test")
+            oss.client.delete_object(test_key)
+
+            return api_response(
+                success=True,
+                message='OSS连接正常',
+                data={
+                    'bucket': oss.bucket_name,
+                    'endpoint': oss.endpoint
+                }
+            )
+        else:
+            return api_response(success=False, message='OSS未配置或连接失败')
+    except Exception as e:
+        return api_response(success=False, message=f'OSS测试失败: {str(e)}')
+
+
 # 博客页面
 @app.route('/blog')
 def blog_page():

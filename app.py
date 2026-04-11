@@ -735,10 +735,861 @@ def init_hot_data_cache():
     hot_data_cache = HotDataCache(get_cache())
     return hot_data_cache
 
+
+# ==================== 文件存储优化系统 ====================
+
+class StorageBackend:
+    """存储后端抽象基类"""
+    
+    def upload_file(self, file_obj, file_path, **kwargs):
+        raise NotImplementedError
+    
+    def download_file(self, file_path):
+        raise NotImplementedError
+    
+    def delete_file(self, file_path):
+        raise NotImplementedError
+    
+    def file_exists(self, file_path):
+        raise NotImplementedError
+    
+    def get_file_url(self, file_path):
+        raise NotImplementedError
+    
+    def get_file_info(self, file_path):
+        raise NotImplementedError
+
+
+class LocalStorage(StorageBackend):
+    """本地文件系统存储"""
+    
+    def __init__(self, base_path=None):
+        self.base_path = Path(base_path) if base_path else UPLOAD_DIR
+        self.base_path.mkdir(parents=True, exist_ok=True)
+        print(f"[本地存储] 初始化完成: {self.base_path}")
+    
+    def _get_full_path(self, file_path):
+        """获取完整路径"""
+        if isinstance(file_path, str):
+            file_path = Path(file_path)
+        
+        # 如果是相对路径，拼接基础路径
+        if not file_path.is_absolute():
+            full_path = self.base_path / file_path
+        else:
+            full_path = file_path
+        
+        return full_path
+    
+    def upload_file(self, file_obj, file_path, **kwargs):
+        """
+        上传文件到本地存储
+        
+        参数:
+            file_obj: 文件对象（FileStorage或文件路径）
+            file_path: 存储路径（相对或绝对）
+            **kwargs: 额外参数
+                - create_dirs: 是否自动创建目录（默认True）
+        """
+        full_path = self._get_full_path(file_path)
+        
+        # 自动创建目录
+        if kwargs.get('create_dirs', True):
+            full_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 写入文件
+        if hasattr(file_obj, 'save'):
+            # Flask FileStorage对象
+            file_obj.save(str(full_path))
+        elif hasattr(file_obj, 'read'):
+            # 文件对象
+            with open(full_path, 'wb') as f:
+                f.write(file_obj.read())
+        elif isinstance(file_obj, (str, Path)):
+            # 文件路径（复制）
+            import shutil
+            shutil.copy2(str(file_obj), str(full_path))
+        else:
+            raise ValueError(f"不支持的文件对象类型: {type(file_obj)}")
+        
+        return {
+            'success': True,
+            'path': str(full_path),
+            'size': full_path.stat().st_size,
+            'url': f'/uploads/{full_path.relative_to(UPLOAD_DIR)}' if UPLOAD_DIR in full_path.parents else f'/static/uploads/{file_path}'
+        }
+    
+    def download_file(self, file_path):
+        """下载/读取文件"""
+        full_path = self._get_full_path(file_path)
+        
+        if not full_path.exists():
+            raise FileNotFoundError(f"文件不存在: {file_path}")
+        
+        return open(full_path, 'rb')
+    
+    def delete_file(self, file_path):
+        """删除文件"""
+        full_path = self._get_full_path(file_path)
+        
+        if full_path.exists():
+            full_path.unlink()
+            return {'success': True}
+        
+        return {'success': False, 'error': '文件不存在'}
+    
+    def file_exists(self, file_path):
+        """检查文件是否存在"""
+        full_path = self._get_full_path(file_path)
+        return full_path.exists()
+    
+    def get_file_url(self, file_path):
+        """获取文件访问URL"""
+        full_path = self._get_full_path(file_path)
+        
+        try:
+            relative_path = full_path.relative_to(UPLOAD_DIR)
+            return url_for('static', filename=f'uploads/{relative_path}')
+        except ValueError:
+            return f'/static/uploads/{file_path}'
+    
+    def get_file_info(self, file_path):
+        """获取文件信息"""
+        full_path = self._get_full_path(file_path)
+        
+        if not full_path.exists():
+            return None
+        
+        stat = full_path.stat()
+        return {
+            'name': full_path.name,
+            'path': str(full_path),
+            'size': stat.st_size,
+            'created_at': datetime.fromtimestamp(stat.st_ctime).isoformat(),
+            'modified_at': datetime.fromtimestamp(stat.st_mtime).isoformat(),
+            'extension': full_path.suffix.lower()
+        }
+
+
+class OSSStorage(StorageBackend):
+    """阿里云OSS/S3兼容对象存储"""
+    
+    def __init__(self, access_key_id=None, access_key_secret=None,
+                 endpoint=None, bucket_name=None):
+        """
+        初始化OSS存储
+        
+        参数:
+            access_key_id: Access Key ID
+            access_key_secret: Access Key Secret
+            endpoint: OSS端点（如 https://oss-cn-hangzhou.aliyuncs.com）
+            bucket_name: 存储桶名称
+        """
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent / ".env")
+        
+        self.access_key_id = access_key_id or os.getenv('OSS_ACCESS_KEY_ID')
+        self.access_key_secret = access_key_secret or os.getenv('OSS_ACCESS_KEY_SECRET')
+        self.endpoint = endpoint or os.getenv('OSS_ENDPOINT')
+        self.bucket_name = bucket_name or os.getenv('OSS_BUCKET_NAME')
+        self.client = None
+        self._available = False
+        
+        # 尝试初始化OSS客户端
+        self._initialize_client()
+    
+    def _initialize_client(self):
+        """初始化OSS客户端"""
+        try:
+            import oss2
+            
+            if not all([self.access_key_id, self.access_key_secret, 
+                       self.endpoint, self.bucket_name]):
+                print("[OSS] 配置不完整，将使用本地存储作为回退")
+                return
+            
+            auth = oss2.Auth(self.access_key_id, self.access_key_secret)
+            self.client = oss2.Bucket(auth, self.endpoint, self.bucket_name)
+            
+            # 测试连接
+            self.client.get_bucket_info()
+            self._available = True
+            print(f"[OSS] 连接成功: {self.bucket_name}")
+            
+        except ImportError:
+            print("[OSS] oss2库未安装，请运行: pip install oss2")
+        except Exception as e:
+            print(f"[OSS] 连接失败: {e}")
+    
+    def upload_file(self, file_obj, object_key, **kwargs):
+        """
+        上传文件到OSS
+        
+        参数:
+            file_obj: 文件对象
+            object_key: 对象键（如 uploads/2024/01/file.txt）
+            **kwargs: 
+                - content_type: MIME类型
+                - headers: 自定义头
+        """
+        if not self._available:
+            raise RuntimeError("OSS未配置或连接失败")
+        
+        # 读取文件内容
+        if hasattr(file_obj, 'read'):
+            data = file_obj.read()
+        elif isinstance(file_obj, (str, Path)):
+            with open(str(file_obj), 'rb') as f:
+                data = f.read()
+        else:
+            raise ValueError(f"不支持的文件对象类型")
+        
+        # 上传选项
+        headers = kwargs.get('headers', {})
+        if kwargs.get('content_type'):
+            headers['Content-Type'] = kwargs['content_type']
+        
+        # 执行上传
+        result = self.client.put_object(object_key, data, headers=headers)
+        
+        return {
+            'success': True,
+            'key': object_key,
+            'url': f"https://{self.bucket_name}.{self.endpoint.replace('https://', '').replace('http://', '')}/{object_key}",
+            'etag': result.etag,
+            'size': len(data)
+        }
+    
+    def download_file(self, object_key):
+        """从OSS下载文件"""
+        if not self._available:
+            raise RuntimeError("OSS未配置或连接失败")
+        
+        result = self.client.get_object(object_key)
+        return result
+    
+    def delete_file(self, object_key):
+        """删除OSS对象"""
+        if not self._available:
+            raise RuntimeError("OSS未配置或连接失败")
+        
+        try:
+            self.client.delete_object(object_key)
+            return {'success': True}
+        except Exception as e:
+            return {'success': False, 'error': str(e)}
+    
+    def file_exists(self, object_key):
+        """检查对象是否存在"""
+        if not self._available:
+            return False
+        
+        try:
+            self.client.head_object(object_key)
+            return True
+        except:
+            return False
+    
+    def get_file_url(self, object_key, expires=3600):
+        """生成带签名的临时URL"""
+        if not self._available:
+            return None
+        
+        return self.client.sign_url('GET', object_key, expires)
+    
+    def get_file_info(self, object_key):
+        """获取对象元数据"""
+        if not self._available:
+            return None
+        
+        try:
+            meta = self.client.head_object(object_key)
+            return {
+                'key': object_key,
+                'size': meta.content_length,
+                'content_type': meta.content_type,
+                'last_modified': meta.last_modified,
+                'etag': meta.etag
+            }
+        except:
+            return None
+
+
+class UnifiedStorageManager:
+    """统一存储管理器"""
+    
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._initialize()
+        return cls._instance
+    
+    def _initialize(self):
+        """初始化存储系统"""
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent / ".env")
+        
+        storage_type = os.getenv('STORAGE_TYPE', 'local').lower()
+        
+        # 尝试使用OSS
+        if storage_type == 'oss' or storage_type == 's3':
+            self.oss_storage = OSSStorage()
+            if self.oss_storage._available:
+                self.primary = self.oss_storage
+                self.fallback = LocalStorage()
+                self.storage_type = "oss"
+                print(f"[存储系统] 使用 OSS 主存储 + 本地回退")
+            else:
+                self.primary = LocalStorage()
+                self.fallback = None
+                self.storage_type = "local"
+                print(f"[存储系统] OSS不可用，回退到本地存储")
+        else:
+            self.primary = LocalStorage()
+            self.fallback = None
+            self.storage_type = "local"
+            print(f"[存储系统] 使用本地存储")
+        
+        # 分片上传临时目录
+        self.chunk_temp_dir = DATA_DIR / "chunks"
+        self.chunk_temp_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 断点续传记录
+        self.upload_sessions = {}
+        self.sessions_lock = threading.Lock()
+        
+        print(f"[存储系统] 初始化完成 (主存储: {self.storage_type})")
+    
+    def upload(self, file_obj, file_path, use_oss=False, **kwargs):
+        """
+        统一上传接口
+        
+        参数:
+            file_obj: 文件对象
+            file_path: 存储路径
+            use_oss: 强制使用OSS（如果可用）
+            **kwargs: 传递给后端的额外参数
+        """
+        try:
+            # 如果强制使用OSS且可用
+            if use_oss and self.storage_type == 'oss':
+                return self.primary.upload_file(file_obj, file_path, **kwargs)
+            
+            # 使用主存储
+            result = self.primary.upload_file(file_obj, file_path, **kwargs)
+            result['storage'] = self.storage_type
+            return result
+            
+        except Exception as e:
+            print(f"[存储] 主存储上传失败: {e}")
+            
+            # 回退到备用存储
+            if self.fallback:
+                print(f"[存储] 回退到备用存储...")
+                result = self.fallback.upload_file(file_obj, file_path, **kwargs)
+                result['storage'] = 'local_fallback'
+                result['fallback_reason'] = str(e)
+                return result
+            
+            raise
+    
+    def download(self, file_path):
+        """统一下载接口"""
+        return self.primary.download_file(file_path)
+    
+    def delete(self, file_path):
+        """统一删除接口"""
+        return self.primary.delete_file(file_path)
+    
+    def exists(self, file_path):
+        """检查文件是否存在"""
+        return self.primary.file_exists(file_path)
+    
+    def get_url(self, file_path):
+        """获取文件URL"""
+        return self.primary.get_file_url(file_path)
+    
+    def get_info(self, file_path):
+        """获取文件信息"""
+        return self.primary.get_file_info(file_path)
+
+
+# 全局存储管理器实例
+storage_manager = None
+
+
+def init_storage():
+    """初始化全局存储管理器"""
+    global storage_manager
+    storage_manager = UnifiedStorageManager()
+    return storage_manager
+
+
+def get_storage():
+    """获取存储实例（延迟初始化）"""
+    global storage_manager
+    if storage_manager is None:
+        init_storage()
+    return storage_manager
+
+
+# ==================== 图片处理系统 ====================
+
+class ImageProcessor:
+    """图片压缩与格式转换处理器"""
+    
+    SUPPORTED_FORMATS = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+    OUTPUT_QUALITY = 85  # 默认压缩质量
+    MAX_DIMENSION = 1920  # 最大边长限制
+    
+    @classmethod
+    def is_image(cls, filename):
+        """判断是否为图片文件"""
+        ext = Path(filename).suffix.lower()
+        return ext in cls.SUPPORTED_FORMATS
+    
+    @classmethod
+    def process_image(cls, input_path, output_path=None, **options):
+        """
+        处理图片（压缩+格式转换+缩放）
+        
+        参数:
+            input_path: 输入图片路径
+            output_path: 输出路径（None则覆盖原文件）
+            **options:
+                - quality: 压缩质量 (1-100)，默认85
+                - format: 输出格式 ('JPEG', 'PNG', 'WEBP')
+                - max_width: 最大宽度
+                - max_height: 最大高度
+                - thumbnail: 是否生成缩略图
+                - thumbnail_size: 缩略图尺寸 (width, height)
+        
+        返回:
+            dict: 处理结果信息
+        """
+        try:
+            from PIL import Image
+        except ImportError:
+            print("[图片处理] PIL/Pillow未安装，跳过处理")
+            return {'success': False, 'error': 'Pillow未安装'}
+        
+        input_path = Path(input_path)
+        if not input_path.exists():
+            return {'success': False, 'error': '输入文件不存在'}
+        
+        # 打开图片
+        img = Image.open(input_path)
+        original_format = img.format
+        original_size = input_path.stat().st_size
+        
+        # 处理选项
+        quality = options.get('quality', cls.OUTPUT_QUALITY)
+        output_format = options.get('format', original_format or 'JPEG')
+        max_width = options.get('max_width', cls.MAX_DIMENSION)
+        max_height = options.get('max_height', cls.MAX_DIMENSION)
+        
+        # 转换为RGB模式（JPEG不支持透明度）
+        if output_format.upper() in ['JPEG', 'JPG']:
+            if img.mode in ['RGBA', 'P']:
+                img = img.convert('RGB')
+        
+        # 计算新尺寸（保持宽高比）
+        width, height = img.size
+        if width > max_width or height > max_height:
+            ratio = min(max_width / width, max_height / height)
+            new_size = (int(width * ratio), int(height * ratio))
+            img = img.resize(new_size, Image.LANCZOS)
+        
+        # 确定输出路径
+        if output_path is None:
+            output_path = input_path
+        else:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 保存处理后的图片
+        save_options = {}
+        if output_format.upper() in ['JPEG', 'JPG']:
+            save_options['quality'] = quality
+            save_options['optimize'] = True
+        elif output_format.upper() == 'PNG':
+            save_options['optimize'] = True
+        elif output_format.upper() == 'WEBP':
+            save_options['quality'] = quality
+        
+        img.save(str(output_path), format=output_format, **save_options)
+        
+        output_size = output_path.stat().st_size
+        compression_ratio = (1 - output_size / original_size) * 100 if original_size > 0 else 0
+        
+        result = {
+            'success': True,
+            'input_path': str(input_path),
+            'output_path': str(output_path),
+            'original_size': original_size,
+            'output_size': output_size,
+            'compression_ratio': round(compression_ratio, 2),
+            'original_dimensions': (width, height),
+            'new_dimensions': img.size,
+            'format': output_format
+        }
+        
+        # 生成缩略图（可选）
+        if options.get('thumbnail', False):
+            thumb_size = options.get('thumbnail_size', (200, 200))
+            thumbnail = img.copy()
+            thumbnail.thumbnail(thumb_size, Image.LANCZOS)
+            
+            thumb_path = output_path.with_suffix(f'.thumb{output_path.suffix}')
+            thumbnail.save(str(thumb_path), format=output_format, **save_options)
+            result['thumbnail_path'] = str(thumb_path)
+            result['thumbnail_size'] = thumb_path.stat().st_size
+        
+        print(f"[图片处理] 完成: {input_path.name} "
+              f"({original_size//1024}KB → {output_size//1024}KB, "
+              f"压缩率: {compression_ratio:.1f}%)")
+        
+        return result
+    
+    @classmethod
+    def generate_thumbnail(cls, image_path, size=(200, 200), output_dir=None):
+        """
+        生成缩略图
+        
+        参数:
+            image_path: 原图路径
+            size: 缩略图尺寸 (width, height)
+            output_dir: 输出目录（默认与原图同目录）
+        
+        返回:
+            dict: 包含缩略图路径的信息
+        """
+        image_path = Path(image_path)
+        
+        if output_dir:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+            thumb_path = output_dir / f"{image_path.stem}_thumb{image_path.suffix}"
+        else:
+            thumb_path = image_path.with_suffix(f'.thumb{image_path.suffix}')
+        
+        result = cls.process_image(
+            image_path,
+            output_path=thumb_path,
+            thumbnail=True,
+            thumbnail_size=size
+        )
+        
+        return result
+
+
+# ==================== 分片上传管理器 ====================
+
+class ChunkUploadManager:
+    """分片上传管理器"""
+
+    CHUNK_SIZE = 5 * 1024 * 1024  # 默认分片大小：5MB
+
+    def __init__(self):
+        self.TEMP_DIR = DATA_DIR / "chunks"
+        self.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        self.sessions = {}  # 上传会话
+        self.lock = threading.Lock()
+        print(f"[分片上传] 初始化完成，分片大小: {self.CHUNK_SIZE // 1024 // 1024}MB")
+    
+    def create_session(self, file_id, filename, total_size, chunk_count, file_hash=None):
+        """
+        创建分片上传会话
+        
+        参数:
+            file_id: 文件唯一标识
+            filename: 原始文件名
+            total_size: 文件总大小（字节）
+            chunk_count: 总分片数
+            file_hash: 文件MD5（用于完整性校验）
+        """
+        session = {
+            'id': file_id,
+            'filename': filename,
+            'total_size': total_size,
+            'chunk_count': chunk_count,
+            'file_hash': file_hash,
+            'uploaded_chunks': [],
+            'created_at': datetime.now().isoformat(),
+            'status': 'uploading',
+            'temp_dir': self.TEMP_DIR / file_id
+        }
+        
+        # 创建临时目录
+        session['temp_dir'].mkdir(parents=True, exist_ok=True)
+        
+        with self.lock:
+            self.sessions[file_id] = session
+        
+        print(f"[分片上传] 创建会话: {file_id}, 文件: {filename}, "
+              f"大小: {total_size // 1024 // 1024}MB, 分片数: {chunk_count}")
+        
+        return session
+    
+    def upload_chunk(self, file_id, chunk_index, chunk_data):
+        """
+        上传单个分片
+        
+        参数:
+            file_id: 会话ID
+            chunk_index: 分片索引（从0开始）
+            chunk_data: 分片数据（bytes）
+        """
+        with self.lock:
+            session = self.sessions.get(file_id)
+        
+        if not session:
+            return {'success': False, 'error': '会话不存在'}
+        
+        if session['status'] != 'uploading':
+            return {'success': False, 'error': f'会话状态异常: {session["status"]}'}
+        
+        # 保存分片到临时目录
+        chunk_path = session['temp_dir'] / f"chunk_{chunk_index}"
+        with open(chunk_path, 'wb') as f:
+            f.write(chunk_data)
+        
+        chunk_size = len(chunk_data)
+        
+        with self.lock:
+            if chunk_index not in session['uploaded_chunks']:
+                session['uploaded_chunks'].append(chunk_index)
+        
+        progress = len(session['uploaded_chunks']) / session['chunk_count'] * 100
+        
+        print(f"[分片上传] {file_id}: 分片 {chunk_index + 1}/{session['chunk_count']} "
+              f"({progress:.1f}%)")
+        
+        return {
+            'success': True,
+            'chunk_index': chunk_index,
+            'chunk_size': chunk_size,
+            'uploaded_count': len(session['uploaded_chunks']),
+            'total_chunks': session['chunk_count'],
+            'progress': round(progress, 2)
+        }
+    
+    def get_upload_progress(self, file_id):
+        """获取上传进度"""
+        with self.lock:
+            session = self.sessions.get(file_id)
+        
+        if not session:
+            return {'success': False, 'error': '会话不存在'}
+        
+        uploaded = len(session['uploaded_chunks'])
+        total = session['chunk_count']
+        
+        return {
+            'success': True,
+            'file_id': file_id,
+            'filename': session['filename'],
+            'uploaded_chunks': uploaded,
+            'total_chunks': total,
+            'progress': round(uploaded / total * 100, 2) if total > 0 else 0,
+            'status': session['status'],
+            'created_at': session['created_at']
+        }
+    
+    def merge_chunks(self, file_id, target_path=None):
+        """
+        合并所有分片
+        
+        参数:
+            file_id: 会话ID
+            target_path: 目标保存路径（None则使用默认路径）
+        
+        返回:
+            dict: 合并结果
+        """
+        with self.lock:
+            session = self.sessions.get(file_id)
+        
+        if not session:
+            return {'success': False, 'error': '会话不存在'}
+        
+        # 检查是否所有分片都已上传
+        missing = set(range(session['chunk_count'])) - set(session['uploaded_chunks'])
+        if missing:
+            return {
+                'success': False,
+                'error': f'缺少分片: {sorted(missing)}',
+                'missing_chunks': sorted(missing)
+            }
+        
+        # 确定目标路径
+        if target_path is None:
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            safe_filename = re.sub(r'[^\w\-_.]', '_', session['filename'])
+            target_path = UPLOAD_DIR / timestamp / safe_filename
+        else:
+            target_path = Path(target_path)
+        
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # 按顺序合并分片
+        print(f"[分片合并] 开始合并: {file_id}")
+        merged_size = 0
+        
+        with open(target_path, 'wb') as outfile:
+            for i in range(session['chunk_count']):
+                chunk_path = session['temp_dir'] / f"chunk_{i}"
+                
+                if not chunk_path.exists():
+                    return {
+                        'success': False,
+                        'error': f'分片文件丢失: chunk_{i}',
+                        'chunk_index': i
+                    }
+                
+                with open(chunk_path, 'rb') as infile:
+                    data = infile.read()
+                    outfile.write(data)
+                    merged_size += len(data)
+        
+        # 校验文件大小
+        expected_size = session['total_size']
+        if abs(merged_size - expected_size) > 1024:  # 允许1KB误差
+            print(f"[分片合并] 警告: 大小不匹配 (期望: {expected_size}, 实际: {merged_size})")
+        
+        # 可选：校验MD5
+        if session.get('file_hash'):
+            actual_hash = calculate_file_hash(target_path)
+            if actual_hash != session['file_hash']:
+                target_path.unlink()  # 删除损坏的文件
+                return {
+                    'success': False,
+                    'error': '文件完整性校验失败（MD5不匹配）',
+                    'expected_hash': session['file_hash'],
+                    'actual_hash': actual_hash
+                }
+        
+        # 更新会话状态
+        with self.lock:
+            session['status'] = 'completed'
+            session['merged_path'] = str(target_path)
+            session['merged_at'] = datetime.now().isoformat()
+        
+        # 清理临时分片文件（异步）
+        self._cleanup_session_files(file_id)
+        
+        print(f"[分片合并] 完成: {target_path.name} ({merged_size // 1024 // 1024}MB)")
+        
+        return {
+            'success': True,
+            'file_id': file_id,
+            'path': str(target_path),
+            'size': merged_size,
+            'filename': session['filename']
+        }
+    
+    def cancel_upload(self, file_id):
+        """取消上传并清理资源"""
+        with self.lock:
+            session = self.sessions.pop(file_id, None)
+        
+        if not session:
+            return {'success': False, 'error': '会话不存在'}
+        
+        # 更新状态
+        session['status'] = 'cancelled'
+        
+        # 清理临时文件
+        self._cleanup_session_files(file_id)
+        
+        print(f"[分片上传] 已取消: {file_id}")
+        
+        return {'success': True, 'message': '上传已取消'}
+    
+    def resume_upload(self, file_id):
+        """
+        断点续传：获取已上传的分片列表
+        
+        用于客户端恢复中断的上传
+        """
+        with self.lock:
+            session = self.sessions.get(file_id)
+        
+        if not session:
+            return {'success': False, 'error': '会话不存在'}
+        
+        if session['status'] == 'completed':
+            return {'success': False, 'error': '上传已完成', 'merged_path': session.get('merged_path')}
+        
+        return {
+            'success': True,
+            'file_id': file_id,
+            'filename': session['filename'],
+            'total_size': session['total_size'],
+            'chunk_count': session['chunk_count'],
+            'uploaded_chunks': sorted(session['uploaded_chunks']),
+            'missing_chunks': sorted(
+                set(range(session['chunk_count'])) - set(session['uploaded_chunks'])
+            ),
+            'status': session['status'],
+            'can_resume': session['status'] == 'uploading'
+        }
+    
+    def _cleanup_session_files(self, file_id):
+        """清理会话的临时文件"""
+        temp_dir = self.TEMP_DIR / file_id
+        
+        if temp_dir.exists():
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"[清理] 已删除临时目录: {temp_dir}")
+    
+    def cleanup_expired_sessions(self, hours=24):
+        """清理过期的上传会话"""
+        expired = []
+        cutoff_time = datetime.now() - timedelta(hours=hours)
+        
+        with self.lock:
+            for file_id, session in self.sessions.items():
+                created_at = datetime.fromisoformat(session['created_at'])
+                if created_at < cutoff_time and session['status'] != 'uploading':
+                    expired.append(file_id)
+        
+        for file_id in expired:
+            self.cancel_upload(file_id)
+        
+        if expired:
+            print(f"[分片上传] 清理了 {len(expired)} 个过期会话")
+        
+        return len(expired)
+
+
+# 全局分片上传管理器
+chunk_manager = None
+
+
+def init_chunk_manager():
+    """初始化分片上传管理器"""
+    global chunk_manager
+    chunk_manager = ChunkUploadManager()
+    return chunk_manager
+
+
+def get_chunk_manager():
+    """获取分片上传管理器"""
+    global chunk_manager
+    if chunk_manager is None:
+        init_chunk_manager()
+    return chunk_manager
+
+
 # 计算文件的MD5哈希值
 def calculate_file_hash(file_path):
-    """计算文件的MD5哈希值"""
-    hasher = hashlib.md5()
     with open(file_path, 'rb') as f:
         for chunk in iter(lambda: f.read(4096), b''):
             hasher.update(chunk)
@@ -2711,11 +3562,12 @@ def ai_page():
     
     return render_template("ai_page.html", username=session.get('username'), saved_contents=saved_contents)
 
-# 导入路由定义
-from routes import *
 
 def main():
     """主函数 - 启动服务器"""
+    # 导入路由定义
+    import routes  # noqa: F401
+
     # 修复Windows控制台编码问题
     import sys
     if sys.platform == 'win32':
