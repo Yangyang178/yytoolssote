@@ -1,29 +1,20 @@
 @echo off
-chcp 65001 >nul 2>&1
-title yytoolssite-aipro 网站服务器
-color 0A
+chcp 65001 >nul
+title 网站服务器 - 启动工具
 
-echo ========================================
-echo   yytoolssite-aipro 网站服务器
-echo ========================================
+echo ================================================
+echo   🚀 网站服务器启动工具
+echo ================================================
 echo.
 
 cd /d "%~dp0"
 
-echo [1/3] 检查虚拟环境...
-if not exist "venv\Scripts\python.exe" (
-    echo [错误] 未找到虚拟环境，请先创建虚拟环境
+python start_server.py
+
+if %errorlevel% neq 0 (
+    echo.
+    echo ❌ 启动失败！请检查错误信息。
     pause
-    exit /b 1
 )
-
-echo [2/3] 启动网站服务...
-echo.
-echo 访问地址: http://localhost:9876
-echo 按 Ctrl+C 停止服务
-echo.
-echo ----------------------------------------
-
-"%~dp0venv\Scripts\python.exe" app.py
 
 pause

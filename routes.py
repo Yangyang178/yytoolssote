@@ -1,4 +1,4 @@
-﻿# 路由定义文件
+# 路由定义文件
 # 基于模板文件和现有功能重构路由
 
 # 导入必要的模块和函数
@@ -2614,5 +2614,504 @@ def api_storage_stats():
         })
     except Exception as e:
         return api_response(success=False, message=f'获取统计数据失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# ==================== 文件标签系统增强功能 ====================
+
+# API: 获取用户的所有标签（带统计信息）
+@app.route('/api/tags/stats')
+def api_get_tags_with_stats():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        rows = conn.execute('''
+            SELECT t.id, t.name, t.created_at, COUNT(ft.file_id) as file_count
+            FROM tags t
+            LEFT JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ?
+            GROUP BY t.id, t.name, t.created_at
+            ORDER BY file_count DESC, t.name ASC
+        ''', (user_id,)).fetchall()
+        
+        tags = [{
+            'id': row['id'],
+            'name': row['name'],
+            'created_at': row['created_at'],
+            'file_count': row['file_count']
+        } for row in rows]
+        
+        return api_response(success=True, data={'tags': tags})
+    except Exception as e:
+        return api_response(success=False, message=f'获取标签统计失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 搜索标签（模糊搜索）
+@app.route('/api/tags/search')
+def api_search_tags():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    query = request.args.get('q', '').strip()
+    
+    if not query or len(query) < 1:
+        return api_response(success=False, message='搜索关键词不能为空')
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        rows = conn.execute('''
+            SELECT t.id, t.name, t.created_at, COUNT(ft.file_id) as file_count
+            FROM tags t
+            LEFT JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ? AND t.name LIKE ?
+            GROUP BY t.id, t.name, t.created_at
+            ORDER BY file_count DESC
+            LIMIT 20
+        ''', (user_id, f'%{query}%')).fetchall()
+        
+        tags = [{
+            'id': row['id'],
+            'name': row['name'],
+            'created_at': row['created_at'],
+            'file_count': row['file_count']
+        } for row in rows]
+        
+        return api_response(success=True, data={'tags': tags, 'query': query})
+    except Exception as e:
+        return api_response(success=False, message=f'搜索失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 按标签筛选文件
+@app.route('/api/files/by-tag/<tag_id>')
+def api_get_files_by_tag(tag_id):
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        files = conn.execute('''
+            SELECT f.id, f.filename, f.size, f.created_at, f.path, 
+                   f.stored_name, f.folder_id, f.view_count,
+                   COALESCE(f.is_deleted, 0) as is_deleted
+            FROM files f
+            JOIN file_tags ft ON f.id = ft.file_id
+            WHERE ft.tag_id = ? AND f.user_id = ? AND (f.is_deleted = 0 OR f.is_deleted IS NULL)
+            ORDER BY f.created_at DESC
+        ''', (tag_id, user_id)).fetchall()
+        
+        result_files = []
+        for f in files:
+            # 获取文件标签
+            tags = []
+            tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                     JOIN file_tags ft ON t.id = ft.tag_id 
+                                     WHERE ft.file_id = ?''', (f['id'],)).fetchall()
+            for tr in tag_rows:
+                tags.append({'id': tr['id'], 'name': tr['name']})
+            
+            result_files.append({
+                'id': f['id'],
+                'filename': f['filename'],
+                'size': f['size'],
+                'created_at': f['created_at'],
+                'path': f['path'],
+                'stored_name': f['stored_name'],
+                'folder_id': f['folder_id'],
+                'view_count': f['view_count'] if f['view_count'] else 0,
+                'tags': tags
+            })
+        
+        # 获取标签信息
+        tag_info = conn.execute('SELECT * FROM tags WHERE id = ?', (tag_id,)).fetchone()
+        
+        return api_response(success=True, data={
+            'files': result_files,
+            'tag_info': {
+                'id': tag_info['id'],
+                'name': tag_info['name']
+            } if tag_info else None,
+            'total': len(result_files)
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'获取文件列表失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 标签云数据
+@app.route('/api/tags/cloud')
+def api_tags_cloud():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        rows = conn.execute('''
+            SELECT t.id, t.name, COUNT(ft.file_id) as weight
+            FROM tags t
+            LEFT JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ?
+            GROUP BY t.id, t.name
+            HAVING weight > 0
+            ORDER BY weight DESC
+            LIMIT 50
+        ''', (user_id,)).fetchall()
+        
+        cloud_data = []
+        max_weight = 0
+        min_weight = float('inf')
+        
+        for row in rows:
+            weight = row['weight']
+            if weight > max_weight:
+                max_weight = weight
+            if weight < min_weight:
+                min_weight = weight
+        
+        for row in rows:
+            # 计算字体大小（基于权重）
+            if max_weight > min_weight:
+                normalized = (row['weight'] - min_weight) / (max_weight - min_weight)
+            else:
+                normalized = 0.5
+            
+            cloud_data.append({
+                'id': row['id'],
+                'name': row['name'],
+                'count': row['weight'],
+                'size': int(12 + normalized * 24),  # 字体大小范围：12-36px
+                'color_index': hash(row['name']) % 10  # 用于颜色分配
+            })
+        
+        return api_response(success=True, data={
+            'cloud': cloud_data,
+            'total_tags': len(cloud_data),
+            'total_files_tagged': sum(item['count'] for item in cloud_data)
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'获取标签云失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 标签统计概览
+@app.route('/api/tags/overview')
+def api_tags_overview():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        # 总体统计
+        total_stats = conn.execute('''
+            SELECT 
+                COUNT(DISTINCT t.id) as total_tags,
+                COUNT(DISTINCT ft.file_id) as tagged_files,
+                COUNT(ft.id) as total_assignments
+            FROM tags t
+            LEFT JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ?
+        ''', (user_id,)).fetchone()
+        
+        # 最热门标签 TOP 10
+        top_tags = conn.execute('''
+            SELECT t.name, COUNT(ft.file_id) as count
+            FROM tags t
+            LEFT JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ?
+            GROUP BY t.id, t.name
+            ORDER BY count DESC
+            LIMIT 10
+        ''', (user_id,)).fetchall()
+        
+        # 未打标签的文件数量
+        untagged_count = conn.execute('''
+            SELECT COUNT(*) as count
+            FROM files f
+            LEFT JOIN file_tags ft ON f.id = ft.file_id
+            WHERE f.user_id = ? AND (f.is_deleted = 0 OR f.is_deleted IS NULL)
+            AND ft.tag_id IS NULL
+        ''', (user_id,)).fetchone()['count']
+        
+        # 最近使用的标签
+        recent_tags = conn.execute('''
+            SELECT DISTINCT t.id, t.name, t.created_at
+            FROM tags t
+            JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE t.user_id = ?
+            ORDER BY t.created_at DESC
+            LIMIT 5
+        ''', (user_id,)).fetchall()
+        
+        return api_response(success=True, data={
+            'total_tags': total_stats['total_tags'] if total_stats else 0,
+            'tagged_files': total_stats['tagged_files'] if total_stats else 0,
+            'total_assignments': total_stats['total_assignments'] if total_stats else 0,
+            'untagged_files': untagged_count,
+            'top_tags': [{'name': r['name'], 'count': r['count']} for r in top_tags],
+            'recent_tags': [{'id': r['id'], 'name': r['name']} for r in recent_tags]
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'获取统计概览失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 自动推荐标签（基于文件内容）
+@app.route('/api/files/<file_id>/recommend-tags')
+def api_recommend_tags(file_id):
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        # 获取文件信息
+        file_info = conn.execute('''
+            SELECT id, filename, path, size, created_at
+            FROM files 
+            WHERE id = ? AND user_id = ?
+        ''', (file_id, user_id)).fetchone()
+        
+        if not file_info:
+            return api_response(success=False, message='文件不存在')
+        
+        filename = file_info['filename'].lower()
+        ext = filename.split('.')[-1] if '.' in filename else ''
+        
+        # 基于文件扩展名的推荐规则
+        extension_rules = {
+            'html': ['网页', '前端', 'HTML', '网页开发'],
+            'htm': ['网页', '前端', 'HTML'],
+            'css': ['样式', 'CSS', '前端', '设计'],
+            'js': ['JavaScript', '脚本', '前端', '交互'],
+            'py': ['Python', '脚本', '后端', '代码'],
+            'java': ['Java', '后端', '代码'],
+            'php': ['PHP', '后端', '网站'],
+            'sql': ['数据库', 'SQL', '查询'],
+            'json': ['配置', 'JSON', '数据'],
+            'xml': ['配置', 'XML', '数据'],
+            'md': ['文档', 'Markdown', '笔记'],
+            'txt': ['文本', '文档', '日志'],
+            'pdf': ['PDF', '文档', '阅读'],
+            'doc': ['Word', '文档', '办公'],
+            'docx': ['Word', '文档', '办公'],
+            'xls': ['Excel', '表格', '数据'],
+            'xlsx': ['Excel', '表格', '数据'],
+            'ppt': ['PPT', '演示', '办公'],
+            'pptx': ['PPT', '演示', '办公'],
+            'jpg': ['图片', '照片', '素材'],
+            'jpeg': ['图片', '照片', '素材'],
+            'png': ['图片', '图标', '素材'],
+            'gif': ['GIF', '动图', '表情'],
+            'svg': ['SVG', '矢量图', '图标'],
+            'mp4': ['视频', '多媒体'],
+            'mp3': ['音频', '音乐'],
+            'zip': ['压缩包', '归档'],
+            'rar': ['压缩包', '归档'],
+            '7z': ['压缩包', '归档'],
+        }
+        
+        recommended = set()
+        
+        # 1. 基于扩展名推荐
+        if ext in extension_rules:
+            for tag_name in extension_rules[ext]:
+                recommended.add(tag_name)
+        
+        # 2. 基于文件名关键词推荐
+        keywords_map = {
+            'index': ['首页', '主页', '入口'],
+            'main': ['主程序', '主要', '核心'],
+            'config': ['配置', '设置'],
+            'test': ['测试', '验证'],
+            'demo': ['示例', '演示', 'Demo'],
+            'backup': ['备份', '存档'],
+            'log': ['日志', '记录'],
+            'report': ['报告', '报表'],
+            'data': ['数据', '资料'],
+            'temp': ['临时', '缓存'],
+            'cache': ['缓存', '临时'],
+            'readme': ['说明', '文档', 'ReadMe'],
+            'install': ['安装', '部署'],
+            'update': ['更新', '升级'],
+            'fix': ['修复', '补丁'],
+            'bug': ['Bug', '问题', '修复'],
+            'feature': ['功能', '特性', '新功能'],
+            'api': ['API', '接口'],
+            'auth': ['认证', '授权', '登录'],
+            'user': ['用户', '账户'],
+            'admin': ['管理', '后台'],
+            'login': ['登录', '认证'],
+            'register': ['注册', '账号'],
+        }
+        
+        for keyword, tags in keywords_map.items():
+            if keyword in filename:
+                for tag_name in tags:
+                    recommended.add(tag_name)
+        
+        # 3. 基于文件大小推荐
+        size = file_info['size']
+        if size > 100 * 1024 * 1024:  # > 100MB
+            recommended.add('大文件')
+        elif size > 10 * 1024 * 1024:  # > 10MB
+            recommended.add('中等大小')
+        elif size < 1024:  # < 1KB
+            recommended.add('小文件')
+        
+        # 4. 基于创建时间推荐
+        from datetime import datetime, timedelta
+        created_at = file_info['created_at']
+        if created_at:
+            try:
+                file_date = datetime.strptime(created_at[:19], '%Y-%m-%d %H:%M:%S') if 'T' not in created_at else datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                days_ago = (datetime.now() - file_date).days
+                if days_ago <= 7:
+                    recommended.add('最近新增')
+                elif days_ago <= 30:
+                    recommended.add('本月新增')
+            except:
+                pass
+        
+        # 5. 排除已添加的标签
+        existing_tags = conn.execute('''
+            SELECT t.name FROM tags t
+            JOIN file_tags ft ON t.id = ft.tag_id
+            WHERE ft.file_id = ?
+        ''', (file_id,)).fetchall()
+        
+        existing_names = {t['name'] for t in existing_tags}
+        recommended = recommended - existing_names
+        
+        # 6. 过滤掉系统中不存在的标签，并检查是否需要自动创建
+        final_recommendations = []
+        for tag_name in list(recommended)[:8]:  # 最多推荐8个
+            existing_tag = conn.execute(
+                'SELECT id, name FROM tags WHERE name = ? AND user_id = ?', 
+                (tag_name, user_id)
+            ).fetchone()
+            
+            if existing_tag:
+                final_recommendations.append({
+                    'id': existing_tag['id'],
+                    'name': existing_tag['name'],
+                    'exists': True
+                })
+            else:
+                # 可以建议创建新标签
+                final_recommendations.append({
+                    'id': None,
+                    'name': tag_name,
+                    'exists': False
+                })
+        
+        return api_response(success=True, data={
+            'recommendations': final_recommendations,
+            'filename': file_info['filename']
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'推荐失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 批量添加标签到多个文件
+@app.route('/api/batch-add-tag', methods=['POST'])
+def api_batch_add_tag():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    data = request.get_json()
+    tag_id = data.get('tag_id')
+    file_ids = data.get('file_ids', [])
+    
+    if not tag_id:
+        return api_response(success=False, message='标签ID不能为空')
+    
+    if not file_ids or not isinstance(file_ids, list):
+        return api_response(success=False, message='文件ID列表不能为空')
+    
+    conn = get_db()
+    try:
+        added_count = 0
+        for file_id in file_ids:
+            existing = conn.execute(
+                'SELECT * FROM file_tags WHERE file_id = ? AND tag_id = ?',
+                (file_id, tag_id)
+            ).fetchone()
+            
+            if not existing:
+                conn.execute(
+                    'INSERT INTO file_tags (file_id, tag_id) VALUES (?, ?)',
+                    (file_id, tag_id)
+                )
+                added_count += 1
+        
+        conn.commit()
+        return api_response(success=True, message=f'成功为 {added_count} 个文件添加标签')
+    except Exception as e:
+        conn.rollback()
+        return api_response(success=False, message=f'批量添加失败: {str(e)}', code=500)
+    finally:
+        conn.close()
+
+# API: 获取当前用户的所有文件（用于标签管理）
+@app.route('/api/my-files')
+def api_get_my_files():
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+    
+    conn = get_db()
+    try:
+        user_id = session['user_id']
+        
+        files = conn.execute('''
+            SELECT f.id, f.filename, f.size, f.created_at, f.path, 
+                   f.stored_name, f.folder_id, f.view_count
+            FROM files f
+            WHERE f.user_id = ? AND (f.is_deleted = 0 OR f.is_deleted IS NULL)
+            ORDER BY f.created_at DESC
+        ''', (user_id,)).fetchall()
+        
+        result_files = []
+        for f in files:
+            # 获取文件标签
+            tags = []
+            tag_rows = conn.execute('''SELECT t.* FROM tags t 
+                                     JOIN file_tags ft ON t.id = ft.tag_id 
+                                     WHERE ft.file_id = ?''', (f['id'],)).fetchall()
+            for tr in tag_rows:
+                tags.append({'id': tr['id'], 'name': tr['name']})
+            
+            result_files.append({
+                'id': f['id'],
+                'filename': f['filename'],
+                'size': f['size'],
+                'created_at': f['created_at'],
+                'path': f['path'],
+                'stored_name': f['stored_name'],
+                'folder_id': f['folder_id'],
+                'view_count': f['view_count'] if f['view_count'] else 0,
+                'tags': tags
+            })
+        
+        return api_response(success=True, data={
+            'files': result_files,
+            'total': len(result_files)
+        })
+    except Exception as e:
+        return api_response(success=False, message=f'获取文件列表失败: {str(e)}', code=500)
     finally:
         conn.close()

@@ -1412,10 +1412,66 @@ def ai_page():
 # 导入路由定义
 from routes import *
 
+def main():
+    """主函数 - 启动服务器"""
+    # 修复Windows控制台编码问题
+    import sys
+    if sys.platform == 'win32':
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    
+    try:
+        print("\n" + "=" * 60)
+        print("[启动] 正在初始化...")
+        print("=" * 60 + "\n")
+        
+        # 初始化数据库
+        print("[数据库] 初始化中...")
+        init_db()
+        print("  [OK] 数据库就绪")
+        
+        # 清理过期数据
+        print("[清理] 清理过期数据...")
+        cleanup_old_logs()
+        cleanup_expired_trash()
+        print("  [OK] 清理完成\n")
+        
+        # 显示启动信息
+        print("=" * 60)
+        print("[就绪] 服务器准备就绪！")
+        print("=" * 60)
+        print(f"  [本地] http://127.0.0.1:9876")
+        
+        # 获取局域网IP
+        import socket
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            print(f"  [局域网] http://{local_ip}:9876")
+        except Exception:
+            pass
+        
+        print("-" * 60)
+        print("  按 Ctrl+C 停止服务器")
+        print("=" * 60 + "\n")
+        
+        # 启动Flask应用
+        app.run(debug=True, host='0.0.0.0', port=9876)
+        
+    except KeyboardInterrupt:
+        print("\n\n[停止] 服务器已正常停止")
+    except ImportError as e:
+        print(f"\n[错误] 缺少依赖: {e}")
+        print("请运行: pip install flask")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n[错误] 启动失败: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
 if __name__ == "__main__":
-    init_db()
-    # 清理超过一周的日志记录
-    cleanup_old_logs()
-    # 清理过期的回收站文件
-    cleanup_expired_trash()
-    app.run(debug=True, host='0.0.0.0', port=9876)
+    main()
