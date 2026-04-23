@@ -1588,6 +1588,711 @@ def get_chunk_manager():
     return chunk_manager
 
 
+# ==================== 认证安全系统 ====================
+
+import hmac
+import base64
+import struct
+import hashlib
+import secrets
+import urllib.parse
+
+
+class TOTPAuthenticator:
+    """双因素认证（2FA）- TOTP实现"""
+
+    TOTP_PERIOD = 30
+    TOTP_DIGITS = 6
+    BACKUP_CODES_COUNT = 10
+
+    @classmethod
+    def generate_secret(cls):
+        """生成TOTP密钥"""
+        return base64.b32encode(secrets.token_bytes(20)).decode('utf-8')
+
+    @classmethod
+    def get_totp_uri(cls, secret, email, issuer="YYTools"):
+        """生成OTP Auth URI（用于QR码）"""
+        encoded_issuer = urllib.parse.quote(issuer)
+        encoded_email = urllib.parse.quote(email)
+        return f'otpauth://totp/{encoded_issuer}:{encoded_email}?secret={secret}&issuer={encoded_issuer}&digits={cls.TOTP_DIGITS}&period={cls.TOTP_PERIOD}'
+
+    @classmethod
+    def generate_totp(cls, secret, timestamp=None):
+        """生成当前TOTP码"""
+        if timestamp is None:
+            timestamp = time.time()
+
+        key = base64.b32decode(secret)
+        time_counter = int(timestamp) // cls.TOTP_PERIOD
+        packed_time = struct.pack('>Q', time_counter)
+
+        hmac_hash = hmac.new(key, packed_time, hashlib.sha1).digest()
+        offset = hmac_hash[-1] & 0x0F
+        code = (struct.unpack('>I', hmac_hash[offset:offset + 4])[0] & 0x7FFFFFFF) % (10 ** cls.TOTP_DIGITS)
+
+        return f'{code:0{cls.TOTP_DIGITS}d}'
+
+    @classmethod
+    def verify_totp(cls, secret, code, valid_window=1):
+        """验证TOTP码（允许前后1个时间窗口）"""
+        if len(code) != cls.TOTP_DIGITS or not code.isdigit():
+            return False
+
+        current_time = time.time()
+
+        for offset in range(-valid_window, valid_window + 1):
+            if cls.generate_totp(secret, current_time + (offset * cls.TOTP_PERIOD)) == code:
+                return True
+
+        return False
+
+    @classmethod
+    def generate_backup_codes(cls):
+        """生成备用验证码列表"""
+        codes = []
+        for _ in range(cls.BACKUP_CODES_COUNT):
+            code = ''.join([str(secrets.randbelow(10)) for _ in range(8)])
+            codes.append(code)
+        return codes
+
+    @staticmethod
+    def hash_secret(secret):
+        """哈希存储密钥（不存储明文）"""
+        return hashlib.sha256(secret.encode()).hexdigest()
+
+
+class DeviceManager:
+    """登录设备管理器"""
+
+    TRUST_DURATION_DAYS = 30
+
+    def __init__(self):
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def generate_device_fingerprint(request):
+        """生成设备指纹"""
+        user_agent = request.headers.get('User-Agent', '')
+        accept_language = request.headers.get('Accept-Language', '')
+        ip = request.remote_addr or 'unknown'
+
+        fingerprint_data = f"{ip}:{user_agent}:{accept_language}"
+        return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
+
+    @staticmethod
+    def get_device_info(request):
+        """获取设备信息"""
+        user_agent = request.headers.get('User-Agent', '')
+
+        device_type = 'desktop'
+        if any(mobile in user_agent.lower() for mobile in ['iphone', 'android', 'mobile']):
+            device_type = 'mobile'
+        elif any(tablet in user_agent.lower() for tablet in ['ipad', 'tablet']):
+            device_type = 'tablet'
+
+        os_info = 'Unknown'
+        if 'windows' in user_agent.lower():
+            os_info = 'Windows'
+        elif 'mac' in user_agent.lower():
+            os_info = 'macOS'
+        elif 'linux' in user_agent.lower():
+            os_info = 'Linux'
+        elif 'iphone' in user_agent.lower() or 'ipad' in user_agent.lower():
+            os_info = 'iOS'
+        elif 'android' in user_agent.lower():
+            os_info = 'Android'
+
+        browser = 'Unknown'
+        if 'chrome' in user_agent.lower() and 'edg' not in user_agent.lower():
+            browser = 'Chrome'
+        elif 'firefox' in user_agent.lower():
+            browser = 'Firefox'
+        elif 'safari' in user_agent.lower():
+            browser = 'Safari'
+        elif 'edg' in user_agent.lower():
+            browser = 'Edge'
+
+        return {
+            'device_type': device_type,
+            'os': os_info,
+            'browser': browser,
+            'user_agent': user_agent[:200]
+        }
+
+    def register_device(self, conn, user_id, request, trusted=False):
+        """注册登录设备"""
+        fingerprint = self.generate_device_fingerprint(request)
+        device_info = self.get_device_info(request)
+        ip = request.remote_addr or 'unknown'
+
+        now = datetime.now().isoformat()
+        expires_at = None
+        if trusted:
+            expires_at = (datetime.now() + timedelta(days=self.TRUST_DURATION_DAYS)).isoformat()
+
+        cursor = conn.cursor()
+        cursor.execute('''INSERT OR REPLACE INTO login_devices
+                        (user_id, device_fingerprint, device_name, device_type, os, browser,
+                         ip_address, last_login_at, is_trusted, trusted_until, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                       (user_id, fingerprint,
+                        f"{device_info['os']} - {device_info['browser']}",
+                        device_info['device_type'], device_info['os'], device_info['browser'],
+                        ip, now, trusted, expires_at, now))
+
+        conn.commit()
+        return cursor.lastrowid
+
+    def update_device_login(self, conn, user_id, request):
+        """更新设备最后登录时间"""
+        fingerprint = self.generate_device_fingerprint(request)
+        ip = request.remote_addr or 'unknown'
+        now = datetime.now().isoformat()
+
+        conn.execute('''UPDATE login_devices SET last_login_at = ?, ip_address = ?
+                        WHERE user_id = ? AND device_fingerprint = ?''',
+                    (now, ip, user_id, fingerprint))
+        conn.commit()
+
+    def is_trusted_device(self, conn, user_id, request):
+        """检查是否为信任设备"""
+        fingerprint = self.generate_device_fingerprint(request)
+
+        device = conn.execute('''SELECT * FROM login_devices
+                                WHERE user_id = ? AND device_fingerprint = ? AND is_trusted = 1''',
+                             (user_id, fingerprint)).fetchone()
+
+        if not device:
+            return False, None
+
+        if device['trusted_until']:
+            trusted_until = datetime.fromisoformat(device['trusted_until'])
+            if datetime.now() > trusted_until:
+                conn.execute('''UPDATE login_devices SET is_trusted = 0, trusted_until = NULL
+                                WHERE id = ?''', (device['id'],))
+                conn.commit()
+                return False, device
+
+        return True, device
+
+    def get_user_devices(self, conn, user_id):
+        """获取用户所有设备列表"""
+        devices = conn.execute('''SELECT * FROM login_devices WHERE user_id = ? ORDER BY last_login_at DESC''',
+                              (user_id,)).fetchall()
+
+        result = []
+        for dev in devices:
+            device_data = dict(dev)
+            if device_data.get('trusted_until'):
+                trusted_until = datetime.fromisoformat(device_data['trusted_until'])
+                device_data['days_remaining'] = max(0, (trusted_until - datetime.now()).days)
+
+            result.append(device_data)
+
+        return result
+
+    def remove_device(self, conn, user_id, device_id):
+        """移除设备"""
+        conn.execute('DELETE FROM login_devices WHERE id = ? AND user_id = ?', (device_id, user_id))
+        conn.commit()
+        return True
+
+    def trust_device(self, conn, user_id, device_id, days=30):
+        """信任设备"""
+        expires_at = (datetime.now() + timedelta(days=days)).isoformat()
+        conn.execute('''UPDATE login_devices SET is_trusted = 1, trusted_until = ?
+                        WHERE id = ? AND user_id = ?''', (expires_at, device_id, user_id))
+        conn.commit()
+        return True
+
+    def untrust_device(self, conn, user_id, device_id):
+        """取消设备信任"""
+        conn.execute('''UPDATE login_devices SET is_trusted = 0, trusted_until = NULL
+                        WHERE id = ? AND user_id = ?''', (device_id, user_id))
+        conn.commit()
+        return True
+
+
+class SecurityAnalyzer:
+    """异常登录检测与分析"""
+
+    MAX_LOGIN_ATTEMPTS = 5
+    LOCKOUT_DURATION_MINUTES = 15
+    SUSPICIOUS_THRESHOLD = 3
+
+    def __init__(self):
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def get_client_ip(request):
+        """获取客户端真实IP"""
+        forwarded = request.headers.get('X-Forwarded-For')
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+        real_ip = request.headers.get('X-Real-IP')
+        if real_ip:
+            return real_ip
+        return request.remote_addr or '127.0.0.1'
+
+    def analyze_login(self, conn, user_id, email, request, success=True):
+        """分析登录行为并记录事件"""
+        ip = self.get_client_ip(request)
+        user_agent = request.headers.get('User-Agent', '')[:500]
+
+        event_type = 'login_success' if success else 'login_failure'
+
+        risk_score = self._calculate_risk_score(conn, user_id, ip, request, success)
+
+        severity = 'low'
+        if risk_score >= 70:
+            severity = 'high'
+        elif risk_score >= 40:
+            severity = 'medium'
+
+        cursor = conn.cursor()
+        cursor.execute('''INSERT INTO security_events
+                        (user_id, email, event_type, ip_address, user_agent,
+                         risk_score, severity, details, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                       (user_id, email, event_type, ip, user_agent,
+                        risk_score, severity,
+                        json.dumps({'success': success}, ensure_ascii=False),
+                        datetime.now().isoformat()))
+        conn.commit()
+
+        anomalies = []
+        if risk_score >= 70 and success:
+            anomalies = self._detect_anomalies(conn, user_id, ip, request)
+
+        return {
+            'event_id': cursor.lastrowid,
+            'risk_score': risk_score,
+            'severity': severity,
+            'anomalies': anomalies,
+            'requires_2fa': risk_score >= 50
+        }
+
+    def _calculate_risk_score(self, conn, user_id, ip, request, success):
+        """计算风险评分（0-100）"""
+        score = 0
+        user_agent = request.headers.get('User-Agent', '')
+
+        recent_failures = conn.execute('''SELECT COUNT(*) FROM security_events
+                                        WHERE email = (SELECT email FROM users WHERE id = ?)
+                                        AND event_type = 'login_failure'
+                                        AND created_at > datetime('now', '-15 minutes')''',
+                                     (user_id,)).fetchone()[0]
+
+        if recent_failures >= 5:
+            score += 30
+        elif recent_failures >= 3:
+            score += 20
+        elif recent_failures >= 1:
+            score += 10
+
+        known_ips = conn.execute('''SELECT DISTINCT ip_address FROM security_events
+                                   WHERE user_id = ? AND event_type = 'login_success'
+                                   AND created_at > datetime('now', '-30 days')''',
+                                (user_id,)).fetchall()
+
+        known_ip_list = [row['ip_address'] for row in known_ips]
+        if ip not in known_ip_list and len(known_ip_list) > 0:
+            score += 25
+
+        known_agents = conn.execute('''SELECT DISTINCT user_agent FROM security_events
+                                      WHERE user_id = ? AND event_type = 'login_success'
+                                      AND created_at > datetime('now', '-30 days') LIMIT 5''',
+                                   (user_id,)).fetchall()
+
+        agent_known = any(row['user_agent'] == user_agent for row in known_agents)
+        if not agent_known and len(known_agents) > 0:
+            score += 15
+
+        hour = datetime.now().hour
+        if hour < 6 or hour > 23:
+            score += 10
+
+        if not success:
+            score = min(score + 20, 100)
+
+        return min(score, 100)
+
+    def _detect_anomalies(self, conn, user_id, ip, request):
+        """检测异常情况"""
+        anomalies = []
+
+        recent_logins = conn.execute('''SELECT ip_address, user_agent, created_at FROM security_events
+                                       WHERE user_id = ? AND event_type = 'login_success'
+                                       ORDER BY created_at DESC LIMIT 10''',
+                                    (user_id,)).fetchall()
+
+        if recent_logins:
+            locations = set(login['ip_address'] for login in recent_logins)
+            if len(locations) >= 3:
+                anomalies.append({
+                    'type': 'multiple_locations',
+                    'message': f'短时间内从{len(locations)}个不同IP地址登录',
+                    'severity': 'high'
+                })
+
+        recent_hours = conn.execute('''SELECT COUNT(*) FROM security_events
+                                       WHERE user_id = ? AND event_type = 'login_failure'
+                                       AND created_at > datetime('now', '-1 hour')''',
+                                    (user_id,)).fetchone()[0]
+
+        if recent_hours >= 10:
+            anomalies.append({
+                'type': 'brute_force_attempt',
+                'message': f'1小时内失败尝试{recent_hours}次，可能存在暴力破解攻击',
+                'severity': 'critical'
+            })
+
+        return anomalies
+
+    def is_account_locked(self, conn, email):
+        """检查账户是否被锁定"""
+        failures = conn.execute('''SELECT COUNT(*) FROM security_events
+                                  WHERE email = ? AND event_type = 'login_failure'
+                                  AND created_at > datetime('now', '-15 minutes')''',
+                               (email,)).fetchone()[0]
+
+        if failures >= self.MAX_LOGIN_ATTEMPTS:
+            last_failure = conn.execute('''SELECT MAX(created_at) FROM security_events
+                                         WHERE email = ? AND event_type = 'login_failure''',
+                                      (email,)).fetchone()[0]
+
+            if last_failure:
+                lock_time = datetime.fromisoformat(last_failure) + timedelta(minutes=self.LOCKOUT_DURATION_MINUTES)
+                remaining_seconds = int((lock_time - datetime.now()).total_seconds())
+                if remaining_seconds > 0:
+                    return True, remaining_seconds
+
+        return False, 0
+
+    def get_security_stats(self, conn, user_id, days=30):
+        """获取用户安全统计"""
+        since = (datetime.now() - timedelta(days=days)).isoformat()
+
+        total_logins = conn.execute('''SELECT COUNT(*) FROM security_events
+                                     WHERE user_id = ? AND event_type = 'login_success'
+                                     AND created_at > ?''', (user_id, since)).fetchone()[0]
+
+        failed_logins = conn.execute('''SELECT COUNT(*) FROM security_events
+                                      WHERE user_id = ? AND event_type = 'login_failure'
+                                      AND created_at > ?''', (user_id, since)).fetchone()[0]
+
+        unique_ips = conn.execute('''SELECT COUNT(DISTINCT ip_address) FROM security_events
+                                   WHERE user_id = ? AND event_type = 'login_success'
+                                   AND created_at > ?''', (user_id, since)).fetchone()[0]
+
+        high_risk_events = conn.execute('''SELECT COUNT(*) FROM security_events
+                                        WHERE user_id = ? AND risk_score >= 70
+                                        AND created_at > ?''', (user_id, since)).fetchone()[0]
+
+        recent_events = conn.execute('''SELECT * FROM security_events
+                                      WHERE user_id = ? ORDER BY created_at DESC LIMIT 20''',
+                                    (user_id,)).fetchall()
+
+        return {
+            'period_days': days,
+            'total_successful_logins': total_logins,
+            'total_failed_logins': failed_logins,
+            'unique_ip_count': unique_ips,
+            'high_risk_event_count': high_risk_events,
+            'recent_events': [dict(event) for event in recent_events]
+        }
+
+    def record_security_event(self, conn, user_id, email, event_type, details=None, risk_score=0):
+        """记录安全事件"""
+        request = getattr(g, '_request', None)
+        ip = self.get_client_ip(request) if request else 'system'
+        user_agent = request.headers.get('User-Agent', '')[:500] if request else 'system'
+
+        severity = 'low'
+        if risk_score >= 70:
+            severity = 'high'
+        elif risk_score >= 40:
+            severity = 'medium'
+
+        conn.execute('''INSERT INTO security_events
+                       (user_id, email, event_type, ip_address, user_agent,
+                        risk_score, severity, details, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                   (user_id, email, event_type, ip, user_agent,
+                    risk_score, severity,
+                    json.dumps(details or {}, ensure_ascii=False),
+                    datetime.now().isoformat()))
+        conn.commit()
+
+
+class PasswordStrengthChecker:
+    """密码强度检测器"""
+
+    COMMON_PASSWORDS = {
+        'password', '123456', '12345678', 'qwerty', 'abc123', 'monkey', '1234567',
+        'letmein', 'trustno1', 'dragon', 'baseball', 'iloveyou', 'master', 'sunshine',
+        'ashley', 'bailey', 'passw0rd', 'shadow', '123123', '654321', 'superman',
+        'qazwsx', 'michael', 'football', 'password1', 'password123', 'welcome', 'admin',
+        'login', 'qwerty123', 'test', 'guest', '1234567890', '1234', '111111', '000000'
+    }
+
+    MIN_LENGTH = 8
+    MAX_LENGTH = 128
+
+    STRENGTH_LEVELS = {
+        0: ('非常弱', '#ff0000', '密码极其不安全，请立即更换'),
+        1: ('弱', '#ff4444', '密码太简单，容易被猜测'),
+        2: ('一般', '#ffaa00', '密码强度一般，建议增加复杂度'),
+        3: ('强', '#00cc00', '密码强度良好'),
+        4: ('非常强', '#008800', '密码非常安全')
+    }
+
+    @classmethod
+    def check_strength(cls, password):
+        """
+        检测密码强度
+
+        返回：
+        {
+            'score': 0-4,
+            'level': 强度等级名称,
+            'color': 显示颜色,
+            'message': 提示信息,
+            'checks': 各项检查结果
+        }
+        """
+        checks = {
+            'length': cls._check_length(password),
+            'complexity': cls._check_complexity(password),
+            'variety': cls._check_variety(password),
+            'common': cls._check_common(password),
+            'pattern': cls._check_pattern(password),
+            'entropy': cls._check_entropy(password)
+        }
+
+        score = sum(1 for check in checks.values() if check['passed'])
+
+        level_info = cls.STRENGTH_LEVELS[score]
+
+        suggestions = []
+        if not checks['length']['passed']:
+            suggestions.append(f"密码长度至少{cls.MIN_LENGTH}个字符")
+        if not checks['complexity']['passed']:
+            suggestions.append("包含大小写字母、数字和特殊字符")
+        if not checks['variety']['passed']:
+            suggestions.append("避免重复字符或连续序列")
+        if not checks['common']['passed']:
+            suggestions.append("不要使用常见密码")
+        if not checks['pattern']['passed']:
+            suggestions.append("避免使用键盘模式或个人信息")
+
+        return {
+            'score': score,
+            'level': level_info[0],
+            'color': level_info[1],
+            'message': level_info[2] if score < 3 else '密码强度符合要求',
+            'checks': checks,
+            'suggestions': suggestions,
+            'is_acceptable': score >= 2
+        }
+
+    @classmethod
+    def _check_length(cls, password):
+        """检查长度"""
+        length = len(password)
+        passed = length >= cls.MIN_LENGTH
+
+        score = 0
+        if length >= cls.MIN_LENGTH:
+            score = 1
+        if length >= 12:
+            score = 2
+        if length >= 16:
+            score = 3
+
+        return {
+            'passed': passed,
+            'score': min(score, 3),
+            'current': length,
+            'required': cls.MIN_LENGTH,
+            'message': f"长度{'✓' if passed else '✗'} ({length}/{cls.MIN_LENGTH})"
+        }
+
+    @classmethod
+    def _check_complexity(cls, password):
+        """检查字符复杂度"""
+        has_lower = bool(re.search(r'[a-z]', password))
+        has_upper = bool(re.search(r'[A-Z]', password))
+        has_digit = bool(re.search(r'\d', password))
+        has_special = bool(re.search(r'[^a-zA-Z\d]', password))
+
+        types_count = sum([has_lower, has_upper, has_digit, has_special])
+        passed = types_count >= 3
+
+        complexity_names = []
+        if has_lower:
+            complexity_names.append('小写字母')
+        if has_upper:
+            complexity_names.append('大写字母')
+        if has_digit:
+            complexity_names.append('数字')
+        if has_special:
+            complexity_names.append('特殊字符')
+
+        return {
+            'passed': passed,
+            'score': types_count,
+            'types': complexity_names,
+            'types_count': types_count,
+            'required': 3,
+            'message': f"字符类型{'✓' if passed else '✗'} ({types_count}/3种)"
+        }
+
+    @classmethod
+    def _check_variety(cls, password):
+        """检查字符多样性"""
+        unique_chars = len(set(password))
+        total_chars = len(password)
+        variety_ratio = unique_chars / total_chars if total_chars > 0 else 0
+
+        has_repeat = len(re.findall(r'(.)\1\1', password)) > 0
+        has_sequence = bool(re.search(r'(?:012|123|234|345|456|567|678|789|890|abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz|qwe|wer|ert|rty|tyu|yui|iop|asd|sdf|dfg|fgh|ghj|hjk|jkl)', password.lower()))
+
+        passed = variety_ratio >= 0.6 and not has_repeat
+
+        return {
+            'passed': passed,
+            'score': 2 if variety_ratio >= 0.8 else (1 if variety_ratio >= 0.6 else 0),
+            'unique_chars': unique_chars,
+            'total_chars': total_chars,
+            'variety_ratio': round(variety_ratio * 100),
+            'has_repeating': has_repeat,
+            'has_sequence': has_sequence,
+            'message': f"多样性{'✓' if passed else '✗'} ({round(variety_ratio*100)}%)"
+        }
+
+    @classmethod
+    def _check_common(cls, password):
+        """检查是否为常见密码"""
+        lower_password = password.lower()
+        is_common = lower_password in cls.COMMON_PASSWORDS
+
+        similar_found = False
+        if not is_common:
+            for common in cls.COMMON_PASSWORDS:
+                if common in lower_password or lower_password in common:
+                    similar_found = True
+                    break
+
+        passed = not is_common and not similar_found
+
+        return {
+            'passed': passed,
+            'is_common_password': is_common,
+            'is_similar_to_common': similar_found,
+            'message': "常见密码检查" + ("✓" if passed else "✗ (常见或相似)")
+        }
+
+    @classmethod
+    def _check_pattern(cls, password):
+        """检查键盘模式和可预测模式"""
+        keyboard_patterns = [
+            r'^[qwertyuiop]+$', r'^[asdfghjkl]+$', r'^[zxcvbnm]+$',
+            r'^[poiuytrewq]+$', r'^[lkjhgfdsa]+$', r'^[mnbvcxz]+$',
+            r'^[1234567890]+$', r'^[0987654321]+$',
+            r'^(.)\1+$', r'^(?:ab|cd|ef|gh|ij|kl|mn|op|qr|st|uv|wx|yz)+$'
+        ]
+
+        is_pattern = bool(re.match('|'.join(keyboard_patterns), password.lower()))
+
+        personal_patterns = [
+            r'\d{4,}', r'[a-z]{4,}\d{2,}',
+            r'(19|20)\d{2}'
+        ]
+
+        has_personal = bool(re.search('|'.join(personal_patterns), password))
+
+        passed = not is_pattern
+
+        warnings = []
+        if is_pattern:
+            warnings.append("包含键盘模式")
+        if has_personal:
+            warnings.append("可能包含个人信息（生日/年份）")
+
+        return {
+            'passed': passed,
+            'is_keyboard_pattern': is_pattern,
+            'has_personal_info': has_personal,
+            'warnings': warnings,
+            'message': "模式检查" + ("✓" if passed else "✗ (" + ", ".join(warnings) + ")")
+        }
+
+    @classmethod
+    def _check_entropy(cls, password):
+        """计算熵值（信息量）"""
+        if not password:
+            return {'passed': False, 'entropy': 0, 'bits_per_char': 0}
+
+        charset_size = 0
+        if re.search(r'[a-z]', password):
+            charset_size += 26
+        if re.search(r'[A-Z]', password):
+            charset_size += 26
+        if re.search(r'\d', password):
+            charset_size += 10
+        if re.search(r'[^a-zA-Z\d]', password):
+            charset_size += 32
+
+        import math
+        entropy = len(password) * math.log2(charset_size) if charset_size > 0 else 0
+        bits_per_char = entropy / len(password) if password else 0
+
+        passed = entropy >= 50
+
+        crack_time_seconds = 2 ** entropy / 10000000000
+        if crack_time_seconds < 60:
+            crack_time_display = "< 1秒"
+        elif crack_time_seconds < 3600:
+            crack_time_display = f"{int(crack_time_seconds / 60)}分钟"
+        elif crack_time_seconds < 86400:
+            crack_time_display = f"{int(crack_time_seconds / 3600)}小时"
+        elif crack_time_seconds < 31536000:
+            crack_time_display = f"{int(crack_time_seconds / 86400)}天"
+        else:
+            crack_time_display = f"{int(crack_time_seconds / 31536000)}年"
+
+        return {
+            'passed': passed,
+            'entropy': round(entropy, 1),
+            'bits_per_char': round(bits_per_char, 2),
+            'charset_size': charset_size,
+            'estimated_crack_time': crack_time_display,
+            'crack_time_seconds': crack_time_seconds,
+            'message': f"熵值{'✓' if passed else '✗'} ({round(entropy, 1)} bits)"
+        }
+
+
+# 全局实例
+totp_authenticator = TOTPAuthenticator
+device_manager = DeviceManager()
+security_analyzer = SecurityAnalyzer()
+password_checker = PasswordStrengthChecker
+
+
+def init_security_system():
+    """初始化安全系统"""
+    global totp_authenticator, device_manager, security_analyzer, password_checker
+    print("[安全系统] 认证安全模块初始化完成")
+    return {
+        'totp_authenticator': totp_authenticator,
+        'device_manager': device_manager,
+        'security_analyzer': security_analyzer,
+        'password_checker': password_checker
+    }
+
+
 # 计算文件的MD5哈希值
 def calculate_file_hash(file_path):
     with open(file_path, 'rb') as f:
@@ -1800,25 +2505,167 @@ class MonitoredConnection(sqlite3.Connection):
             raise
 
 
+class SafeConnectionWrapper:
+    """安全的数据库连接包装器 - 防止误关闭共享连接，支持自动重连"""
+
+    def __init__(self, real_connection, db_path=None):
+        object.__setattr__(self, '_real_conn', real_connection)
+        object.__setattr__(self, '_closed', False)
+        object.__setattr__(self, '_db_path', db_path)
+
+    def _reconnect(self):
+        """重新建立数据库连接"""
+        db_path = object.__getattribute__(self, '_db_path')
+        try:
+            old_conn = object.__getattribute__(self, '_real_conn')
+            try:
+                old_conn.close()
+            except:
+                pass
+        except:
+            pass
+        new_conn = sqlite3.connect(
+            str(db_path),
+            factory=MonitoredConnection,
+            timeout=30,
+            check_same_thread=False
+        )
+        new_conn.row_factory = sqlite3.Row
+        new_conn.execute('PRAGMA journal_mode=WAL')
+        new_conn.execute('PRAGMA cache_size=-10000')
+        new_conn.execute('PRAGMA temp_store=MEMORY')
+        object.__setattr__(self, '_real_conn', new_conn)
+        print("[数据库] 连接已自动重连")
+        return new_conn
+
+    def _get_alive_conn(self):
+        """获取有效的数据库连接，如果连接已关闭则自动重连"""
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            real_conn.execute('SELECT 1')
+            return real_conn
+        except:
+            return self._reconnect()
+
+    def close(self):
+        """拦截close()调用 - 不实际关闭，由Flask管理生命周期"""
+        pass
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, '_real_conn'), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, '_real_conn'), name, value)
+
+    def __delattr__(self, name):
+        delattr(object.__getattribute__(self, '_real_conn'), name)
+
+    def __iter__(self):
+        return iter(object.__getattribute__(self, '_real_conn'))
+
+    def execute(self, *args, **kwargs):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.execute(*args, **kwargs)
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.execute(*args, **kwargs)
+            raise
+
+    def executemany(self, *args, **kwargs):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.executemany(*args, **kwargs)
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.executemany(*args, **kwargs)
+            raise
+
+    def executescript(self, *args, **kwargs):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.executescript(*args, **kwargs)
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.executescript(*args, **kwargs)
+            raise
+
+    def commit(self):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.commit()
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.commit()
+            raise
+
+    def rollback(self):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.rollback()
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.rollback()
+            raise
+
+    def cursor(self, *args, **kwargs):
+        real_conn = object.__getattribute__(self, '_real_conn')
+        try:
+            return real_conn.cursor(*args, **kwargs)
+        except sqlite3.ProgrammingError as e:
+            if 'closed' in str(e).lower():
+                new_conn = self._reconnect()
+                return new_conn.cursor(*args, **kwargs)
+            raise
+
+    @property
+    def row_factory(self):
+        return object.__getattribute__(self, '_real_conn').row_factory
+
+    @row_factory.setter
+    def row_factory(self, value):
+        object.__getattribute__(self, '_real_conn').row_factory = value
+
+
 def get_db():
-    """获取数据库连接（带性能监控）"""
+    """获取数据库连接（带性能监控和防误关闭保护）"""
     if 'db' not in g:
-        g.db = sqlite3.connect(
+        raw_conn = sqlite3.connect(
             str(DB_FILE),
             factory=MonitoredConnection,
-            timeout=30,  # 30秒超时
-            check_same_thread=False  # 允许跨线程使用
+            timeout=30,
+            check_same_thread=False
         )
-        g.db.row_factory = sqlite3.Row
+        raw_conn.row_factory = sqlite3.Row
+        raw_conn.execute('PRAGMA journal_mode=WAL')
+        raw_conn.execute('PRAGMA cache_size=-10000')
+        raw_conn.execute('PRAGMA temp_store=MEMORY')
 
-        # 启用WAL模式提升并发性能
-        g.db.execute('PRAGMA journal_mode=WAL')
-
-        # 设置缓存大小（负值表示KB）
-        g.db.execute('PRAGMA cache_size=-10000')  # 10MB缓存
-
-        # 设置临时存储为内存
-        g.db.execute('PRAGMA temp_store=MEMORY')
+        g.db = SafeConnectionWrapper(raw_conn, db_path=DB_FILE)
+    else:
+        db = g.db
+        if isinstance(db, SafeConnectionWrapper):
+            real_conn = object.__getattribute__(db, '_real_conn')
+            try:
+                real_conn.execute('SELECT 1')
+            except:
+                raw_conn = sqlite3.connect(
+                    str(DB_FILE),
+                    factory=MonitoredConnection,
+                    timeout=30,
+                    check_same_thread=False
+                )
+                raw_conn.row_factory = sqlite3.Row
+                raw_conn.execute('PRAGMA journal_mode=WAL')
+                raw_conn.execute('PRAGMA cache_size=-10000')
+                raw_conn.execute('PRAGMA temp_store=MEMORY')
+                g.db = SafeConnectionWrapper(raw_conn, db_path=DB_FILE)
+                print("[数据库] get_db() 检测到连接已关闭，已重建连接")
 
     return g.db
 
@@ -1828,7 +2675,11 @@ def close_db(exception):
     """请求结束后关闭数据库连接"""
     db = g.pop('db', None)
     if db is not None:
-        db.close()
+        if isinstance(db, SafeConnectionWrapper):
+            real_conn = object.__getattribute__(db, '_real_conn')
+            real_conn.close()
+        else:
+            db.close()
 
 
 # 全局监控器实例（用于API访问）
@@ -2225,6 +3076,87 @@ def init_db():
                         FOREIGN KEY (user_id) REFERENCES users(id)
                     )''')
 
+        # ==================== 认证安全系统表 ====================
+
+        # 创建2FA密钥存储表
+        conn.execute('''CREATE TABLE IF NOT EXISTS user_2fa (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL UNIQUE,
+                        secret_hash TEXT NOT NULL,
+                        is_enabled INTEGER DEFAULT 0,
+                        backup_codes_hash TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_used_at TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        # 创建登录设备管理表
+        conn.execute('''CREATE TABLE IF NOT EXISTS login_devices (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT NOT NULL,
+                        device_fingerprint TEXT NOT NULL,
+                        device_name TEXT,
+                        device_type TEXT DEFAULT 'desktop',
+                        os TEXT,
+                        browser TEXT,
+                        ip_address TEXT,
+                        last_login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        is_trusted INTEGER DEFAULT 0,
+                        trusted_until TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id),
+                        UNIQUE(user_id, device_fingerprint)
+                    )''')
+
+        # 创建安全事件记录表
+        conn.execute('''CREATE TABLE IF NOT EXISTS security_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id TEXT,
+                        email TEXT,
+                        event_type TEXT NOT NULL,
+                        ip_address TEXT,
+                        user_agent TEXT,
+                        risk_score INTEGER DEFAULT 0,
+                        severity TEXT DEFAULT 'low',
+                        details TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        # 为users表添加2FA相关字段
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN two_factor_enabled INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN last_login_ip TEXT')
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN last_login_at TIMESTAMP')
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN failed_login_count INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute('ALTER TABLE users ADD COLUMN account_locked_until TIMESTAMP')
+        except sqlite3.OperationalError:
+            pass
+
+        # 安全相关索引
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_user_2fa_user ON user_2fa(user_id)''')
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_login_devices_user ON login_devices(user_id)''')
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_security_events_user ON security_events(user_id)''')
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_security_events_type ON security_events(event_type)''')
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_security_events_time ON security_events(created_at)''')
+        conn.execute('''CREATE INDEX IF NOT EXISTS idx_security_events_email ON security_events(email, event_type)''')
+
         conn.commit()
 
     except Exception as e:
@@ -2444,36 +3376,29 @@ def send_verification_email(email, code, purpose):
 def save_verification_code(email, code, purpose):
     expires_at = datetime.now() + timedelta(minutes=CODE_EXPIRATION_MINUTES)
     conn = get_db()
-    try:
-        conn.execute('''DELETE FROM verification_codes 
-                        WHERE email = ? AND purpose = ?''', 
-                    (email, purpose))
-        conn.execute('''INSERT INTO verification_codes (email, code, purpose, expires_at)
-                        VALUES (?, ?, ?, ?)''', 
-                    (email, code, purpose, expires_at))
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute('''DELETE FROM verification_codes
+                    WHERE email = ? AND purpose = ?''',
+                (email, purpose))
+    conn.execute('''INSERT INTO verification_codes (email, code, purpose, expires_at)
+                    VALUES (?, ?, ?, ?)''',
+                (email, code, purpose, expires_at))
+    conn.commit()
 
 
 
 def verify_code(email, code, purpose):
     conn = get_db()
-    try:
-        row = conn.execute('''SELECT * FROM verification_codes 
-                            WHERE email = ? AND code = ? AND purpose = ? 
-                            AND expires_at > CURRENT_TIMESTAMP''', 
-                        (email, code, purpose)).fetchone()
-        if row:
-            # 验证码有效，删除它
-            conn.execute('''DELETE FROM verification_codes 
-                            WHERE email = ? AND code = ? AND purpose = ?''', 
-                        (email, code, purpose))
-            conn.commit()
-            return True
-        return False
-    finally:
-        conn.close()
+    row = conn.execute('''SELECT * FROM verification_codes
+                        WHERE email = ? AND code = ? AND purpose = ?
+                        AND expires_at > CURRENT_TIMESTAMP''',
+                    (email, code, purpose)).fetchone()
+    if row:
+        conn.execute('''DELETE FROM verification_codes
+                        WHERE email = ? AND code = ? AND purpose = ?''',
+                    (email, code, purpose))
+        conn.commit()
+        return True
+    return False
 
 
 # 日志记录函数
@@ -2484,54 +3409,20 @@ def log_message(log_type='operation', log_level='INFO', message='', user_id=None
     
     # 记录到数据库
     if log_type == 'operation':
-        print(f"[DEBUG] log_type是operation")
-        # 不检查user_id，即使为空也记录到数据库，以便调试
-        print(f"[DEBUG] user_id值为: {user_id}, 类型: {type(user_id)}")
-        conn = None
+        conn = get_db()
         try:
-            # 确保数据库连接
-            conn = get_db()
-            print(f"[DEBUG] 获取数据库连接成功")
-            
-            # 获取本地时间
-            from datetime import datetime
             local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            
-            # 执行插入操作，指定created_at为本地时间
-            cursor = conn.execute('''INSERT INTO operation_logs (user_id, action, target_id, target_type, message, details, created_at) 
-                                   VALUES (?, ?, ?, ?, ?, ?, ?)''', 
+            cursor = conn.execute('''INSERT INTO operation_logs (user_id, action, target_id, target_type, message, details, created_at)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?)''',
                                (user_id or 'unknown', action, target_id, target_type, message, details, local_time))
             conn.commit()
-            print(f"[DEBUG] 日志插入数据库成功，影响行数: {cursor.rowcount}")
-            
-            # 立即查询刚刚插入的日志，验证是否成功
-            last_log = conn.execute('SELECT * FROM operation_logs ORDER BY created_at DESC LIMIT 1').fetchone()
-            if last_log:
-                print(f"[DEBUG] 刚刚插入的日志: ID={last_log['id']}, UserID={last_log['user_id']}, Action={last_log['action']}, Message={last_log['message']}")
-            
-            # 查询该用户的所有日志
-            if user_id:
-                user_logs = conn.execute('SELECT * FROM operation_logs WHERE user_id = ? ORDER BY created_at DESC', (user_id,)).fetchall()
-                print(f"[DEBUG] 用户 {user_id} 的日志数量: {len(user_logs)}")
         except Exception as e:
             print(f"[ERROR] 记录日志到数据库失败: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            # 确保回滚
             if conn:
                 try:
                     conn.rollback()
-                    print(f"[DEBUG] 数据库回滚成功")
-                except Exception as rollback_e:
-                    print(f"[ERROR] 数据库回滚失败: {str(rollback_e)}")
-        finally:
-            # 确保关闭连接
-            if conn:
-                try:
-                    conn.close()
-                    print(f"[DEBUG] 关闭数据库连接成功")
-                except Exception as close_e:
-                    print(f"[ERROR] 关闭数据库连接失败: {str(close_e)}")
+                except Exception:
+                    pass
     else:
         print(f"[DEBUG] 不满足日志插入条件: log_type={log_type}, user_id={user_id}")
 
@@ -2562,191 +3453,159 @@ def api_response(success=True, message='', data=None, code=200):
 
 def get_all_files(user_id=None):
     conn = get_db()
-    try:
-        if user_id:
-            rows = conn.execute('SELECT * FROM files WHERE user_id = ? AND (folder_id IS NULL OR folder_id = "") ORDER BY id DESC', (user_id,)).fetchall()
-        else:
-            rows = conn.execute('SELECT * FROM files WHERE folder_id IS NULL OR folder_id = "" ORDER BY id DESC').fetchall()
-        
-        result = []
-        for row in rows:
-            file_id = row["id"]
-            # 获取点赞数和收藏数
-            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
-            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
-            
-            # 获取文件分类
-            categories = []
-            category_rows = conn.execute('''SELECT c.* FROM categories c 
-                                           JOIN file_categories fc ON c.id = fc.category_id 
-                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
-            for category_row in category_rows:
-                categories.append({
-                    "id": category_row["id"],
-                    "name": category_row["name"],
-                    "description": category_row["description"]
-                })
-            
-            # 获取文件标签
-            tags = []
-            tag_rows = conn.execute('''SELECT t.* FROM tags t 
-                                     JOIN file_tags ft ON t.id = ft.tag_id 
-                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
-            for tag_row in tag_rows:
-                tags.append({
-                    "id": tag_row["id"],
-                    "name": tag_row["name"]
-                })
-            
-            # 检查 created_at 字段是否存在并转换时区
-            created_at = row["created_at"] if "created_at" in row.keys() else ""
-            if created_at:
-                # 将UTC时间转换为本地时间（Asia/Shanghai）
-                try:
-                    # 解析ISO格式的时间字符串
-                    utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    # 转换为东八区时间
-                    local_dt = utc_dt + timedelta(hours=8)
-                    created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    # 如果解析失败，保持原格式
-                    pass
-            view_count = row["view_count"] if "view_count" in row.keys() else 0
-            result.append({
-                "id": file_id, 
-                "filename": row["filename"], 
-                "stored_name": row["stored_name"],
-                "path": row["path"], 
-                "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
-                "project_name": row["project_name"], 
-                "project_desc": row["project_desc"],
-                "like_count": like_count,
-                "favorite_count": favorite_count,
-                "view_count": view_count,
-                "categories": categories,
-                "tags": tags,
-                "created_at": created_at
+    if user_id:
+        rows = conn.execute('SELECT * FROM files WHERE user_id = ? AND (folder_id IS NULL OR folder_id = "") ORDER BY id DESC', (user_id,)).fetchall()
+    else:
+        rows = conn.execute('SELECT * FROM files WHERE folder_id IS NULL OR folder_id = "" ORDER BY id DESC').fetchall()
+
+    result = []
+    for row in rows:
+        file_id = row["id"]
+        like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+        favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+
+        categories = []
+        category_rows = conn.execute('''SELECT c.* FROM categories c
+                                       JOIN file_categories fc ON c.id = fc.category_id
+                                       WHERE fc.file_id = ?''', (file_id,)).fetchall()
+        for category_row in category_rows:
+            categories.append({
+                "id": category_row["id"],
+                "name": category_row["name"],
+                "description": category_row["description"]
             })
-        return result
-    finally:
-        conn.close()
+
+        tags = []
+        tag_rows = conn.execute('''SELECT t.* FROM tags t
+                                 JOIN file_tags ft ON t.id = ft.tag_id
+                                 WHERE ft.file_id = ?''', (file_id,)).fetchall()
+        for tag_row in tag_rows:
+            tags.append({
+                "id": tag_row["id"],
+                "name": tag_row["name"]
+            })
+
+        created_at = row["created_at"] if "created_at" in row.keys() else ""
+        if created_at:
+            try:
+                utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                local_dt = utc_dt + timedelta(hours=8)
+                created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                pass
+        view_count = row["view_count"] if "view_count" in row.keys() else 0
+        result.append({
+            "id": file_id,
+            "filename": row["filename"],
+            "stored_name": row["stored_name"],
+            "path": row["path"],
+            "size": row["size"],
+            "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
+            "project_name": row["project_name"],
+            "project_desc": row["project_desc"],
+            "like_count": like_count,
+            "favorite_count": favorite_count,
+            "view_count": view_count,
+            "categories": categories,
+            "tags": tags,
+            "created_at": created_at
+        })
+    return result
 
 
 
 def get_file_by_id(file_id, user_id=None, check_owner=True):
     conn = get_db()
-    try:
-        if check_owner and user_id:
-            row = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, user_id)).fetchone()
-        else:
-            row = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
-        if row:
-            # 获取点赞数和收藏数
-            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
-            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
-            
-            # 获取文件分类
-            categories = []
-            category_rows = conn.execute('''SELECT c.* FROM categories c 
-                                           JOIN file_categories fc ON c.id = fc.category_id 
-                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
-            for category_row in category_rows:
-                categories.append({
-                    "id": category_row["id"],
-                    "name": category_row["name"],
-                    "description": category_row["description"]
-                })
-            
-            # 获取文件标签
-            tags = []
-            tag_rows = conn.execute('''SELECT t.* FROM tags t 
-                                     JOIN file_tags ft ON t.id = ft.tag_id 
-                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
-            for tag_row in tag_rows:
-                tags.append({
-                    "id": tag_row["id"],
-                    "name": tag_row["name"]
-                })
-            
-            # 检查 created_at 字段是否存在并转换时区
-            created_at = row["created_at"] if "created_at" in row.keys() else ""
-            if created_at:
-                # 将UTC时间转换为本地时间（Asia/Shanghai）
-                try:
-                    # 解析ISO格式的时间字符串
-                    utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    # 转换为东八区时间
-                    local_dt = utc_dt + timedelta(hours=8)
-                    created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    # 如果解析失败，保持原格式
-                    pass
-            return {
-                "id": row["id"], 
-                "filename": row["filename"], 
-                "stored_name": row["stored_name"],
-                "path": row["path"], 
-                "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
-                "project_name": row["project_name"], 
-                "project_desc": row["project_desc"],
-                "user_id": row["user_id"],
-                "like_count": like_count,
-                "favorite_count": favorite_count,
-                "categories": categories,
-                "tags": tags,
-                "created_at": created_at
-            }
-        return None
-    finally:
-        conn.close()
+    if check_owner and user_id:
+        row = conn.execute('SELECT * FROM files WHERE id = ? AND user_id = ?', (file_id, user_id)).fetchone()
+    else:
+        row = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+    if row:
+        like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+        favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+
+        categories = []
+        category_rows = conn.execute('''SELECT c.* FROM categories c
+                                       JOIN file_categories fc ON c.id = fc.category_id
+                                       WHERE fc.file_id = ?''', (file_id,)).fetchall()
+        for category_row in category_rows:
+            categories.append({
+                "id": category_row["id"],
+                "name": category_row["name"],
+                "description": category_row["description"]
+            })
+
+        tags = []
+        tag_rows = conn.execute('''SELECT t.* FROM tags t
+                                 JOIN file_tags ft ON t.id = ft.tag_id
+                                 WHERE ft.file_id = ?''', (file_id,)).fetchall()
+        for tag_row in tag_rows:
+            tags.append({
+                "id": tag_row["id"],
+                "name": tag_row["name"]
+            })
+
+        created_at = row["created_at"] if "created_at" in row.keys() else ""
+        if created_at:
+            try:
+                utc_dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                local_dt = utc_dt + timedelta(hours=8)
+                created_at = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                pass
+        return {
+            "id": row["id"],
+            "filename": row["filename"],
+            "stored_name": row["stored_name"],
+            "path": row["path"],
+            "size": row["size"],
+            "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
+            "project_name": row["project_name"],
+            "project_desc": row["project_desc"],
+            "user_id": row["user_id"],
+            "like_count": like_count,
+            "favorite_count": favorite_count,
+            "categories": categories,
+            "tags": tags,
+            "created_at": created_at
+        }
+    return None
 
 
 
 def ensure_categories_exist():
     """确保系统中存在所需的分类"""
     conn = get_db()
-    try:
-        # 定义所需的分类
-        required_categories = [
-            {"name": "图片处理", "description": "图片编辑、处理相关工具"},
-            {"name": "娱乐游戏", "description": "游戏、娱乐相关工具"},
-            {"name": "通用工具", "description": "通用型工具"},
-            {"name": "生活工具", "description": "生活相关工具"},
-            {"name": "文件处理", "description": "文件编辑、转换相关工具"},
-            {"name": "开发工具", "description": "编程、开发相关工具"}
-        ]
-        
-        # 获取现有的分类
-        existing_categories = conn.execute('SELECT name FROM categories WHERE user_id = ?', ('default_user',)).fetchall()
-        existing_names = {row[0] for row in existing_categories}
-        
-        # 添加缺失的分类
-        for category in required_categories:
-            if category["name"] not in existing_names:
-                try:
-                    conn.execute('''INSERT INTO categories (name, description, user_id) 
-                                VALUES (?, ?, ?)''', 
+    required_categories = [
+        {"name": "图片处理", "description": "图片编辑、处理相关工具"},
+        {"name": "娱乐游戏", "description": "游戏、娱乐相关工具"},
+        {"name": "通用工具", "description": "通用型工具"},
+        {"name": "生活工具", "description": "生活相关工具"},
+        {"name": "文件处理", "description": "文件编辑、转换相关工具"},
+        {"name": "开发工具", "description": "编程、开发相关工具"}
+    ]
+
+    existing_categories = conn.execute('SELECT name FROM categories WHERE user_id = ?', ('default_user',)).fetchall()
+    existing_names = {row[0] for row in existing_categories}
+
+    for category in required_categories:
+        if category["name"] not in existing_names:
+            try:
+                conn.execute('''INSERT INTO categories (name, description, user_id)
+                                VALUES (?, ?, ?)''',
                                 (category["name"], category["description"], "default_user"))
-                except sqlite3.IntegrityError:
-                    # 分类已存在，跳过
-                    pass
-        conn.commit()
-    finally:
-        conn.close()
+            except sqlite3.IntegrityError:
+                pass
+    conn.commit()
 
 
 
 def get_category_id(category_name):
     """根据分类名称获取分类ID"""
     conn = get_db()
-    try:
-        result = conn.execute('SELECT id FROM categories WHERE name = ? AND user_id = ?', 
-                           (category_name, "default_user")).fetchone()
-        return result[0] if result else None
-    finally:
-        conn.close()
+    result = conn.execute('SELECT id FROM categories WHERE name = ? AND user_id = ?',
+                       (category_name, "default_user")).fetchone()
+    return result[0] if result else None
 
 
 
@@ -2803,130 +3662,100 @@ def auto_categorize_file(file_info):
 
 def add_file(item):
     conn = get_db()
-    try:
-        # 确保所需分类存在
-        ensure_categories_exist()
-        
-        # 检查files表的列
-        cursor = conn.execute("PRAGMA table_info(files)")
-        columns = [row[1] for row in cursor.fetchall()]
-        
-        # 准备插入语句
-        if "created_at" in columns and "hash" in columns:
-            # 如果有created_at和hash列
-            conn.execute('''INSERT INTO files (
-                            id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, folder_id, created_at, hash
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''', 
-                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
-        elif "created_at" in columns:
-            # 如果只有created_at列
-            conn.execute('''INSERT INTO files (
-                            id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, folder_id, created_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''', 
-                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
-        elif "hash" in columns:
-            # 如果只有hash列
-            conn.execute('''INSERT INTO files (
-                            id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, folder_id, hash
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
-        else:
-            # 如果都没有
-            conn.execute('''INSERT INTO files (
-                            id, user_id, filename, stored_name, path, size, 
-                            dkfile, project_name, project_desc, folder_id
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''', 
-                        (item["id"], item["user_id"], item["filename"], item["stored_name"], 
-                        item["path"], item["size"], json.dumps(item.get("dkfile")), 
-                        item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
-        
-        # 自动分类并添加到文件分类关联表
-        category_name = auto_categorize_file(item)
-        category_id = get_category_id(category_name)
-        if category_id:
-            conn.execute('''INSERT INTO file_categories (file_id, category_id) 
-                        VALUES (?, ?)''', 
-                        (item["id"], category_id))
-        
-        conn.commit()
-    finally:
-        conn.close()
+    ensure_categories_exist()
+
+    cursor = conn.execute("PRAGMA table_info(files)")
+    columns = [row[1] for row in cursor.fetchall()]
+
+    if "created_at" in columns and "hash" in columns:
+        conn.execute('''INSERT INTO files (
+                        id, user_id, filename, stored_name, path, size,
+                        dkfile, project_name, project_desc, folder_id, created_at, hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)''',
+                    (item["id"], item["user_id"], item["filename"], item["stored_name"],
+                     item["path"], item["size"], json.dumps(item.get("dkfile")),
+                     item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
+    elif "created_at" in columns:
+        conn.execute('''INSERT INTO files (
+                        id, user_id, filename, stored_name, path, size,
+                        dkfile, project_name, project_desc, folder_id, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
+                    (item["id"], item["user_id"], item["filename"], item["stored_name"],
+                     item["path"], item["size"], json.dumps(item.get("dkfile")),
+                     item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
+    elif "hash" in columns:
+        conn.execute('''INSERT INTO files (
+                        id, user_id, filename, stored_name, path, size,
+                        dkfile, project_name, project_desc, folder_id, hash
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (item["id"], item["user_id"], item["filename"], item["stored_name"],
+                     item["path"], item["size"], json.dumps(item.get("dkfile")),
+                     item.get("project_name"), item.get("project_desc"), item.get("folder_id"), item.get("hash")))
+    else:
+        conn.execute('''INSERT INTO files (
+                        id, user_id, filename, stored_name, path, size,
+                        dkfile, project_name, project_desc, folder_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    (item["id"], item["user_id"], item["filename"], item["stored_name"],
+                     item["path"], item["size"], json.dumps(item.get("dkfile")),
+                     item.get("project_name"), item.get("project_desc"), item.get("folder_id")))
+
+    category_name = auto_categorize_file(item)
+    category_id = get_category_id(category_name)
+    if category_id:
+        conn.execute('''INSERT INTO file_categories (file_id, category_id)
+                        VALUES (?, ?)''',
+                    (item["id"], category_id))
+
+    conn.commit()
 
 
 
 def delete_file(file_id, user_id):
     conn = get_db()
-    try:
-        conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, user_id))
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, user_id))
+    conn.commit()
 
 
 def get_user_storage_usage(user_id):
     """获取用户存储空间使用情况"""
     conn = get_db()
-    try:
-        # 计算用户所有文件的总大小（包括文件夹中的文件）
-        result = conn.execute('''
-            SELECT COALESCE(SUM(size), 0) as total_size
-            FROM files 
-            WHERE user_id = ?
-        ''', (user_id,)).fetchone()
-        
-        total_size = result['total_size'] if result else 0
-        
-        # 定义总空间限制（1GB）
-        MAX_STORAGE = 1 * 1024 * 1024 * 1024  # 1GB in bytes
-        
-        return {
-            'total_size': total_size,
-            'max_storage': MAX_STORAGE,
-            'used_percentage': (total_size / MAX_STORAGE * 100) if MAX_STORAGE > 0 else 0,
-            'is_over_limit': total_size >= MAX_STORAGE
-        }
-    finally:
-        conn.close()
+    result = conn.execute('''
+        SELECT COALESCE(SUM(size), 0) as total_size
+        FROM files
+        WHERE user_id = ?
+    ''', (user_id,)).fetchone()
+
+    total_size = result['total_size'] if result else 0
+    MAX_STORAGE = 1 * 1024 * 1024 * 1024
+
+    return {
+        'total_size': total_size,
+        'max_storage': MAX_STORAGE,
+        'used_percentage': (total_size / MAX_STORAGE * 100) if MAX_STORAGE > 0 else 0,
+        'is_over_limit': total_size >= MAX_STORAGE
+    }
 
 
 def log_access(file_id, action, request):
     conn = get_db()
-    try:
-        user_id = session.get('user_id')
-        ip_address = request.remote_addr
-        user_agent = request.user_agent.string
-        conn.execute('''INSERT INTO access_logs (file_id, user_id, action, ip_address, user_agent)
-                        VALUES (?, ?, ?, ?, ?)''', 
-                    (file_id, user_id, action, ip_address, user_agent))
-        conn.commit()
-    finally:
-        conn.close()
+    user_id = session.get('user_id')
+    ip_address = request.remote_addr
+    user_agent = request.user_agent.string
+    conn.execute('''INSERT INTO access_logs (file_id, user_id, action, ip_address, user_agent)
+                    VALUES (?, ?, ?, ?, ?)''',
+                (file_id, user_id, action, ip_address, user_agent))
+    conn.commit()
 
 
 def cleanup_old_logs():
     """清理超过一周的访问记录和操作日志"""
     conn = get_db()
-    try:
-        # 清理超过一周的访问记录
-        conn.execute('''DELETE FROM access_logs 
-                        WHERE access_time < datetime('now', '-7 days')''')
-        
-        # 清理超过一周的操作日志
-        conn.execute('''DELETE FROM operation_logs 
-                        WHERE created_at < datetime('now', '-7 days')''')
-        
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute('''DELETE FROM access_logs
+                    WHERE access_time < datetime('now', '-7 days')''')
+    conn.execute('''DELETE FROM operation_logs
+                    WHERE created_at < datetime('now', '-7 days')''')
+    conn.commit()
 
 
 def cleanup_expired_trash():
@@ -3215,102 +4044,75 @@ def optimize_database():
 
 def get_user_by_email(email):
     conn = get_db()
-    try:
-        row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-        if row:
-            # 直接使用索引访问字段，避免字典键访问问题
-            role = "user"  # 默认值
-            if len(row) > 6:  # role字段在索引6位置
-                role = row[6]
-            return {
-                "id": row[0], 
-                "email": row[1], 
-                "username": row[2], 
-                "avatar": row[4] if len(row) > 4 and row[4] else "",
-                "role": role
-            }
-        return None
-    finally:
-        conn.close()
-
+    row = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+    if row:
+        role = "user"
+        if len(row) > 6:
+            role = row[6]
+        return {
+            "id": row[0],
+            "email": row[1],
+            "username": row[2],
+            "avatar": row[4] if len(row) > 4 and row[4] else "",
+            "role": role
+        }
+    return None
 
 
 def get_access_logs(user_id):
     conn = get_db()
-    try:
-        rows = conn.execute('''SELECT al.*, f.filename 
-                           FROM access_logs al 
-                           JOIN files f ON al.file_id = f.id 
-                           WHERE f.user_id = ? 
-                           ORDER BY al.access_time DESC''', 
+    rows = conn.execute('''SELECT al.*, f.filename
+                           FROM access_logs al
+                           JOIN files f ON al.file_id = f.id
+                           WHERE f.user_id = ?
+                           ORDER BY al.access_time DESC''',
                           (user_id,)).fetchall()
-        return [{
-            "id": row["id"], 
-            "file_id": row["file_id"], 
-            "filename": row["filename"],
-            "action": row["action"], 
-            "ip_address": row["ip_address"],
-            "user_agent": row["user_agent"], 
-            "access_time": row["access_time"]
-        }
-                for row in rows]
-    finally:
-        conn.close()
-
+    return [{
+        "id": row["id"],
+        "file_id": row["file_id"],
+        "filename": row["filename"],
+        "action": row["action"],
+        "ip_address": row["ip_address"],
+        "user_agent": row["user_agent"],
+        "access_time": row["access_time"]
+    } for row in rows]
 
 
 # 点赞相关函数
 def toggle_like(file_id, user_id):
     """切换文件的点赞状态"""
     conn = get_db()
-    try:
-        # 检查是否已经点赞
-        row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', 
-                          (file_id, user_id)).fetchone()
-        if row:
-            # 已经点赞，取消点赞
-            conn.execute('DELETE FROM likes WHERE file_id = ? AND user_id = ?', 
-                        (file_id, user_id))
-            liked = False
-        else:
-            # 未点赞，添加点赞
-            conn.execute('INSERT INTO likes (file_id, user_id) VALUES (?, ?)', 
-                        (file_id, user_id))
-            liked = True
-        conn.commit()
-        
-        # 获取最新点赞数
-        count_row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', 
-                               (file_id,)).fetchone()
-        count = count_row['count']
-        
-        return liked, count
-    finally:
-        conn.close()
+    row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?',
+                      (file_id, user_id)).fetchone()
+    if row:
+        conn.execute('DELETE FROM likes WHERE file_id = ? AND user_id = ?',
+                    (file_id, user_id))
+        liked = False
+    else:
+        conn.execute('INSERT INTO likes (file_id, user_id) VALUES (?, ?)',
+                    (file_id, user_id))
+        liked = True
+    conn.commit()
 
+    count_row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?',
+                           (file_id,)).fetchone()
+    return liked, count_row['count']
 
 
 def get_like_count(file_id):
     """获取文件的点赞数量"""
     conn = get_db()
-    try:
-        row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', 
-                          (file_id,)).fetchone()
-        return row['count']
-    finally:
-        conn.close()
-
+    row = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?',
+                      (file_id,)).fetchone()
+    return row['count']
 
 
 def is_liked(file_id, user_id):
     """检查用户是否已经点赞该文件"""
     conn = get_db()
-    try:
-        row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?', 
-                          (file_id, user_id)).fetchone()
-        return row is not None
-    finally:
-        conn.close()
+    row = conn.execute('SELECT id FROM likes WHERE file_id = ? AND user_id = ?',
+                      (file_id, user_id)).fetchone()
+    return row is not None
 
 
 
@@ -3318,133 +4120,105 @@ def is_liked(file_id, user_id):
 def toggle_favorite(file_id, user_id):
     """切换文件的收藏状态"""
     conn = get_db()
-    try:
-        # 检查是否已经收藏
-        row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', 
-                          (file_id, user_id)).fetchone()
-        if row:
-            # 已经收藏，取消收藏
-            conn.execute('DELETE FROM favorites WHERE file_id = ? AND user_id = ?', 
-                        (file_id, user_id))
-            favorited = False
-        else:
-            # 未收藏，添加收藏
-            conn.execute('INSERT INTO favorites (file_id, user_id) VALUES (?, ?)', 
-                        (file_id, user_id))
-            favorited = True
-        conn.commit()
-        
-        # 获取最新收藏数
-        count_row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', 
-                               (file_id,)).fetchone()
-        count = count_row['count']
-        
-        return favorited, count
-    finally:
-        conn.close()
+    row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?',
+                      (file_id, user_id)).fetchone()
+    if row:
+        conn.execute('DELETE FROM favorites WHERE file_id = ? AND user_id = ?',
+                    (file_id, user_id))
+        favorited = False
+    else:
+        conn.execute('INSERT INTO favorites (file_id, user_id) VALUES (?, ?)',
+                    (file_id, user_id))
+        favorited = True
+    conn.commit()
 
+    count_row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?',
+                           (file_id,)).fetchone()
+    return favorited, count_row['count']
 
 
 def get_favorite_count(file_id):
     """获取文件的收藏数量"""
     conn = get_db()
-    try:
-        row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', 
-                          (file_id,)).fetchone()
-        return row['count']
-    finally:
-        conn.close()
-
+    row = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?',
+                      (file_id,)).fetchone()
+    return row['count']
 
 
 def is_favorited(file_id, user_id):
     """检查用户是否已经收藏该文件"""
     conn = get_db()
-    try:
-        row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?', 
-                          (file_id, user_id)).fetchone()
-        return row is not None
-    finally:
-        conn.close()
+    row = conn.execute('SELECT id FROM favorites WHERE file_id = ? AND user_id = ?',
+                      (file_id, user_id)).fetchone()
+    return row is not None
 
 
 
 def get_favorite_files(user_id):
     """获取用户收藏的文件列表，只返回HTML文件且排除项目文件夹中的文件"""
     conn = get_db()
-    try:
-        rows = conn.execute('''
-            SELECT f.* 
-            FROM files f 
-            JOIN favorites fav ON f.id = fav.file_id 
-            WHERE fav.user_id = ? 
-            AND f.filename LIKE ? 
-            AND (f.folder_id IS NULL OR f.folder_id = "") 
-            ORDER BY fav.created_at DESC
-        ''', (user_id, '%.html')).fetchall()
-        
-        result = []
-        for row in rows:
-            file_id = row["id"]
-            # 获取点赞数和收藏数
-            like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
-            favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
-            
-            # 获取文件分类
-            categories = []
-            category_rows = conn.execute('''SELECT c.* FROM categories c 
-                                           JOIN file_categories fc ON c.id = fc.category_id 
-                                           WHERE fc.file_id = ?''', (file_id,)).fetchall()
-            for category_row in category_rows:
-                categories.append({
-                    "id": category_row["id"],
-                    "name": category_row["name"],
-                    "description": category_row["description"]
-                })
-            
-            # 获取文件标签
-            tags = []
-            tag_rows = conn.execute('''SELECT t.* FROM tags t 
-                                     JOIN file_tags ft ON t.id = ft.tag_id 
-                                     WHERE ft.file_id = ?''', (file_id,)).fetchall()
-            for tag_row in tag_rows:
-                tags.append({
-                    "id": tag_row["id"],
-                    "name": tag_row["name"]
-                })
-            
-            # 检查 created_at 字段是否存在
-            created_at = row["created_at"] if "created_at" in row.keys() else ""
-            result.append({
-                "id": file_id, 
-                "filename": row["filename"], 
-                "stored_name": row["stored_name"],
-                "path": row["path"], 
-                "size": row["size"], 
-                "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
-                "project_name": row["project_name"], 
-                "project_desc": row["project_desc"],
-                "like_count": like_count,
-                "favorite_count": favorite_count,
-                "categories": categories,
-                "tags": tags,
-                "created_at": row["created_at"] if "created_at" in row else ""
-            })
-        return result
-    finally:
-        conn.close()
+    rows = conn.execute('''
+        SELECT f.*
+        FROM files f
+        JOIN favorites fav ON f.id = fav.file_id
+        WHERE fav.user_id = ?
+        AND f.filename LIKE ?
+        AND (f.folder_id IS NULL OR f.folder_id = "")
+        ORDER BY fav.created_at DESC
+    ''', (user_id, '%.html')).fetchall()
 
+    result = []
+    for row in rows:
+        file_id = row["id"]
+        like_count = conn.execute('SELECT COUNT(*) as count FROM likes WHERE file_id = ?', (file_id,)).fetchone()['count']
+        favorite_count = conn.execute('SELECT COUNT(*) as count FROM favorites WHERE file_id = ?', (file_id,)).fetchone()['count']
+
+        categories = []
+        category_rows = conn.execute('''SELECT c.* FROM categories c
+                                       JOIN file_categories fc ON c.id = fc.category_id
+                                       WHERE fc.file_id = ?''', (file_id,)).fetchall()
+        for category_row in category_rows:
+            categories.append({
+                "id": category_row["id"],
+                "name": category_row["name"],
+                "description": category_row["description"]
+            })
+
+        tags = []
+        tag_rows = conn.execute('''SELECT t.* FROM tags t
+                                 JOIN file_tags ft ON t.id = ft.tag_id
+                                 WHERE ft.file_id = ?''', (file_id,)).fetchall()
+        for tag_row in tag_rows:
+            tags.append({
+                "id": tag_row["id"],
+                "name": tag_row["name"]
+            })
+
+        created_at = row["created_at"] if "created_at" in row.keys() else ""
+        result.append({
+            "id": file_id,
+            "filename": row["filename"],
+            "stored_name": row["stored_name"],
+            "path": row["path"],
+            "size": row["size"],
+            "dkfile": json.loads(row["dkfile"] if row["dkfile"] else "{}"),
+            "project_name": row["project_name"],
+            "project_desc": row["project_desc"],
+            "like_count": like_count,
+            "favorite_count": favorite_count,
+            "categories": categories,
+            "tags": tags,
+            "created_at": row["created_at"] if "created_at" in row else ""
+        })
+    return result
 
 
 def add_user(user):
     conn = get_db()
-    try:
-        conn.execute('''INSERT INTO users (id, email, username, password)
-                        VALUES (?, ?, ?, ?)''', 
-                    (user["id"], user["email"], user["username"], user["password"]))
-        conn.commit()
-    finally:
-        conn.close()
+    conn.execute('''INSERT INTO users (id, email, username, password)
+                    VALUES (?, ?, ?, ?)''',
+                (user["id"], user["email"], user["username"], user["password"]))
+    conn.commit()
 
 
 
@@ -3539,27 +4313,22 @@ def upload_page():
 @login_required
 def ai_page():
     """AI对话页面"""
-    # 获取用户保存的AI内容
     user_id = session.get('user_id')
     conn = get_db()
-    saved_contents = []
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''SELECT id, ai_function, prompt, response, created_at 
-                          FROM ai_contents 
-                          WHERE user_id = ? 
-                          ORDER BY created_at DESC''', (user_id,))
-        rows = cursor.fetchall()
-        saved_contents = [{
-            'id': row[0],
-            'ai_function': row[1],
-            'prompt': row[2],
-            'response': row[3],
-            'created_at': row[4]
-        } for row in rows]
-    finally:
-        conn.close()
-    
+    cursor = conn.cursor()
+    cursor.execute('''SELECT id, ai_function, prompt, response, created_at
+                      FROM ai_contents
+                      WHERE user_id = ?
+                      ORDER BY created_at DESC''', (user_id,))
+    rows = cursor.fetchall()
+    saved_contents = [{
+        'id': row[0],
+        'ai_function': row[1],
+        'prompt': row[2],
+        'response': row[3],
+        'created_at': row[4]
+    } for row in rows]
+
     return render_template("ai_page.html", username=session.get('username'), saved_contents=saved_contents)
 
 
@@ -3670,6 +4439,8 @@ def main():
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
+import routes  # noqa: F401
 
 if __name__ == "__main__":
     main()

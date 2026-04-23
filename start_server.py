@@ -201,8 +201,9 @@ def start_server():
         
         # 清理日志和回收站
         print("🧹 清理过期数据...")
-        cleanup_old_logs()
-        cleanup_expired_trash()
+        with app.app_context():
+            cleanup_old_logs()
+            cleanup_expired_trash()
         print("  ✅ 清理完成\n")
         
         # 启动Flask应用

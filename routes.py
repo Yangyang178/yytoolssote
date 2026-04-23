@@ -9,6 +9,7 @@ import json
 import os
 import uuid
 import sqlite3
+import hashlib
 from pathlib import Path
 from datetime import datetime
 
@@ -239,87 +240,79 @@ def auth():
 def user_center():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
-    
+
     # 获取用户信息和相关数据
     conn = get_db()
-    try:
-        user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
-        if not user:
-            # 用户不存在，清除session并跳转登录
-            session.clear()
-            return redirect(url_for('auth'))
-        
-        # 获取用户文件（带分类和标签）
-        files = get_all_files(session['user_id'])
-        
-        # 统计文件夹数量
-        folder_count = conn.execute('SELECT COUNT(*) FROM folders WHERE user_id = ?', (session['user_id'],)).fetchone()[0]
-        
-        # 统计收藏数量
-        favorite_count = conn.execute('SELECT COUNT(*) FROM favorites WHERE user_id = ?', (session['user_id'],)).fetchone()[0]
-        
-        # 获取收藏文件（只包括不在项目文件夹中的文件）
-        favorite_files = []
-        favorite_files_raw = conn.execute('''
-            SELECT f.* FROM files f
-            JOIN favorites fav ON f.id = fav.file_id
-            WHERE fav.user_id = ? AND (f.folder_id IS NULL OR f.folder_id = "")
-            ORDER BY fav.created_at DESC
-        ''', (session['user_id'],)).fetchall()
-        for file in favorite_files_raw:
-            # 使用get_all_files函数获取完整的文件信息，包括分类、标签、点赞数和收藏数
-            file_dict = next((f for f in files if f['id'] == file['id']), dict(file))
-            # 确保dkfile字段是字典类型
-            if 'dkfile' in file_dict and file_dict['dkfile']:
-                if isinstance(file_dict['dkfile'], str):
-                    try:
-                        file_dict['dkfile'] = json.loads(file_dict['dkfile'])
-                    except json.JSONDecodeError:
-                        file_dict['dkfile'] = {}
-            else:
-                file_dict['dkfile'] = {}
-            favorite_files.append(file_dict)
-        
-        # 获取操作日志
-        operation_logs = conn.execute('''
-            SELECT * FROM operation_logs 
-            WHERE user_id = ? 
-            ORDER BY created_at DESC 
-            LIMIT 50
-        ''', (session['user_id'],)).fetchall()
-        
-        # 获取访问日志 - 通过JOIN files表获取文件名，基于access_logs中的user_id
-        access_logs_raw = conn.execute('''
-            SELECT al.*, f.filename 
-            FROM access_logs al 
-            JOIN files f ON al.file_id = f.id 
-            WHERE al.user_id = ? 
-            ORDER BY al.access_time DESC 
-            LIMIT 50
-        ''', (session['user_id'],)).fetchall()
-        
-        # 转换访问时间为本地时间
-        access_logs = []
-        from datetime import datetime, timedelta
-        for log in access_logs_raw:
-            log_dict = dict(log)
-            if log_dict.get('access_time'):
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    if not user:
+        # 用户不存在，清除session并跳转登录
+        session.clear()
+        return redirect(url_for('auth'))
+
+    # 获取用户文件（带分类和标签）
+    files = get_all_files(session['user_id'])
+
+    # 统计文件夹数量
+    folder_count = conn.execute('SELECT COUNT(*) FROM folders WHERE user_id = ?', (session['user_id'],)).fetchone()[0]
+
+    # 统计收藏数量
+    favorite_count = conn.execute('SELECT COUNT(*) FROM favorites WHERE user_id = ?', (session['user_id'],)).fetchone()[0]
+
+    # 获取收藏文件（只包括不在项目文件夹中的文件）
+    favorite_files = []
+    favorite_files_raw = conn.execute('''
+        SELECT f.* FROM files f
+        JOIN favorites fav ON f.id = fav.file_id
+        WHERE fav.user_id = ? AND (f.folder_id IS NULL OR f.folder_id = "")
+        ORDER BY fav.created_at DESC
+    ''', (session['user_id'],)).fetchall()
+    for file in favorite_files_raw:
+        file_dict = next((f for f in files if f['id'] == file['id']), dict(file))
+        if 'dkfile' in file_dict and file_dict['dkfile']:
+            if isinstance(file_dict['dkfile'], str):
                 try:
-                    # 解析ISO格式的时间字符串
-                    utc_dt = datetime.fromisoformat(log_dict['access_time'])
-                    # 转换为东八区时间
-                    local_dt = utc_dt + timedelta(hours=8)
-                    log_dict['access_time'] = local_dt.strftime('%Y-%m-%d %H:%M:%S')
-                except:
-                    # 如果解析失败，保持原格式
-                    pass
-            access_logs.append(log_dict)
-    finally:
-        conn.close()
-    
-    return render_template('user_center.html', 
-                           username=session.get('username'), 
-                           user=user, 
+                    file_dict['dkfile'] = json.loads(file_dict['dkfile'])
+                except json.JSONDecodeError:
+                    file_dict['dkfile'] = {}
+        else:
+            file_dict['dkfile'] = {}
+        favorite_files.append(file_dict)
+
+    # 获取操作日志
+    operation_logs = conn.execute('''
+        SELECT * FROM operation_logs
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 50
+    ''', (session['user_id'],)).fetchall()
+
+    # 获取访问日志 - 通过JOIN files表获取文件名，基于access_logs中的user_id
+    access_logs_raw = conn.execute('''
+        SELECT al.*, f.filename
+        FROM access_logs al
+        JOIN files f ON al.file_id = f.id
+        WHERE al.user_id = ?
+        ORDER BY al.access_time DESC
+        LIMIT 50
+    ''', (session['user_id'],)).fetchall()
+
+    # 转换访问时间为本地时间
+    access_logs = []
+    from datetime import datetime, timedelta
+    for log in access_logs_raw:
+        log_dict = dict(log)
+        if log_dict.get('access_time'):
+            try:
+                utc_dt = datetime.fromisoformat(log_dict['access_time'])
+                local_dt = utc_dt + timedelta(hours=8)
+                log_dict['access_time'] = local_dt.strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                pass
+        access_logs.append(log_dict)
+
+    return render_template('user_center.html',
+                           username=session.get('username'),
+                           user=user,
                            files=files,
                            folder_count=folder_count,
                            favorite_count=favorite_count,
@@ -1801,6 +1794,418 @@ def test_oss_connection():
             return api_response(success=False, message='OSS未配置或连接失败')
     except Exception as e:
         return api_response(success=False, message=f'OSS测试失败: {str(e)}')
+
+
+# ==================== 认证安全系统API ====================
+
+@app.route('/api/security/password-strength', methods=['POST'])
+def check_password_strength():
+    """检测密码强度"""
+    try:
+        data = request.get_json(silent=True) or {}
+        password = data.get('password', '')
+
+        if not password:
+            return api_response(success=False, message='请提供密码')
+
+        from app import PasswordStrengthChecker
+        result = PasswordStrengthChecker.check_strength(password)
+
+        return api_response(success=True, data=result)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/2fa/setup', methods=['POST'])
+def setup_2fa():
+    """设置双因素认证（2FA）- 生成密钥"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        conn = get_db()
+        user_id = session['user_id']
+        user = conn.execute('SELECT email FROM users WHERE id = ?', (user_id,)).fetchone()
+
+        if not user:
+            return api_response(success=False, message='用户不存在')
+
+        existing_2fa = conn.execute('SELECT * FROM user_2fa WHERE user_id = ?', (user_id,)).fetchone()
+
+        if existing_2fa and existing_2fa['is_enabled']:
+            return api_response(success=False, message='2FA已启用，请先禁用后再重新设置')
+
+        from app import TOTPAuthenticator
+        secret = TOTPAuthenticator.generate_secret()
+        secret_hash = TOTPAuthenticator.hash_secret(secret)
+        totp_uri = TOTPAuthenticator.get_totp_uri(secret, user['email'])
+
+        backup_codes = TOTPAuthenticator.generate_backup_codes()
+        backup_codes_hash = hashlib.sha256(json.dumps(backup_codes).encode()).hexdigest()
+
+        if existing_2fa:
+            conn.execute('''UPDATE user_2fa SET secret_hash = ?, backup_codes_hash = ?, is_enabled = 0
+                          WHERE user_id = ?''', (secret_hash, backup_codes_hash, user_id))
+        else:
+            conn.execute('''INSERT INTO user_2fa (user_id, secret_hash, backup_codes_hash)
+                           VALUES (?, ?, ?)''', (user_id, secret_hash, backup_codes_hash))
+
+        conn.commit()
+
+        return api_response(success=True, data={
+            'secret': secret,
+            'totp_uri': totp_uri,
+            'backup_codes': backup_codes
+        })
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/2fa/verify', methods=['POST'])
+def verify_2fa_setup():
+    """验证并激活2FA"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        data = request.get_json(silent=True) or {}
+        code = data.get('code', '')
+
+        if not code:
+            return api_response(success=False, message='请输入验证码')
+
+        conn = get_db()
+        user_id = session['user_id']
+
+        user_2fa = conn.execute('SELECT * FROM user_2fa WHERE user_id = ?', (user_id,)).fetchone()
+
+        if not user_2fa or not user_2fa['secret_hash']:
+            return api_response(success=False, message='请先设置2FA密钥')
+
+        stored_secret = user_2fa['secret_hash']
+
+        from app import TOTPAuthenticator
+
+        for possible_secret in [stored_secret]:
+            if TOTPAuthenticator.verify_totp(possible_secret, code):
+                conn.execute('''UPDATE user_2fa SET is_enabled = 1, last_used_at = datetime('now')
+                              WHERE user_id = ?''', (user_id,))
+                conn.execute('''UPDATE users SET two_factor_enabled = 1 WHERE id = ?''', (user_id,))
+                conn.commit()
+
+                log_message(
+                    log_type='security',
+                    log_level='INFO',
+                    message='用户启用了双因素认证（2FA）',
+                    user_id=user_id,
+                    action='2fa_enable',
+                    request=request
+                )
+
+                return api_response(success=True, message='2FA已成功启用')
+
+        return api_response(success=False, message='验证码无效')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/2fa/disable', methods=['POST'])
+def disable_2fa():
+    """禁用2FA"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        data = request.get_json(silent=True) or {}
+        code = data.get('code', '')
+        password = data.get('password', '')
+
+        conn = get_db()
+        user_id = session['user_id']
+
+        user = conn.execute('SELECT password FROM users WHERE id = ?', (user_id,)).fetchone()
+        if not user or not check_password_hash(user['password'], password):
+            return api_response(success=False, message='密码错误')
+
+        user_2fa = conn.execute('SELECT * FROM user_2fa WHERE user_id = ?', (user_id,)).fetchone()
+
+        if not user_2fa or not user_2fa['is_enabled']:
+            return api_response(success=False, message='2FA未启用')
+
+        if code:
+            from app import TOTPAuthenticator
+            if not TOTPAuthenticator.verify_totp(user_2fa['secret_hash'], code):
+                return api_response(success=False, message='验证码无效')
+
+        conn.execute('''UPDATE user_2fa SET is_enabled = 0 WHERE user_id = ?''', (user_id,))
+        conn.execute('''UPDATE users SET two_factor_enabled = 0 WHERE id = ?''', (user_id,))
+        conn.commit()
+
+        log_message(
+            log_type='security',
+            log_level='INFO',
+            message='用户禁用了双因素认证（2FA）',
+            user_id=user_id,
+            action='2fa_disable',
+            request=request
+        )
+
+        return api_response(success=True, message='2FA已禁用')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/2fa/status')
+def get_2fa_status():
+    """获取2FA状态"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        conn = get_db()
+        user_id = session['user_id']
+
+        result = conn.execute('''SELECT u.two_factor_enabled, t.is_enabled, t.created_at, t.last_used_at
+                                FROM users u LEFT JOIN user_2fa t ON u.id = t.user_id
+                                WHERE u.id = ?''', (user_id,)).fetchone()
+
+        if not result:
+            return api_response(success=False, message='用户不存在')
+
+        return api_response(success=True, data={
+            'enabled': bool(result['two_factor_enabled'] or result['is_enabled']),
+            'setup_completed': result['is_enabled'] == 1 if result['is_enabled'] else False,
+            'created_at': result['created_at'],
+            'last_used_at': result['last_used_at']
+        })
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/2fa/validate', methods=['POST'])
+def validate_2fa_code():
+    """验证2FA码（用于登录时二次验证）"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        data = request.get_json(silent=True) or {}
+        code = data.get('code', '')
+
+        if not code:
+            return api_response(success=False, message='请输入验证码')
+
+        conn = get_db()
+        user_id = session['user_id']
+
+        user_2fa = conn.execute('SELECT * FROM user_2fa WHERE user_id = ? AND is_enabled = 1', (user_id,)).fetchone()
+
+        if not user_2fa:
+            return api_response(success=False, message='2FA未启用')
+
+        from app import TOTPAuthenticator
+        if TOTPAuthenticator.verify_totp(user_2fa['secret_hash'], code):
+            conn.execute('''UPDATE user_2fa SET last_used_at = datetime('now') WHERE user_id = ?''', (user_id,))
+            conn.commit()
+
+            return api_response(success=True, message='验证成功')
+
+        return api_response(success=False, message='验证码无效或已过期')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/devices')
+def get_login_devices():
+    """获取登录设备列表"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import device_manager
+        conn = get_db()
+        devices = device_manager.get_user_devices(conn, session['user_id'])
+
+        current_fingerprint = device_manager.generate_device_fingerprint(request)
+        current_device = next((d for d in devices if d['device_fingerprint'] == current_fingerprint), None)
+
+        return api_response(success=True, data={
+            'devices': devices,
+            'current_device_id': current_device['id'] if current_device else None,
+            'total_devices': len(devices),
+            'trusted_count': sum(1 for d in devices if d['is_trusted'])
+        })
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/devices/<int:device_id>/trust', methods=['POST'])
+def trust_device(device_id):
+    """信任设备"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import device_manager
+        conn = get_db()
+        device_manager.trust_device(conn, session['user_id'], device_id)
+
+        log_message(
+            log_type='security',
+            log_level='INFO',
+            message=f'用户信任了设备 #{device_id}',
+            user_id=session['user_id'],
+            action='device_trust',
+            request=request
+        )
+
+        return api_response(success=True, message='设备已设为信任')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/devices/<int:device_id>/untrust', methods=['POST'])
+def untrust_device(device_id):
+    """取消设备信任"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import device_manager
+        conn = get_db()
+        device_manager.untrust_device(conn, session['user_id'], device_id)
+
+        log_message(
+            log_type='security',
+            log_level='INFO',
+            message=f'用户取消信任设备 #{device_id}',
+            user_id=session['user_id'],
+            action='device_untrust',
+            request=request
+        )
+
+        return api_response(success=True, message='已取消设备信任')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/devices/<int:device_id>', methods=['DELETE'])
+def remove_device(device_id):
+    """移除设备"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import device_manager
+        conn = get_db()
+        device_manager.remove_device(conn, session['user_id'], device_id)
+
+        log_message(
+            log_type='security',
+            log_level='WARNING',
+            message=f'用户删除了设备 #{device_id}',
+            user_id=session['user_id'],
+            action='device_remove',
+            request=request
+        )
+
+        return api_response(success=True, message='设备已移除，下次登录需要重新验证')
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/stats')
+def get_security_stats():
+    """获取安全统计信息"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        from app import security_analyzer
+        conn = get_db()
+        days = int(request.args.get('days', 30))
+        stats = security_analyzer.get_security_stats(conn, session['user_id'], days)
+
+        return api_response(success=True, data=stats)
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/events')
+def get_security_events():
+    """获取安全事件列表"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='请先登录', code=401)
+
+    try:
+        conn = get_db()
+        limit = min(int(request.args.get('limit', 50)), 100)
+        offset = int(request.args.get('offset', 0))
+
+        events = conn.execute('''SELECT * FROM security_events
+                                WHERE user_id = ?
+                                ORDER BY created_at DESC LIMIT ? OFFSET ?''',
+                             (session['user_id'], limit, offset)).fetchall()
+
+        total = conn.execute('''SELECT COUNT(*) FROM security_events WHERE user_id = ?''',
+                            (session['user_id'],)).fetchone()[0]
+
+        return api_response(success=True, data={
+            'events': [dict(event) for event in events],
+            'total': total,
+            'limit': limit,
+            'offset': offset
+        })
+    except Exception as e:
+        return api_response(success=False, message=str(e))
+
+
+@app.route('/api/security/check-login-status')
+def check_login_status():
+    """检查当前登录安全性状态"""
+    if 'user_id' not in session:
+        return api_response(success=False, message='未登录', code=401)
+
+    try:
+        from app import device_manager, security_analyzer
+        conn = get_db()
+        user_id = session['user_id']
+
+        is_trusted, device = device_manager.is_trusted_device(conn, user_id, request)
+
+        recent_events = conn.execute('''SELECT COUNT(*) FROM security_events
+                                       WHERE user_id = ? AND event_type = 'login_failure'
+                                       AND created_at > datetime('now', '-24 hours')''',
+                                    (user_id,)).fetchone()[0]
+
+        has_2fa = conn.execute('''SELECT is_enabled FROM user_2fa
+                                 WHERE user_id = ? AND is_enabled = 1''', (user_id,)).fetchone() is not None
+
+        risk_indicators = []
+        if not is_trusted:
+            risk_indicators.append('新设备登录')
+        if recent_events >= 3:
+            risk_indicators.append(f'近期有{recent_events}次失败尝试')
+        if SecurityAnalyzer.get_client_ip(request) != session.get('last_ip'):
+            risk_indicators.append('IP地址变化')
+
+        overall_risk = 'low'
+        if len(risk_indicators) >= 2 or recent_events >= 5:
+            overall_risk = 'high'
+        elif len(risk_indicators) >= 1 or recent_events >= 1:
+            overall_risk = 'medium'
+
+        return api_response(success=True, data={
+            'is_trusted_device': is_trusted,
+            'device_info': dict(device) if device else None,
+            'has_2fa_enabled': has_2fa,
+            'recent_failures_24h': recent_events,
+            'risk_indicators': risk_indicators,
+            'overall_risk': overall_risk,
+            'requires_additional_verification': overall_risk != 'low' and not has_2fa
+        })
+    except Exception as e:
+        return api_response(success=False, message=str(e))
 
 
 # 博客页面
