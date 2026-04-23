@@ -17,6 +17,7 @@ from email.mime.multipart import MIMEMultipart
 import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+import data_security
 
 # ==================== 缓存系统实现 ====================
 
@@ -2344,6 +2345,8 @@ DB_FILE = DATA_DIR / "db.sqlite"
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "dev")
+data_security.get_encryption().ensure_key()
+print(f"[安全] 数据加密: {'已启用' if data_security.get_encryption().available else '未配置密钥'}")
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
 # 静态文件缓存配置
@@ -4273,174 +4276,9 @@ def deepseek_chat(messages, model="deepseek-chat", temperature=0.5):
     r.raise_for_status()
     return r.json()
 
-@app.get("/")
-def index():
-    # 首页只显示默认用户的文件，用户上传的文件只显示在用户中心
-    files = get_all_files(user_id="default_user")
-    remote_error = None
-    info = None
-    try:
-        info = dkfile_info()
-    except Exception as e:
-        remote_error = str(e)
-    remote_table = []
-    for x in files:
-        dk = x.get("dkfile") or {}
-        d = dk.get("data") or {}
-        if dk.get("success") and d:
-            remote_table.append({
-                "file_name": d.get("file_name") or x.get("filename"),
-                "url": d.get("url"),
-                "created_at": d.get("created_at"),
-                "is_update": d.get("is_update"),
-                "updated_at": d.get("updated_at"),
-            })
-    return render_template("index.html", files=files, remote_table=remote_table, remote_error=remote_error, dk_info=info, username=session.get('username'), role=session.get('role'))
 
-
-
-@app.get("/upload_page")
-def upload_page():
-    """上传发布页面"""
-    return render_template("upload_page.html", username=session.get('username'))
-
-
-
-
-
-
-@app.get("/ai_page")
-@login_required
-def ai_page():
-    """AI对话页面"""
-    user_id = session.get('user_id')
-    conn = get_db()
-    cursor = conn.cursor()
-    cursor.execute('''SELECT id, ai_function, prompt, response, created_at
-                      FROM ai_contents
-                      WHERE user_id = ?
-                      ORDER BY created_at DESC''', (user_id,))
-    rows = cursor.fetchall()
-    saved_contents = [{
-        'id': row[0],
-        'ai_function': row[1],
-        'prompt': row[2],
-        'response': row[3],
-        'created_at': row[4]
-    } for row in rows]
-
-    return render_template("ai_page.html", username=session.get('username'), saved_contents=saved_contents)
-
-
-def main():
-    """主函数 - 启动服务器"""
-    # 导入路由定义
-    import routes  # noqa: F401
-
-    # 修复Windows控制台编码问题
-    import sys
-    if sys.platform == 'win32':
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
-    try:
-        print("\n" + "=" * 60)
-        print("[启动] 正在初始化...")
-        print("=" * 60 + "\n")
-
-        # 初始化数据库（不依赖Flask上下文）
-        print("[数据库] 初始化中...")
-        init_db()
-        print("  [OK] 数据库就绪")
-
-        # 初始化连接池（不依赖Flask上下文）
-        print("[连接池] 初始化中...")
-        init_db_pool()
-        print("  [OK] 连接池就绪")
-
-        # 初始化缓存系统
-        print("[缓存] 初始化中...")
-        init_cache()
-        init_preview_cache()
-        init_hot_data_cache()
-
-        # 配置CDN（如果环境变量中有配置）
-        with app.app_context():
-            configure_cdn(app)
-
-        cache_stats = get_cache().get_stats()
-        print(f"  [OK] 缓存就绪 (类型: {cache_stats['type']})")
-
-        # 清理过期预览文件
-        if preview_cache:
-            preview_cache.clear_old_previews(days=7)
-
-        # 清理过期数据（使用应用上下文）
-        print("[清理] 清理过期数据...")
-        with app.app_context():
-            cleanup_old_logs()
-            cleanup_expired_trash()
-
-            # 执行定期归档（可选，默认保留90天）
-            try:
-                archive_result = archive_old_logs(days_to_keep=90)
-                if archive_result.get('success'):
-                    print(f"  [OK] 日志归档完成: {archive_result.get('archived_count', 0)} 条")
-            except Exception as e:
-                print(f"  [WARN] 日志归档跳过: {e}")
-
-        print("  [OK] 清理完成\n")
-
-        # 显示启动信息
-        print("=" * 60)
-        print("[就绪] 服务器准备就绪！")
-        print("=" * 60)
-        print(f"  [本地] http://127.0.0.1:9876")
-
-        # 获取局域网IP
-        import socket
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-            print(f"  [局域网] http://{local_ip}:9876")
-        except Exception:
-            pass
-
-        # 显示数据库优化状态
-        print("-" * 60)
-        print("[数据库优化]")
-        with app.app_context():
-            stats = get_database_stats()
-        if 'db_size_mb' in stats:
-            print(f"  数据库大小: {stats['db_size_mb']} MB")
-        if 'index_count' in stats:
-            print(f"  索引数量: {stats['index_count']}")
-        if db_pool:
-            pool_stats = db_pool.get_stats()
-            print(f"  连接池: {pool_stats['available_connections']}/{pool_stats['pool_size']} 可用")
-        print("-" * 60)
-        print("  按 Ctrl+C 停止服务器")
-        print("=" * 60 + "\n")
-
-        # 启动Flask应用（禁用reloader以支持SSE流式传输）
-        app.run(debug=True, host='0.0.0.0', port=9876, use_reloader=False)
-        
-    except KeyboardInterrupt:
-        print("\n\n[停止] 服务器已正常停止")
-    except ImportError as e:
-        print(f"\n[错误] 缺少依赖: {e}")
-        print("请运行: pip install flask")
-        sys.exit(1)
-    except Exception as e:
-        print(f"\n[错误] 启动失败: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
-
-import routes  # noqa: F401
+from blueprints import register_blueprints
+register_blueprints(app)
 
 if __name__ == "__main__":
     main()
