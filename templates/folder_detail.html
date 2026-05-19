@@ -36,6 +36,7 @@
                     <div class="form-group">
                         <label for="file-upload" class="form-label">选择文件</label>
                         <input type="file" id="file-upload" name="file" class="form-input" required>
+                        <p style="color: #94a3b8; font-size: 0.8rem; margin-top: 4px;">⚠️ HTML 文件请上传到用户中心"我的文件"，项目文件夹不支持 HTML 文件</p>
                     </div>
                     <div class="form-group">
                         <label for="file-description" class="form-label">文件描述（可选）</label>
@@ -190,21 +191,11 @@
                             <p class="file-size">{{ file.size }} B</p>
                             <p class="file-desc">{{ file.project_desc or '无描述' }}</p>
                             <div class="file-actions">
-                                <a href="{{ url_for('file_detail', file_id=file.id) }}" class="btn btn-detail">详情</a>
+                                <a href="{{ url_for('folder_file_detail', file_id=file.id) }}" class="btn btn-detail">详情</a>
                                 <a href="{{ url_for('download_local', stored_name=file.stored_name) }}" class="btn btn-download">下载</a>
-                                <!-- 预览按钮 - 支持多种文件类型 -->
-                                {% set filename_lower = file.filename.lower() %}
-                                {% if filename_lower.endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg')) or 
-                                      filename_lower.endswith('.pdf') or
-                                      filename_lower.endswith(('.mp4', '.webm', '.ogg', '.mov', '.avi')) or
-                                      filename_lower.endswith(('.mp3', '.wav', '.m4a', '.flac', '.aac')) or
-                                      filename_lower.endswith(('.py', '.js', '.ts', '.html', '.css', '.json', '.xml', '.sql')) or
-                                      filename_lower.endswith(('.java', '.cpp', '.c', '.h', '.go', '.rs', '.php', '.sh')) or
-                                      filename_lower.endswith(('.yaml', '.yml', '.md', '.markdown', '.txt', '.log', '.csv')) %}
-                                    <button class="btn btn-preview" onclick="previewFile('{{ file.id }}', '{{ file.filename }}', '{{ url_for('static', filename='uploads/' + file.stored_name) }}')">
-                                        <i class="preview-icon">👁️</i> 预览
-                                    </button>
-                                {% endif %}
+                                <button class="btn btn-preview" data-file-id="{{ file.id }}" data-file-name="{{ file.filename | e }}" data-file-path="{{ url_for('preview_file', stored_name=file.stored_name) }}">
+                                    <i class="preview-icon">👁️</i> 预览
+                                </button>
                                 <button class="btn btn-delete btn-file-delete" data-file-id="{{ file.id }}" data-file-name="{{ file.filename }}">
                                     <i class="delete-icon">🗑️</i> 删除
                                 </button>
@@ -2097,26 +2088,29 @@
     
     // 确认批量移动
     document.getElementById('confirm-batch-move').addEventListener('click', function() {
-        const targetFolderId = document.getElementById('target-folder-select').value;
-        const fileIds = document.getElementById('batch-move-modal').dataset.fileIds.split(',');
+        var targetFolderId = document.getElementById('target-folder-select').value;
+        var fileIds = document.getElementById('batch-move-modal').dataset.fileIds.split(',');
         
-        if (!targetFolderId && targetFolderId !== 'root') {
+        if (!targetFolderId) {
             alert('请选择目标文件夹');
             return;
         }
+        
+        var bodyData = { 
+            file_ids: fileIds.filter(function(id) { return id; }),
+            target_folder_id: targetFolderId
+        };
         
         fetch('/batch-move', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
-                file_ids: fileIds,
-                target_folder_id: targetFolderId === 'root' ? null : targetFolderId
-            })
+            credentials: 'same-origin',
+            body: JSON.stringify(bodyData)
         })
-        .then(response => response.json())
-        .then(data => {
+        .then(function(response) { return response.json(); })
+        .then(function(data) {
             if (data.success) {
                 alert('文件移动成功！');
                 closeBatchMoveModal();
@@ -2125,7 +2119,7 @@
                 alert('移动失败: ' + data.message);
             }
         })
-        .catch(error => {
+        .catch(function(error) {
             alert('移动失败: ' + error.message);
         });
     });
@@ -2263,61 +2257,178 @@
     
     // 文件类型映射
     const fileTypeMap = {
-        image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'],
-        video: ['.mp4', '.webm', '.ogg', '.mov', '.avi'],
-        audio: ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'],
+        image: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg', '.ico', '.tiff', '.tif', '.avif'],
+        video: ['.mp4', '.webm', '.ogg', '.mov', '.avi', '.mkv', '.wmv', '.flv', '.m4v', '.3gp', '.ogv'],
+        audio: ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma', '.opus', '.mid', '.midi', '.aiff', '.aif'],
         pdf: ['.pdf'],
-        markdown: ['.md', '.markdown'],
+        markdown: ['.md', '.markdown', '.mdown', '.mkd'],
         code: {
             '.py': 'python',
+            '.pyw': 'python',
+            '.pyi': 'python',
             '.js': 'javascript',
+            '.mjs': 'javascript',
+            '.cjs': 'javascript',
             '.ts': 'typescript',
             '.jsx': 'jsx',
             '.tsx': 'tsx',
             '.html': 'html',
             '.htm': 'html',
+            '.xhtml': 'html',
             '.css': 'css',
             '.scss': 'scss',
             '.sass': 'sass',
             '.less': 'less',
             '.json': 'json',
+            '.jsonc': 'json',
+            '.json5': 'json',
             '.xml': 'xml',
+            '.xsl': 'xml',
+            '.xslt': 'xml',
+            '.xsd': 'xml',
             '.sql': 'sql',
+            '.mysql': 'sql',
+            '.pgsql': 'sql',
             '.java': 'java',
+            '.jar': 'java',
             '.cpp': 'cpp',
+            '.cc': 'cpp',
+            '.cxx': 'cpp',
             '.c': 'c',
             '.h': 'c',
             '.hpp': 'cpp',
+            '.hxx': 'cpp',
             '.cs': 'csharp',
+            '.vb': 'vbnet',
             '.go': 'go',
             '.rs': 'rust',
             '.php': 'php',
+            '.phtml': 'php',
             '.rb': 'ruby',
+            '.erb': 'ruby',
             '.swift': 'swift',
             '.kt': 'kotlin',
+            '.kts': 'kotlin',
             '.scala': 'scala',
             '.sh': 'bash',
             '.bash': 'bash',
             '.zsh': 'bash',
+            '.fish': 'bash',
             '.ps1': 'powershell',
+            '.psm1': 'powershell',
+            '.bat': 'batch',
+            '.cmd': 'batch',
             '.yaml': 'yaml',
             '.yml': 'yaml',
             '.toml': 'toml',
             '.ini': 'ini',
+            '.cfg': 'ini',
             '.conf': 'nginx',
             '.dockerfile': 'docker',
-            '.vue': 'vue',
-            '.svelte': 'svelte',
+            '.vue': 'javascript',
+            '.svelte': 'javascript',
             '.lua': 'lua',
             '.r': 'r',
+            '.R': 'r',
             '.m': 'matlab',
-            '.pl': 'perl'
+            '.pl': 'perl',
+            '.pm': 'perl',
+            '.ex': 'elixir',
+            '.exs': 'elixir',
+            '.erl': 'erlang',
+            '.hrl': 'erlang',
+            '.hs': 'haskell',
+            '.lhs': 'haskell',
+            '.ml': 'ocaml',
+            '.mli': 'ocaml',
+            '.dart': 'dart',
+            '.zig': 'zig',
+            '.nim': 'nim',
+            '.nims': 'nim',
+            '.v': 'v',
+            '.proto': 'protobuf',
+            '.graphql': 'graphql',
+            '.gql': 'graphql',
+            '.tf': 'hcl',
+            '.hcl': 'hcl',
+            '.makefile': 'makefile',
+            '.cmake': 'cmake',
+            '.gradle': 'groovy',
+            '.groovy': 'groovy',
+            '.asm': 'asm',
+            '.s': 'asm',
+            '.ipynb': 'json',
+            '.lock': 'json',
+            '.wasm': 'asm',
+            '.sol': 'solidity',
+            '.move': 'javascript',
+            '.cairo': 'python',
+            '.fortran': 'fortran',
+            '.f90': 'fortran',
+            '.f': 'fortran',
+            '.cob': 'cobol',
+            '.cbl': 'cobol',
+            '.pas': 'pascal',
+            '.dpr': 'pascal',
+            '.lisp': 'lisp',
+            '.cl': 'lisp',
+            '.clj': 'clojure',
+            '.cljs': 'clojure',
+            '.hs': 'haskell',
+            '.elm': 'elm',
+            '.pug': 'pug',
+            '.haml': 'haml',
+            '.slim': 'slim',
+            '.ejs': 'html',
+            '.hbs': 'html',
+            '.mustache': 'html',
+            '.twig': 'html',
+            '.jinja': 'html',
+            '.jinja2': 'html'
         },
-        text: ['.txt', '.log', '.csv']
+        text: ['.txt', '.log', '.csv', '.tsv', '.rtf', '.env', '.gitignore', '.dockerignore',
+               '.editorconfig', '.prettierrc', '.eslintrc', '.babelrc', '.npmrc',
+               '.properties', '.conf', '.hosts', '.passwd', '.shadow', '.gitattributes',
+               '.npmignore', '.nvmrc', '.node-version', '.python-version', '.ruby-version',
+               '.tool-versions', '.env.local', '.env.development', '.env.production',
+               '.env.test', '.env.staging', '.htaccess', '.npmrc', '.yarnrc',
+               '.bowerrc', '.browserslistrc', '.stylelintrc', '.commitlintrc',
+               '.releaserc', '.mocharc', '.jestrc', '.karma.conf', '.webpack.conf',
+               '.rollup.conf', '.vite.conf', '.tsconfig', '.jsconfig', '.parcelrc',
+               '.prettierignore', '.eslintignore', '.stylelintignore', '.dockerignore',
+               '.gitmodules', '.gitkeep', '.mailmap', '.clang-format', '.clang-tidy',
+               'license', 'readme', 'changelog', 'authors', 'contributors', 'copying',
+               'makefile', 'dockerfile', 'vagrantfile', 'gemfile', 'rakefile',
+               'procfile', 'berksfile', 'chefignore', 'thorfile', 'capfile'],
+        archive: ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz', '.zst'],
+        document: ['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp'],
+        binary: ['.exe', '.dll', '.so', '.dylib', '.bin', '.dat', '.db', '.sqlite',
+                 '.woff', '.woff2', '.ttf', '.eot', '.otf', '.pyc', '.pyo', '.class',
+                 '.o', '.obj', '.lib', '.a', '.iso', '.dmg', '.msi', '.apk', '.ipa']
+    };
+
+    const noExtFileMap = {
+        'dockerfile': 'docker',
+        'makefile': 'makefile',
+        'gemfile': 'ruby',
+        'rakefile': 'ruby',
+        'vagrantfile': 'ruby',
+        'procfile': 'bash',
+        'berksfile': 'ruby',
+        'capfile': 'ruby',
+        'thorfile': 'ruby',
+        'readme': 'markdown',
+        'changelog': 'markdown',
+        'license': 'text',
+        'copying': 'text',
+        'authors': 'text',
+        'contributors': 'text'
     };
     
     function getFileType(fileName) {
-        const ext = '.' + fileName.toLowerCase().split('.').pop();
+        const lowerName = fileName.toLowerCase();
+        const ext = '.' + lowerName.split('.').pop();
+        const baseName = lowerName.split('.').slice(0, -1).join('.') || lowerName;
         
         if (fileTypeMap.image.includes(ext)) return 'image';
         if (fileTypeMap.video.includes(ext)) return 'video';
@@ -2326,62 +2437,93 @@
         if (fileTypeMap.markdown.includes(ext)) return 'markdown';
         if (fileTypeMap.code[ext]) return 'code';
         if (fileTypeMap.text.includes(ext)) return 'text';
+        if (fileTypeMap.archive.includes(ext)) return 'archive';
+        if (fileTypeMap.document.includes(ext)) return 'document';
+        if (fileTypeMap.binary.includes(ext)) return 'binary';
+        
+        if (noExtFileMap[baseName]) {
+            const mappedType = noExtFileMap[baseName];
+            if (mappedType === 'markdown') return 'markdown';
+            if (mappedType === 'text') return 'text';
+            return 'code';
+        }
         
         return 'unknown';
     }
     
     function getFileLanguage(fileName) {
-        const ext = '.' + fileName.toLowerCase().split('.').pop();
-        return fileTypeMap.code[ext] || 'plaintext';
+        const lowerName = fileName.toLowerCase();
+        const ext = '.' + lowerName.split('.').pop();
+        const baseName = lowerName.split('.').slice(0, -1).join('.') || lowerName;
+        
+        if (fileTypeMap.code[ext]) return fileTypeMap.code[ext];
+        if (noExtFileMap[baseName] && noExtFileMap[baseName] !== 'text' && noExtFileMap[baseName] !== 'markdown') {
+            return noExtFileMap[baseName];
+        }
+        return 'plaintext';
     }
     
     function previewFile(fileId, fileName, filePath) {
-        currentPreviewFile = { id: fileId, name: fileName, path: filePath };
-        isShowingSource = false;
-        
-        document.getElementById('preview-file-name').textContent = fileName;
-        const previewContent = document.getElementById('preview-content');
-        const toggleSourceBtn = document.getElementById('toggle-source-btn');
-        const copyCodeBtn = document.getElementById('copy-code-btn');
-        const previewInfo = document.getElementById('preview-file-info');
-        
-        // 隐藏工具按钮
-        toggleSourceBtn.style.display = 'none';
-        copyCodeBtn.style.display = 'none';
-        previewInfo.textContent = '';
-        
-        // 清空预览内容
-        previewContent.innerHTML = '<div class="loading-spinner">加载中...</div>';
-        
-        // 显示预览弹窗
-        document.getElementById('file-preview-modal').style.display = 'flex';
-        
-        const fileType = getFileType(fileName);
-        
-        switch (fileType) {
-            case 'image':
-                previewImage(filePath, fileName, previewContent, previewInfo);
-                break;
-            case 'video':
-                previewVideo(filePath, fileName, previewContent, previewInfo);
-                break;
-            case 'audio':
-                previewAudio(filePath, fileName, previewContent, previewInfo);
-                break;
-            case 'pdf':
-                previewPDF(filePath, previewContent, previewInfo);
-                break;
-            case 'markdown':
-                previewMarkdown(filePath, fileName, previewContent, toggleSourceBtn, copyCodeBtn, previewInfo);
-                break;
-            case 'code':
-                previewCode(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
-                break;
-            case 'text':
-                previewText(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
-                break;
-            default:
-                previewContent.innerHTML = '<div class="unsupported-message"><p>该文件类型暂不支持预览</p><p>请下载后查看</p></div>';
+        try {
+            currentPreviewFile = { id: fileId, name: fileName, path: filePath };
+            isShowingSource = false;
+            
+            document.getElementById('preview-file-name').textContent = fileName;
+            const previewContent = document.getElementById('preview-content');
+            const toggleSourceBtn = document.getElementById('toggle-source-btn');
+            const copyCodeBtn = document.getElementById('copy-code-btn');
+            const previewInfo = document.getElementById('preview-file-info');
+            
+            toggleSourceBtn.style.display = 'none';
+            copyCodeBtn.style.display = 'none';
+            previewInfo.textContent = '';
+            
+            previewContent.innerHTML = '<div class="loading-spinner">加载中...</div>';
+            
+            document.getElementById('file-preview-modal').style.display = 'flex';
+            
+            const fileType = getFileType(fileName);
+            
+            switch (fileType) {
+                case 'image':
+                    previewImage(filePath, fileName, previewContent, previewInfo);
+                    break;
+                case 'video':
+                    previewVideo(filePath, fileName, previewContent, previewInfo);
+                    break;
+                case 'audio':
+                    previewAudio(filePath, fileName, previewContent, previewInfo);
+                    break;
+                case 'pdf':
+                    previewPDF(filePath, previewContent, previewInfo);
+                    break;
+                case 'markdown':
+                    previewMarkdown(filePath, fileName, previewContent, toggleSourceBtn, copyCodeBtn, previewInfo);
+                    break;
+                case 'code':
+                    previewCode(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
+                    break;
+                case 'text':
+                    previewText(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
+                    break;
+                case 'archive':
+                    previewArchive(fileName, previewContent, previewInfo);
+                    break;
+                case 'document':
+                    previewDocument(fileName, previewContent, previewInfo, filePath);
+                    break;
+                case 'binary':
+                    previewBinary(fileName, previewContent, previewInfo);
+                    break;
+                default:
+                    previewAsText(filePath, fileName, previewContent, copyCodeBtn, previewInfo);
+            }
+        } catch (err) {
+            console.error('previewFile error:', err);
+            const pc = document.getElementById('preview-content');
+            if (pc) {
+                pc.innerHTML = '<div class="unsupported-message"><p>预览出错: ' + escapeHtml(err.message) + '</p><p>请尝试下载后查看</p></div>';
+            }
         }
     }
     
@@ -2390,14 +2532,20 @@
         const img = document.createElement('img');
         img.src = filePath;
         img.alt = fileName;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '70vh';
+        img.style.objectFit = 'contain';
         img.onload = function() {
             infoEl.textContent = `${this.naturalWidth} × ${this.naturalHeight} 像素`;
+        };
+        img.onerror = function() {
+            container.innerHTML = '<div class="unsupported-message"><p>图片加载失败</p><p>文件可能不存在或格式不受支持</p><p>请尝试下载后查看</p></div>';
+            infoEl.textContent = '加载失败';
         };
         container.innerHTML = '';
         container.appendChild(img);
     }
     
-    // 视频预览
     function previewVideo(filePath, fileName, container, infoEl) {
         const video = document.createElement('video');
         video.src = filePath;
@@ -2408,16 +2556,19 @@
             const duration = formatDuration(this.duration);
             infoEl.textContent = `时长: ${duration}`;
         };
+        video.onerror = function() {
+            container.innerHTML = '<div class="unsupported-message"><p>视频加载失败</p><p>文件可能不存在或格式不受支持</p><p>请尝试下载后查看</p></div>';
+            infoEl.textContent = '加载失败';
+        };
         container.innerHTML = '';
         container.appendChild(video);
     }
     
-    // 音频预览
     function previewAudio(filePath, fileName, container, infoEl) {
         container.innerHTML = `
             <div class="audio-preview-container">
                 <div class="audio-icon">🎵</div>
-                <div class="audio-name">${fileName}</div>
+                <div class="audio-name">${escapeHtml(fileName)}</div>
                 <audio controls src="${filePath}"></audio>
             </div>
         `;
@@ -2425,6 +2576,10 @@
         audio.onloadedmetadata = function() {
             const duration = formatDuration(this.duration);
             infoEl.textContent = `时长: ${duration}`;
+        };
+        audio.onerror = function() {
+            container.innerHTML = '<div class="unsupported-message"><p>音频加载失败</p><p>文件可能不存在或格式不受支持</p><p>请尝试下载后查看</p></div>';
+            infoEl.textContent = '加载失败';
         };
     }
     
@@ -2489,20 +2644,24 @@
         });
     }
     
-    // Markdown预览
     function previewMarkdown(filePath, fileName, container, toggleBtn, copyBtn, infoEl) {
         toggleBtn.style.display = 'inline-block';
         copyBtn.style.display = 'inline-block';
         infoEl.textContent = 'Markdown文档';
         
-        fetch(filePath)
-            .then(response => response.text())
+        fetch(filePath, {credentials: 'same-origin'})
+            .then(response => {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+            })
             .then(content => {
+                if (!content && content !== '') throw new Error('文件内容为空');
                 originalContent = content;
                 renderMarkdown(content, container);
             })
             .catch(err => {
-                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+                container.innerHTML = '<div class="unsupported-message"><p>Markdown加载失败: ' + escapeHtml(err.message) + '</p><p>请尝试下载后查看</p></div>';
+                infoEl.textContent = '加载失败';
             });
     }
     
@@ -2522,20 +2681,23 @@
         }
     }
     
-    // 代码预览
     function previewCode(filePath, fileName, container, copyBtn, infoEl) {
         copyBtn.style.display = 'inline-block';
         const language = getFileLanguage(fileName);
         infoEl.textContent = `语言: ${language.toUpperCase()}`;
         
-        fetch(filePath)
-            .then(response => response.text())
+        fetch(filePath, {credentials: 'same-origin'})
+            .then(response => {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+            })
             .then(content => {
                 originalContent = content;
                 renderCode(content, language, container, fileName);
             })
             .catch(err => {
-                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+                container.innerHTML = '<div class="unsupported-message"><p>代码加载失败: ' + escapeHtml(err.message) + '</p><p>请尝试下载后查看</p></div>';
+                infoEl.textContent = '加载失败';
             });
     }
     
@@ -2562,13 +2724,15 @@
         }
     }
     
-    // 文本预览
     function previewText(filePath, fileName, container, copyBtn, infoEl) {
         copyBtn.style.display = 'inline-block';
         infoEl.textContent = '文本文件';
         
-        fetch(filePath)
-            .then(response => response.text())
+        fetch(filePath, {credentials: 'same-origin'})
+            .then(response => {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                return response.text();
+            })
             .then(content => {
                 originalContent = content;
                 container.innerHTML = `
@@ -2578,7 +2742,178 @@
                 `;
             })
             .catch(err => {
-                container.innerHTML = '<p class="error-message">加载失败: ' + err.message + '</p>';
+                container.innerHTML = '<div class="unsupported-message"><p>文本加载失败: ' + escapeHtml(err.message) + '</p><p>请尝试下载后查看</p></div>';
+                infoEl.textContent = '加载失败';
+            });
+    }
+
+    function previewArchive(fileName, container, infoEl) {
+        const ext = '.' + fileName.toLowerCase().split('.').pop();
+        const archiveTypes = {
+            '.zip': 'ZIP 压缩包', '.rar': 'RAR 压缩包', '.7z': '7-Zip 压缩包',
+            '.tar': 'Tar 归档', '.gz': 'Gzip 压缩', '.bz2': 'Bzip2 压缩',
+            '.xz': 'XZ 压缩', '.tgz': 'Tar+Gzip 压缩', '.zst': 'Zstandard 压缩'
+        };
+        const typeName = archiveTypes[ext] || '压缩包';
+        infoEl.textContent = typeName;
+        container.innerHTML = `
+            <div class="unsupported-message">
+                <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
+                <p style="font-size: 1.1rem; font-weight: 600;">${typeName}</p>
+                <p>${escapeHtml(fileName)}</p>
+                <p style="margin-top: 12px; color: #94a3b8;">压缩包文件无法在线预览</p>
+                <p style="color: #94a3b8;">请下载后使用解压软件打开</p>
+            </div>
+        `;
+    }
+
+    function previewDocument(fileName, container, infoEl, filePath) {
+        var ext = '.' + fileName.toLowerCase().split('.').pop();
+        var docTypes = {
+            '.doc': 'Word 文档', '.docx': 'Word 文档',
+            '.xls': 'Excel 表格', '.xlsx': 'Excel 表格',
+            '.ppt': 'PowerPoint 演示', '.pptx': 'PowerPoint 演示',
+            '.odt': 'OpenDocument 文本', '.ods': 'OpenDocument 表格', '.odp': 'OpenDocument 演示'
+        };
+        var typeName = docTypes[ext] || 'Office 文档';
+        infoEl.textContent = typeName;
+        var icon = ext.startsWith('.doc') ? '📄' : ext.startsWith('.xls') ? '📊' : ext.startsWith('.ppt') ? '📽️' : '📄';
+        container.innerHTML = '<div class="unsupported-message">' +
+            '<div style="font-size: 48px; margin-bottom: 16px;">' + icon + '</div>' +
+            '<p style="font-size: 1.1rem; font-weight: 600;">' + escapeHtml(typeName) + '</p>' +
+            '<p>' + escapeHtml(fileName) + '</p>' +
+            '<div style="margin-top: 16px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;">' +
+            '<a href="' + escapeHtml(filePath) + '" download="' + escapeHtml(fileName) + '" class="btn btn-primary" style="text-decoration: none; padding: 8px 20px; border-radius: 6px; background: #3b82f6; color: white; font-size: 0.9rem;">📥 下载文件</a>' +
+            '<button class="btn btn-secondary btn-try-office" data-file-path="' + escapeHtml(filePath) + '" data-file-name="' + escapeHtml(fileName) + '" style="padding: 8px 20px; border-radius: 6px; background: #475569; color: white; font-size: 0.9rem; border: none; cursor: pointer;">🌐 尝试在线预览</button>' +
+            '</div>' +
+            '<p style="margin-top: 12px; color: #94a3b8; font-size: 0.85rem;">Office 文档推荐下载后使用对应软件打开</p>' +
+            '</div>';
+    }
+
+    function tryOfficeOnline(filePath, fileName) {
+        var previewContent = document.getElementById('preview-content');
+        var isExcel = fileName.toLowerCase().split('.').pop().startsWith('xls');
+        var isPpt = fileName.toLowerCase().split('.').pop().startsWith('ppt');
+        var isWord = fileName.toLowerCase().split('.').pop().startsWith('doc');
+
+        previewContent.innerHTML = '<div style="width: 100%; height: 70vh; display: flex; flex-direction: column;">' +
+            '<div style="padding: 8px 12px; background: #1e293b; border-radius: 8px 8px 0 0; display: flex; justify-content: space-between; align-items: center;">' +
+            '<span style="color: #94a3b8; font-size: 0.85rem;">正在尝试在线预览 ' + escapeHtml(fileName) + '...</span>' +
+            '<button class="btn-back-to-doc-info" data-file-path="' + escapeHtml(filePath) + '" data-file-name="' + escapeHtml(fileName) + '" style="background: #475569; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 0.8rem;">返回信息</button>' +
+            '</div>' +
+            '<iframe src="' + escapeHtml(filePath) + '" style="width: 100%; flex: 1; border: none; border-radius: 0 0 8px 8px; background: white;"></iframe>' +
+            '</div>';
+    }
+
+    function previewBinary(fileName, container, infoEl) {
+        const ext = '.' + fileName.toLowerCase().split('.').pop();
+        const binaryTypes = {
+            '.exe': 'Windows 可执行文件', '.dll': 'Windows 动态链接库',
+            '.so': 'Linux 共享库', '.dylib': 'macOS 动态库',
+            '.bin': '二进制文件', '.dat': '数据文件',
+            '.db': '数据库文件', '.sqlite': 'SQLite 数据库',
+            '.woff': 'Web 字体', '.woff2': 'Web 字体', '.ttf': 'TrueType 字体',
+            '.eot': 'EOT 字体', '.otf': 'OpenType 字体',
+            '.pyc': 'Python 编译文件', '.pyo': 'Python 优化文件',
+            '.class': 'Java 类文件', '.o': '目标文件', '.obj': '目标文件',
+            '.lib': '库文件', '.a': '静态库',
+            '.iso': 'ISO 镜像', '.dmg': 'macOS 磁盘镜像',
+            '.msi': 'Windows 安装包', '.apk': 'Android 安装包', '.ipa': 'iOS 安装包'
+        };
+        const typeName = binaryTypes[ext] || '二进制文件';
+        infoEl.textContent = typeName;
+        container.innerHTML = `
+            <div class="unsupported-message">
+                <div style="font-size: 48px; margin-bottom: 16px;">⚙️</div>
+                <p style="font-size: 1.1rem; font-weight: 600;">${typeName}</p>
+                <p>${escapeHtml(fileName)}</p>
+                <p style="margin-top: 12px; color: #94a3b8;">二进制文件无法在线预览</p>
+                <p style="color: #94a3b8;">请下载后使用对应软件打开</p>
+            </div>
+        `;
+    }
+
+    function previewAsText(filePath, fileName, container, copyBtn, infoEl) {
+        infoEl.textContent = '尝试文本预览...';
+
+        fetch(filePath, {credentials: 'same-origin'})
+            .then(response => {
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const ct = (response.headers.get('content-type') || '').toLowerCase();
+                const isTextCt = ct.startsWith('text/') ||
+                    ct.includes('json') || ct.includes('xml') ||
+                    ct.includes('javascript') || ct.includes('yaml') ||
+                    ct.includes('x-python') || ct.includes('x-shellscript') ||
+                    ct.includes('x-sql') || ct.includes('markdown') ||
+                    ct.includes('csv') || ct.includes('x-c') ||
+                    ct.includes('x-java') || ct.includes('x-go') ||
+                    ct.includes('x-rust') || ct.includes('x-php') ||
+                    ct.includes('x-ruby') || ct.includes('x-swift') ||
+                    ct.includes('x-kotlin') || ct.includes('x-scala') ||
+                    ct.includes('x-lua') || ct.includes('x-perl') ||
+                    ct.includes('x-elixir') || ct.includes('x-erlang') ||
+                    ct.includes('x-haskell') || ct.includes('x-dart') ||
+                    ct.includes('x-asm') || ct.includes('x-toml') ||
+                    ct.includes('x-vue') || ct.includes('x-scss') ||
+                    ct.includes('x-less') || ct.includes('x-sass') ||
+                    ct.includes('graphql') || ct.includes('x-protobuf') ||
+                    ct.includes('x-hcl') || ct.includes('x-groovy') ||
+                    ct.includes('typescript') || ct.includes('jsx') ||
+                    ct.includes('x-csharp') || ct.includes('x-c++');
+
+                if (isTextCt) {
+                    return response.text().then(text => ({text, isText: true}));
+                }
+                return response.blob().then(blob => {
+                    if (blob.size > 2 * 1024 * 1024) {
+                        return {text: null, isText: false, reason: '文件过大（超过2MB），建议下载后查看'};
+                    }
+                    if (blob.size === 0) {
+                        return {text: '', isText: true};
+                    }
+                    return blob.text().then(t => ({text: t, isText: true}));
+                });
+            })
+            .then(result => {
+                if (result.isText && result.text !== null) {
+                    if (result.text === '') {
+                        container.innerHTML = '<div class="unsupported-message"><p>文件内容为空</p></div>';
+                        infoEl.textContent = '空文件';
+                        return;
+                    }
+                    const hasNull = result.text.substring(0, 8192).indexOf('\0') !== -1;
+                    if (hasNull) {
+                        container.innerHTML = '<div class="unsupported-message"><div style="font-size: 48px; margin-bottom: 16px;">⚙️</div><p>该文件为二进制文件，无法文本预览</p><p>请下载后使用对应软件打开</p></div>';
+                        infoEl.textContent = '二进制文件';
+                    } else {
+                        copyBtn.style.display = 'inline-block';
+                        originalContent = result.text;
+                        const lowerName = fileName.toLowerCase();
+                        const ext = '.' + lowerName.split('.').pop();
+                        const baseName = lowerName.split('.').slice(0, -1).join('.') || lowerName;
+                        const lang = fileTypeMap.code[ext] || noExtFileMap[baseName];
+                        if (lang && lang !== 'text' && lang !== 'markdown' && typeof Prism !== 'undefined') {
+                            renderCode(result.text, lang, container, fileName);
+                            infoEl.textContent = `语言: ${lang.toUpperCase()}`;
+                        } else if (lang === 'markdown' && typeof marked !== 'undefined') {
+                            renderMarkdown(result.text, container);
+                            infoEl.textContent = 'Markdown文档';
+                        } else {
+                            container.innerHTML = `
+                                <div class="text-preview-container">
+                                    <pre>${escapeHtml(result.text)}</pre>
+                                </div>
+                            `;
+                            infoEl.textContent = '文本预览';
+                        }
+                    }
+                } else {
+                    container.innerHTML = `<div class="unsupported-message"><p>${escapeHtml(result.reason || '该文件类型暂不支持预览')}</p><p>请下载后查看</p></div>`;
+                }
+            })
+            .catch(err => {
+                container.innerHTML = '<div class="unsupported-message"><p>加载失败: ' + escapeHtml(err.message) + '</p><p>请尝试下载后查看</p></div>';
+                infoEl.textContent = '加载失败';
             });
     }
     
@@ -2669,13 +3004,43 @@
     
     // 页面加载完成后初始化功能
     document.addEventListener('DOMContentLoaded', function() {
-        // 初始化批量操作功能
         initBatchOperations();
-        // 初始化批量上传功能
         initBatchUpload();
-        // 初始化搜索功能
         initSearch();
-        // 点击弹窗外部关闭弹窗
+
+        document.addEventListener('click', function(e) {
+            var previewBtn = e.target.closest('.btn-preview');
+            if (previewBtn) {
+                var fileId = previewBtn.dataset.fileId;
+                var fileName = previewBtn.dataset.fileName;
+                var filePath = previewBtn.dataset.filePath;
+                if (fileId && fileName && filePath) {
+                    previewFile(fileId, fileName, filePath);
+                }
+                return;
+            }
+            var tryOfficeBtn = e.target.closest('.btn-try-office');
+            if (tryOfficeBtn) {
+                var fPath = tryOfficeBtn.dataset.filePath;
+                var fName = tryOfficeBtn.dataset.fileName;
+                if (fPath && fName) {
+                    tryOfficeOnline(fPath, fName);
+                }
+                return;
+            }
+            var backBtn = e.target.closest('.btn-back-to-doc-info');
+            if (backBtn) {
+                var bPath = backBtn.dataset.filePath;
+                var bName = backBtn.dataset.fileName;
+                var pc = document.getElementById('preview-content');
+                var pi = document.getElementById('preview-file-info');
+                if (bPath && bName && pc && pi) {
+                    previewDocument(bName, pc, pi, bPath);
+                }
+                return;
+            }
+        });
+
         window.onclick = function(event) {
             const modals = document.querySelectorAll('.modal');
             modals.forEach(modal => {

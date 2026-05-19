@@ -9,6 +9,7 @@ env/
 *.sqlite
 *.sqlite3
 data/
+*.db
 
 # Secrets
 .env
@@ -45,3 +46,17 @@ build/
 *.tmp
 *.temp
 .cache/
+
+# Debug / temporary scripts
+check_*.py
+debug_*.py
+test_*.py
+list_routes.py
+reset_pwd.py
+debug_*.html
+error_*.html
+home_*.html
+uc_*.html
+
+# Backup directories
+_backup_phase*/

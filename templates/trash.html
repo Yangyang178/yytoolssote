@@ -89,8 +89,8 @@
                                     {{ item.deleted_at }}
                                 </span>
                                 <span class="meta-item remaining-days">
-                                    {% set remaining_days = (item.remaining_hours / 24)|round(1) %}
-                                    {% if remaining_days > 0 %}
+                                    {% set remaining_days = item.days_remaining %}
+                                    {% if remaining_days and remaining_days > 0 %}
                                         <span class="remaining-time">剩余 {{ remaining_days }} 天</span>
                                     {% else %}
                                         <span class="expired">即将删除</span>

@@ -13,6 +13,14 @@
         <h1>文件详情</h1>
       </div>
       
+      <!-- 文件预览 -->
+      <div class="detail-section">
+        <h2>文件预览</h2>
+        <div id="detail-preview-area" style="min-height: 200px; display: flex; justify-content: center; align-items: center; background: #1e293b; border-radius: 8px; padding: 20px; overflow: auto;">
+          <div class="loading-spinner" style="color: #94a3b8;">加载预览中...</div>
+        </div>
+      </div>
+
       <!-- 文件基本信息 -->
       <div class="detail-section">
         <h2>基本信息</h2>
@@ -48,10 +56,12 @@
           <a class="btn btn-primary" href="{{ url_for('sandbox', stored_name=item.stored_name) }}" target="_blank">在沙盒中运行</a>
           <a class="btn btn-secondary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">直接打开</a>
           <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
+          {% if is_owner %}
           <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
 
             <button class="btn btn-danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
           </form>
+          {% endif %}
         </div>
       </div>
       
@@ -90,6 +100,7 @@
       </div>
 
       <!-- 文件分类和标签管理 -->
+      {% if is_owner %}
       <div class="detail-section">
         <h2>分类和标签</h2>
         
@@ -145,6 +156,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
     </section>
   </div>
 
@@ -214,10 +226,11 @@ function loadCategoriesAndTags() {
       return response.json();
     })
     .then(data => {
-      if (data.success) {
+      if (data.success && data.data) {
+        const categories = data.data.categories || [];
         const select = document.getElementById('category-select');
         select.innerHTML = '<option value="">选择分类</option>';
-        data.categories.forEach(category => {
+        categories.forEach(category => {
           const option = document.createElement('option');
           option.value = category.id;
           option.textContent = category.name;
@@ -238,10 +251,11 @@ function loadCategoriesAndTags() {
       return response.json();
     })
     .then(data => {
-      if (data.success) {
+      if (data.success && data.data) {
+        const tags = data.data.tags || [];
         const select = document.getElementById('tag-select');
         select.innerHTML = '<option value="">选择标签</option>';
-        data.tags.forEach(tag => {
+        tags.forEach(tag => {
           const option = document.createElement('option');
           option.value = tag.id;
           option.textContent = tag.name;
@@ -453,6 +467,127 @@ document.getElementById('create-tag-form')?.addEventListener('submit', function(
 
 // 页面加载时加载分类和标签列表
 loadCategoriesAndTags();
+
+// 文件预览功能
+(function() {
+    var previewUrl = "{{ url_for('preview_file', stored_name=item.stored_name) }}";
+    var fileName = "{{ item.filename | e }}";
+    var downloadUrl = "{{ url_for('download_local', stored_name=item.stored_name) }}";
+    var previewArea = document.getElementById('detail-preview-area');
+    if (!previewArea) return;
+
+    var lowerName = fileName.toLowerCase();
+    var ext = lowerName.split('.').pop();
+
+    var imageExts = ['png','jpg','jpeg','gif','bmp','webp','svg','ico','tiff','tif','avif'];
+    var videoExts = ['mp4','webm','ogg','ogv','mkv','wmv','flv','m4v','3gp'];
+    var audioExts = ['mp3','wav','flac','aac','m4a','ogg','wma','opus','mid','midi','aiff','aif'];
+    var pdfExts = ['pdf'];
+    var docExts = ['doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp'];
+    var archiveExts = ['zip','rar','7z','tar','gz','bz2','xz','tgz','zst'];
+    var binaryExts = ['exe','dll','so','dylib','bin','dat','db','sqlite','woff','woff2','ttf','eot','otf','pyc','pyo','class','o','obj','lib','a','iso','dmg','msi','apk','ipa'];
+    var codeExts = ['py','pyw','js','mjs','ts','tsx','jsx','vue','svelte','css','scss','sass','less','html','htm','json','xml','yaml','yml','toml','ini','cfg','conf','sh','bash','zsh','ps1','bat','cmd','sql','java','c','h','cpp','hpp','cs','go','rs','php','rb','swift','kt','kts','scala','lua','r','pl','pm','ex','exs','erl','hs','dart','proto','graphql','gql','tf','hcl','gradle','groovy','asm','s','m'];
+    var textExts = ['txt','log','csv','tsv','rtf','env','md','markdown'];
+
+    function escHtml(t) {
+        var d = document.createElement('div');
+        d.textContent = t;
+        return d.innerHTML;
+    }
+
+    function showMsg(icon, title, detail, extra) {
+        previewArea.innerHTML = '<div style="text-align:center; color:#94a3b8; padding:40px 20px;">' +
+            '<div style="font-size:48px;margin-bottom:16px;">' + icon + '</div>' +
+            '<p style="font-size:1.1rem;font-weight:600;color:#e2e8f0;">' + escHtml(title) + '</p>' +
+            '<p>' + escHtml(detail) + '</p>' +
+            (extra || '') +
+            '</div>';
+    }
+
+    function fetchAndShowText(url, lang) {
+        previewArea.innerHTML = '<div style="color:#94a3b8;">加载中...</div>';
+        fetch(url, {credentials: 'same-origin'})
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                return resp.text();
+            })
+            .then(function(content) {
+                if (!content) {
+                    showMsg('📄', '空文件', fileName);
+                    return;
+                }
+                var langLabel = lang ? '语言: ' + lang.toUpperCase() + ' | ' : '';
+                previewArea.innerHTML = '<div style="width:100%;">' +
+                    '<div style="color:#94a3b8;font-size:0.8rem;margin-bottom:8px;">' + langLabel + '大小: ' + content.length + ' 字符</div>' +
+                    '<pre style="width:100%;max-height:70vh;overflow:auto;background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;font-size:0.875rem;white-space:pre-wrap;word-break:break-all;">' + escHtml(content) + '</pre>' +
+                    '</div>';
+            })
+            .catch(function(err) {
+                showMsg('❌', '加载失败', err.message,
+                    '<a href="' + escHtml(downloadUrl) + '" style="display:inline-block;margin-top:12px;padding:8px 20px;border-radius:6px;background:#3b82f6;color:white;text-decoration:none;font-size:0.9rem;">📥 下载文件</a>');
+            });
+    }
+
+    if (imageExts.indexOf(ext) !== -1) {
+        previewArea.innerHTML = '<img src="' + previewUrl + '" alt="' + escHtml(fileName) + '" style="max-width:100%; max-height:70vh; object-fit:contain;" onerror="this.parentElement.innerHTML=\'<div style=\\\'text-align:center;color:#94a3b8;padding:40px;\\\'><div style=\\\'font-size:48px;margin-bottom:16px;\\\'>❌</div><p>图片加载失败</p><a href=\\\'' + escHtml(downloadUrl) + '\\\' style=\\\'display:inline-block;margin-top:12px;padding:8px 20px;border-radius:6px;background:#3b82f6;color:white;text-decoration:none;font-size:0.9rem;\\\'>📥 下载文件</a></div>\'">';
+    } else if (videoExts.indexOf(ext) !== -1) {
+        previewArea.innerHTML = '<video src="' + previewUrl + '" controls style="max-width:100%; max-height:70vh;" onerror="this.parentElement.innerHTML=\'<div style=\\\'text-align:center;color:#94a3b8;padding:40px;\\\'><div style=\\\'font-size:48px;margin-bottom:16px;\\\'>❌</div><p>视频加载失败</p></div>\'"></video>';
+    } else if (audioExts.indexOf(ext) !== -1) {
+        previewArea.innerHTML = '<div style="text-align:center;"><div style="font-size:48px;margin-bottom:16px;">🎵</div><p style="color:#e2e8f0;margin-bottom:12px;">' + escHtml(fileName) + '</p><audio src="' + previewUrl + '" controls style="width:100%;max-width:500px;"></audio></div>';
+    } else if (pdfExts.indexOf(ext) !== -1) {
+        previewArea.innerHTML = '<iframe src="' + previewUrl + '" style="width:100%; height:70vh; border:none; border-radius:8px; background:white;"></iframe>';
+    } else if (docExts.indexOf(ext) !== -1) {
+        var docNames = {'doc':'Word 文档','docx':'Word 文档','xls':'Excel 表格','xlsx':'Excel 表格','ppt':'PowerPoint 演示','pptx':'PowerPoint 演示','odt':'OpenDocument 文本','ods':'OpenDocument 表格','odp':'OpenDocument 演示'};
+        var icon = (ext.indexOf('doc') === 0) ? '📄' : (ext.indexOf('xls') === 0) ? '📊' : (ext.indexOf('ppt') === 0) ? '📽️' : '📄';
+        showMsg(icon, docNames[ext] || 'Office 文档', fileName,
+            '<div style="margin-top:16px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
+            '<a href="' + escHtml(downloadUrl) + '" style="text-decoration:none;padding:8px 20px;border-radius:6px;background:#3b82f6;color:white;font-size:0.9rem;">📥 下载文件</a>' +
+            '</div>' +
+            '<p style="margin-top:12px;font-size:0.85rem;">Office 文档推荐下载后使用对应软件打开</p>');
+    } else if (archiveExts.indexOf(ext) !== -1) {
+        showMsg('📦', '压缩包文件', fileName, '<p style="margin-top:12px;">压缩包无法在线预览，请下载后解压查看</p>');
+    } else if (binaryExts.indexOf(ext) !== -1) {
+        showMsg('⚙️', '二进制文件', fileName, '<p style="margin-top:12px;">二进制文件无法在线预览</p>');
+    } else if (codeExts.indexOf(ext) !== -1 || textExts.indexOf(ext) !== -1) {
+        fetchAndShowText(previewUrl, ext);
+    } else {
+        fetch(previewUrl, {credentials: 'same-origin'})
+            .then(function(resp) {
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var ct = (resp.headers.get('content-type') || '').toLowerCase();
+                if (ct.startsWith('text/') || ct.includes('json') || ct.includes('xml') || ct.includes('javascript') || ct.includes('yaml') || ct.includes('python') || ct.includes('shell') || ct.includes('sql') || ct.includes('markdown') || ct.includes('csv')) {
+                    return resp.text().then(function(t) { return {text: t, isText: true}; });
+                }
+                return resp.blob().then(function(blob) {
+                    if (blob.size > 2 * 1024 * 1024) {
+                        return {text: null, isText: false, reason: '文件过大，建议下载后查看'};
+                    }
+                    if (blob.size === 0) {
+                        return {text: '', isText: true};
+                    }
+                    return blob.text().then(function(t) { return {text: t, isText: true}; });
+                });
+            })
+            .then(function(result) {
+                if (result.isText && result.text !== null) {
+                    if (result.text === '') {
+                        showMsg('📄', '空文件', fileName);
+                    } else if (result.text.substring(0, 8192).indexOf('\0') !== -1) {
+                        showMsg('⚙️', '二进制文件', fileName, '<p style="margin-top:12px;">请下载后使用对应软件打开</p>');
+                    } else {
+                        previewArea.innerHTML = '<pre style="width:100%;max-height:70vh;overflow:auto;background:#0f172a;color:#e2e8f0;padding:16px;border-radius:8px;font-size:0.875rem;white-space:pre-wrap;word-break:break-all;">' + escHtml(result.text) + '</pre>';
+                    }
+                } else {
+                    showMsg('📄', result.reason || '该文件类型暂不支持预览', fileName,
+                        '<a href="' + escHtml(downloadUrl) + '" style="display:inline-block;margin-top:12px;padding:8px 20px;border-radius:6px;background:#3b82f6;color:white;text-decoration:none;font-size:0.9rem;">📥 下载文件</a>');
+                }
+            })
+            .catch(function(err) {
+                showMsg('❌', '加载失败', err.message,
+                    '<a href="' + escHtml(downloadUrl) + '" style="display:inline-block;margin-top:12px;padding:8px 20px;border-radius:6px;background:#3b82f6;color:white;text-decoration:none;font-size:0.9rem;">📥 下载文件</a>');
+            });
+    }
+})();
 </script>
 {% endif %}
 {% endblock %}

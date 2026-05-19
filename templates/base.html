@@ -11,6 +11,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="yytoolssite">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
+    <!-- 设计令牌（必须在其他CSS之前加载） -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='design-tokens.css') }}?v={{ range(1000000, 9999999) | random }}">
     <!-- 合并CSS文件引用，减少HTTP请求 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='navbar.css') }}?v={{ range(1000000, 9999999) | random }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='hero.css') }}?v={{ range(1000000, 9999999) | random }}">
@@ -340,7 +342,7 @@
         // Ctrl+U: 跳转到上传页面
         if ((e.ctrlKey || e.metaKey) && e.key === 'u') {
           e.preventDefault();
-          window.location.href = '{{ url_for('upload') }}';
+          window.location.href = '{{ url_for('upload_page') }}';
           showLoading('正在跳转到上传页面...');
         }
         
@@ -428,8 +430,9 @@
       </button>
       <div class="nav-buttons" id="navButtons">
         <a href="{{ url_for('index') }}" class="nav-btn nav-btn-light">首页</a>
-        <a href="{{ url_for('upload') }}" class="nav-btn nav-btn-primary">上传发布</a>
+        <a href="{{ url_for('upload_page') }}" class="nav-btn nav-btn-primary">上传发布</a>
         <a href="{{ url_for('ai_page') }}" class="nav-btn nav-btn-primary">AI对话</a>
+        <a href="{{ url_for('workspaces_list') }}" class="nav-btn nav-btn-light">协作空间</a>
         <a href="{{ url_for('blog_page') }}" class="nav-btn nav-btn-primary">yytoolssite博客</a>
         <a href="{{ url_for('user_center') }}" class="nav-btn nav-btn-light">用户中心</a>
         {% if session.user_id %}
@@ -485,5 +488,324 @@
       </div>
     </div>
   </footer>
+
+  <!-- 移动端底部导航栏 -->
+  <nav class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <a href="{{ url_for('index') }}" class="bottom-nav-item" data-page="home">
+        <span class="nav-icon">🏠</span>
+        <span>首页</span>
+      </a>
+      <a href="{{ url_for('ai_page') }}" class="bottom-nav-item" data-page="ai">
+        <span class="nav-icon">🤖</span>
+        <span>AI</span>
+      </a>
+      <a href="{{ url_for('upload_page') }}" class="bottom-nav-item" data-page="upload">
+        <span class="nav-icon">📤</span>
+        <span>上传</span>
+      </a>
+      <a href="{{ url_for('notification_center') }}" class="bottom-nav-item" data-page="notifications">
+        <span class="nav-icon">🔔</span>
+        <span>通知</span>
+      </a>
+      <a href="{{ url_for('workspaces_list') }}" class="bottom-nav-item" data-page="workspaces">
+        <span class="nav-icon">👥</span>
+        <span>协作</span>
+      </a>
+      <a href="{{ url_for('user_center') }}" class="bottom-nav-item" data-page="user">
+        <span class="nav-icon">👤</span>
+        <span>我的</span>
+      </a>
+    </div>
+  </nav>
+
+  <!-- 移动端浮动操作按钮 -->
+  <a href="{{ url_for('upload_page') }}" class="fab" title="上传文件">+</a>
+
+  <!-- 文件预览器 -->
+  <div class="file-preview-overlay" id="filePreviewOverlay">
+    <div class="file-preview-header">
+      <span class="file-preview-title" id="filePreviewTitle">文件预览</span>
+      <div class="file-preview-actions">
+        <button class="file-preview-btn" id="filePreviewDownload">下载</button>
+        <button class="file-preview-btn" id="filePreviewFullscreen">全屏</button>
+        <button class="file-preview-btn" id="filePreviewClose">关闭</button>
+      </div>
+    </div>
+    <div class="file-preview-body" id="filePreviewBody"></div>
+  </div>
+
+  <script>
+  (function() {
+    function getFileIconClass(filename) {
+      var ext = filename.split('.').pop().toLowerCase();
+      var imageExts = ['jpg','jpeg','png','gif','svg','webp','ico','bmp','tiff','avif'];
+      var pdfExts = ['pdf'];
+      var videoExts = ['mp4','webm','avi','mov','mkv','flv','wmv','m4v'];
+      var audioExts = ['mp3','wav','ogg','flac','aac','m4a','wma'];
+      var codeExts = ['html','htm','css','js','json','xml','yaml','yml','sql','py','java','cpp','c','h','cs','go','rs','rb','php','swift','kt','ts','tsx','jsx','vue','svelte','sh','bat','ps1'];
+      var docExts = ['doc','docx','xls','xlsx','ppt','pptx','txt','md','csv','odt','ods','odp'];
+      var archiveExts = ['zip','rar','7z','tar','gz','bz2','xz'];
+      if (imageExts.indexOf(ext) !== -1) return 'file-icon-image';
+      if (pdfExts.indexOf(ext) !== -1) return 'file-icon-pdf';
+      if (videoExts.indexOf(ext) !== -1) return 'file-icon-video';
+      if (audioExts.indexOf(ext) !== -1) return 'file-icon-audio';
+      if (codeExts.indexOf(ext) !== -1) return 'file-icon-code';
+      if (docExts.indexOf(ext) !== -1) return 'file-icon-doc';
+      if (archiveExts.indexOf(ext) !== -1) return 'file-icon-archive';
+      return 'file-icon-other';
+    }
+
+    function getFileIconEmoji(filename) {
+      var cls = getFileIconClass(filename);
+      var map = {
+        'file-icon-image': '🖼️',
+        'file-icon-pdf': '📄',
+        'file-icon-video': '🎬',
+        'file-icon-audio': '🎵',
+        'file-icon-code': '💻',
+        'file-icon-doc': '📝',
+        'file-icon-archive': '📦',
+        'file-icon-other': '📎'
+      };
+      return map[cls] || '📎';
+    }
+
+    function previewFile(fileId, filename, fileUrl) {
+      var overlay = document.getElementById('filePreviewOverlay');
+      var body = document.getElementById('filePreviewBody');
+      var title = document.getElementById('filePreviewTitle');
+      if (!overlay || !body) return;
+
+      title.textContent = filename;
+      body.innerHTML = '<div class="skeleton" style="width:100%;height:300px;"></div>';
+      overlay.classList.add('active');
+
+      var ext = filename.split('.').pop().toLowerCase();
+      var imageExts = ['jpg','jpeg','png','gif','svg','webp','ico','bmp','tiff','avif'];
+      var videoExts = ['mp4','webm','avi','mov','mkv'];
+      var audioExts = ['mp3','wav','ogg','flac','aac','m4a'];
+      var codeExts = ['html','htm','css','js','json','xml','yaml','yml','sql','py','java','cpp','c','h','cs','go','rs','rb','php','swift','kt','ts','tsx','jsx','vue','svelte','sh','bat','ps1','txt','md','csv','log','ini','cfg','conf','env'];
+      var pdfExts = ['pdf'];
+
+      if (imageExts.indexOf(ext) !== -1) {
+        body.innerHTML = '<img src="' + fileUrl + '" alt="' + filename + '" onclick="this.style.transform=this.style.transform===\'scale(2)\'?\'scale(1)\':\'scale(2)\'" style="transition:transform 0.3s;cursor:zoom-in;">';
+      } else if (videoExts.indexOf(ext) !== -1) {
+        body.innerHTML = '<video src="' + fileUrl + '" controls autoplay style="max-width:90%;max-height:90%;border-radius:12px;"></video>';
+      } else if (audioExts.indexOf(ext) !== -1) {
+        body.innerHTML = '<div style="text-align:center;"><div style="font-size:80px;margin-bottom:20px;">🎵</div><audio src="' + fileUrl + '" controls autoplay style="width:80%;"></audio><p style="color:#fff;margin-top:16px;">' + filename + '</p></div>';
+      } else if (ext === 'pdf') {
+        body.innerHTML = '<iframe src="' + fileUrl + '"></iframe>';
+      } else if (ext === 'html' || ext === 'htm') {
+        body.innerHTML = '<iframe src="/sandbox/' + fileUrl.split('/').pop() + '" sandbox="allow-scripts allow-same-origin"></iframe>';
+      } else if (codeExts.indexOf(ext) !== -1) {
+        fetch(fileUrl).then(function(r){return r.text()}).then(function(text){
+          if (ext === 'md' && typeof marked !== 'undefined') {
+            body.innerHTML = '<div class="markdown-body">' + marked.parse(text) + '</div>';
+          } else {
+            var escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            body.innerHTML = '<pre><code>' + escaped + '</code></pre>';
+            if (typeof Prism !== 'undefined') Prism.highlightAllUnder(body);
+          }
+        }).catch(function(){ body.innerHTML = '<p style="color:#fff;">无法加载文件内容</p>'; });
+      } else {
+        body.innerHTML = '<div class="empty-state"><div class="empty-state-icon">' + getFileIconEmoji(filename) + '</div><div class="empty-state-title" style="color:#fff;">' + filename + '</div><div class="empty-state-desc" style="color:rgba(255,255,255,0.7);">此文件类型暂不支持在线预览</div><a href="' + fileUrl + '" class="btn btn-primary" download>下载文件</a></div>';
+      }
+
+      var dlBtn = document.getElementById('filePreviewDownload');
+      if (dlBtn) dlBtn.onclick = function(){ window.open(fileUrl, '_blank'); };
+    }
+
+    function closePreview() {
+      var overlay = document.getElementById('filePreviewOverlay');
+      if (overlay) overlay.classList.remove('active');
+    }
+
+    var closeBtn = document.getElementById('filePreviewClose');
+    if (closeBtn) closeBtn.addEventListener('click', closePreview);
+
+    var overlay = document.getElementById('filePreviewOverlay');
+    if (overlay) overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closePreview();
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') closePreview();
+    });
+
+    window.previewFile = previewFile;
+    window.closePreview = closePreview;
+    window.getFileIconClass = getFileIconClass;
+    window.getFileIconEmoji = getFileIconEmoji;
+  })();
+  </script>
+
+  <!-- Ctrl+K 全局搜索 -->
+  <div class="search-overlay" id="searchOverlay" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:400;opacity:0;visibility:hidden;transition:all 0.2s;backdrop-filter:blur(4px);display:flex;align-items:flex-start;justify-content:center;padding-top:15vh;">
+    <div style="background:var(--bg-primary);border-radius:16px;width:90%;max-width:600px;box-shadow:0 25px 50px rgba(0,0,0,0.25);overflow:hidden;" onclick="event.stopPropagation()">
+      <div style="display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border-color);gap:12px;">
+        <span style="font-size:20px;color:var(--text-secondary);">🔍</span>
+        <input type="text" id="searchInput" placeholder="搜索文件、项目、标签、AI对话..." style="flex:1;border:none;outline:none;font-size:16px;background:transparent;color:var(--text-dark);" autocomplete="off">
+        <kbd style="background:var(--bg-tertiary);border:1px solid var(--border-color);border-radius:6px;padding:2px 8px;font-size:12px;color:var(--text-secondary);">ESC</kbd>
+      </div>
+      <div id="searchSuggestions" style="border-bottom:1px solid var(--border-color);display:none;max-height:200px;overflow-y:auto;"></div>
+      <div id="searchResults" style="max-height:400px;overflow-y:auto;padding:8px;">
+        <div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">
+          <div style="font-size:40px;margin-bottom:12px;">🔎</div>
+          <div>输入关键词开始搜索</div>
+          <div style="font-size:13px;margin-top:8px;">搜索范围：文件名 · 项目名 · 标签 · AI对话</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    var overlay = document.getElementById('searchOverlay');
+    var input = document.getElementById('searchInput');
+    var results = document.getElementById('searchResults');
+    var suggestions = document.getElementById('searchSuggestions');
+    var debounceTimer = null;
+
+    function openSearch() {
+      if (!overlay) return;
+      overlay.style.opacity = '1';
+      overlay.style.visibility = 'visible';
+      if (input) input.focus();
+      loadHistory();
+    }
+
+    function closeSearch() {
+      if (!overlay) return;
+      overlay.style.opacity = '0';
+      overlay.style.visibility = 'hidden';
+      if (input) input.value = '';
+      if (results) results.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);"><div style="font-size:40px;margin-bottom:12px;">🔎</div><div>输入关键词开始搜索</div></div>';
+      if (suggestions) { suggestions.style.display = 'none'; suggestions.innerHTML = ''; }
+    }
+
+    function loadHistory() {
+      fetch('/api/search/history').then(function(r){return r.json()}).then(function(data){
+        if (!data.success || !data.data.history.length) return;
+        var html = '<div style="padding:8px 16px;font-size:12px;color:var(--text-secondary);font-weight:600;">搜索历史</div>';
+        data.data.history.slice(0, 5).forEach(function(q) {
+          html += '<div class="dropdown-item" onclick="document.getElementById(\'searchInput\').value=\'' + q.replace(/'/g, "\\'") + '\';document.getElementById(\'searchInput\').dispatchEvent(new Event(\'input\'))">🕐 ' + q + '</div>';
+        });
+        if (suggestions) { suggestions.innerHTML = html; suggestions.style.display = 'block'; }
+      }).catch(function(){});
+    }
+
+    function doSearch(query) {
+      if (!query || query.length < 2) {
+        if (results) results.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);">请输入至少2个字符</div>';
+        return;
+      }
+      if (results) results.innerHTML = '<div style="text-align:center;padding:40px;"><div class="skeleton" style="width:60%;height:20px;margin:8px auto;"></div><div class="skeleton" style="width:40%;height:20px;margin:8px auto;"></div></div>';
+
+      fetch('/api/search?q=' + encodeURIComponent(query)).then(function(r){return r.json()}).then(function(data){
+        if (!data.success) return;
+        var d = data.data;
+        var html = '';
+
+        if (d.files.length) {
+          html += '<div style="padding:8px 16px;font-size:12px;color:var(--text-secondary);font-weight:600;">📄 文件 (' + d.files.length + ')</div>';
+          d.files.forEach(function(f) {
+            var icon = window.getFileIconEmoji ? getFileIconEmoji(f.filename) : '📎';
+            var size = f.size > 1048576 ? (f.size/1048576).toFixed(1) + 'MB' : f.size > 1024 ? (f.size/1024).toFixed(1) + 'KB' : f.size + 'B';
+            html += '<a href="/detail/' + f.id + '" class="dropdown-item" style="padding:10px 16px;">' + icon + ' <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + f.filename + '</div><div style="font-size:12px;color:var(--text-secondary);">' + (f.project_name || '') + ' · ' + size + '</div></div></a>';
+          });
+        }
+
+        if (d.ai_contents.length) {
+          html += '<div style="padding:8px 16px;font-size:12px;color:var(--text-secondary);font-weight:600;">🤖 AI对话 (' + d.ai_contents.length + ')</div>';
+          d.ai_contents.forEach(function(c) {
+            html += '<a href="/ai" class="dropdown-item" style="padding:10px 16px;">🤖 <div style="flex:1;min-width:0;"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + c.preview + '</div><div style="font-size:12px;color:var(--text-secondary);">' + c.created_at + '</div></div></a>';
+          });
+        }
+
+        if (!d.total) {
+          html = '<div style="text-align:center;padding:40px 20px;color:var(--text-secondary);"><div style="font-size:40px;margin-bottom:12px;">🔍</div><div>未找到相关结果</div></div>';
+        }
+
+        if (results) results.innerHTML = html;
+        if (suggestions) suggestions.style.display = 'none';
+
+        fetch('/api/search/history', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({q:query})}).catch(function(){});
+      }).catch(function(){
+        if (results) results.innerHTML = '<div style="text-align:center;padding:40px;color:var(--color-danger);">搜索失败，请重试</div>';
+      });
+    }
+
+    if (input) {
+      input.addEventListener('input', function() {
+        var q = this.value.trim();
+        clearTimeout(debounceTimer);
+        if (q.length >= 2) {
+          debounceTimer = setTimeout(function(){
+            fetch('/api/search/suggestions?q=' + encodeURIComponent(q)).then(function(r){return r.json()}).then(function(data){
+              if (!data.success || !data.data.suggestions.length) { if(suggestions) suggestions.style.display='none'; return; }
+              var html = '<div style="padding:8px 16px;font-size:12px;color:var(--text-secondary);font-weight:600;">搜索建议</div>';
+              data.data.suggestions.forEach(function(s) {
+                var icon = s.type === 'file' ? '📄' : s.type === 'project' ? '📁' : '🏷️';
+                html += '<div class="dropdown-item" onclick="document.getElementById(\'searchInput\').value=\'' + s.text.replace(/'/g, "\\'") + '\';doSearch(\'' + s.text.replace(/'/g, "\\'") + '\')">' + icon + ' ' + s.text + '</div>';
+              });
+              if (suggestions) { suggestions.innerHTML = html; suggestions.style.display = 'block'; }
+            }).catch(function(){});
+          }, 300);
+        } else {
+          if (suggestions) suggestions.style.display = 'none';
+        }
+        debounceTimer = setTimeout(function(){ doSearch(q); }, 500);
+      });
+
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          clearTimeout(debounceTimer);
+          doSearch(this.value.trim());
+        }
+      });
+    }
+
+    if (overlay) overlay.addEventListener('click', closeSearch);
+
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        if (overlay && overlay.style.visibility === 'visible') closeSearch();
+        else openSearch();
+      }
+      if (e.key === 'Escape' && overlay && overlay.style.visibility === 'visible') closeSearch();
+    });
+
+    window.openSearch = openSearch;
+    window.closeSearch = closeSearch;
+    window.doSearch = doSearch;
+  })();
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+  (function() {
+    const socket = io();
+    socket.on('connect', function() {
+      console.log('[SocketIO] 已连接');
+    });
+    socket.on('new_notification', function(data) {
+      if (data && window.updateNotificationBadge) {
+        window.updateNotificationBadge(1);
+      }
+    });
+    socket.on('user_online', function(data) {
+      document.querySelectorAll(`[data-user-online="${data.user_id}"]`).forEach(el => {
+        el.classList.add('online');
+      });
+    });
+    socket.on('user_offline', function(data) {
+      document.querySelectorAll(`[data-user-online="${data.user_id}"]`).forEach(el => {
+        el.classList.remove('online');
+      });
+    });
+    window._socket = socket;
+  })();
+  </script>
 </body>
 </html>

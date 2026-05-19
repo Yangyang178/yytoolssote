@@ -1,6 +1,18 @@
 from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify, session
-from app import (get_db, log_message, api_response)
 import uuid
+
+
+class _LazyAppImports:
+    def __getattr__(self, name):
+        if name == '_module':
+            raise AttributeError(name)
+        if not hasattr(self, '_module'):
+            import app as _app_module
+            self._module = _app_module
+        return getattr(self._module, name)
+
+
+_app = _LazyAppImports()
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -11,11 +23,14 @@ def permission_management():
         flash('权限不足')
         return redirect(url_for('index'))
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
+        current_user = conn.execute("SELECT id, username, email, role FROM users WHERE id = ?",
+                                    (session['user_id'],)).fetchone()
         users = conn.execute("SELECT id, username, email, role, created_at FROM users ORDER BY created_at DESC").fetchall()
         return render_template('permission_management.html',
                              username=session.get('username'),
+                             current_user=dict(current_user) if current_user else None,
                              users=[dict(u) for u in users])
     finally:
         conn.close()
@@ -24,30 +39,30 @@ def permission_management():
 @admin_bp.route('/update-user-role/<user_id>', methods=['POST'], endpoint='update_user_role')
 def update_user_role(user_id):
     if session.get('role') != 'admin':
-        return api_response(success=False, message='权限不足', code=403)
+        return _app.api_response(success=False, message='权限不足', code=403)
 
     data = request.get_json(silent=True) or {}
     new_role = data.get('role', '')
 
     if new_role not in ('user', 'admin'):
-        return api_response(success=False, message='无效的角色')
+        return _app.api_response(success=False, message='无效的角色')
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            return api_response(success=False, message='用户不存在', code=404)
+            return _app.api_response(success=False, message='用户不存在', code=404)
 
         old_role = user['role']
         conn.execute("UPDATE users SET role = ? WHERE id = ?", (new_role, user_id))
         conn.commit()
 
-        log_message(log_type='security', log_level='WARNING',
+        _app.log_message(log_type='security', log_level='WARNING',
                    message=f'管理员修改用户角色: {user["username"]} ({old_role} -> {new_role})',
                    user_id=session['user_id'], action='update_user_role',
                    target_id=user_id, target_type='user', request=request)
 
-        return api_response(success=True, message=f'用户角色已更新为: {new_role}')
+        return _app.api_response(success=True, message=f'用户角色已更新为: {new_role}')
     finally:
         conn.close()
 
@@ -55,16 +70,16 @@ def update_user_role(user_id):
 @admin_bp.route('/delete-user/<user_id>', methods=['POST'], endpoint='delete_user')
 def delete_user(user_id):
     if session.get('role') != 'admin':
-        return api_response(success=False, message='权限不足', code=403)
+        return _app.api_response(success=False, message='权限不足', code=403)
 
     if user_id == session.get('user_id'):
-        return api_response(success=False, message='不能删除自己的账号')
+        return _app.api_response(success=False, message='不能删除自己的账号')
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if not user:
-            return api_response(success=False, message='用户不存在', code=404)
+            return _app.api_response(success=False, message='用户不存在', code=404)
 
         tables_to_clean = [
             ("files", "user_id"), ("folders", "user_id"),
@@ -84,11 +99,11 @@ def delete_user(user_id):
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
 
-        log_message(log_type='security', log_level='CRITICAL',
+        _app.log_message(log_type='security', log_level='CRITICAL',
                    message=f'管理员删除用户: {user["username"]}',
                    user_id=session['user_id'], action='delete_user',
                    target_id=user_id, target_type='user', request=request)
 
-        return api_response(success=True, message=f'用户 {user["username"]} 已被删除')
+        return _app.api_response(success=True, message=f'用户 {user["username"]} 已被删除')
     finally:
         conn.close()

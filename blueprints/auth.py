@@ -1,13 +1,33 @@
 from flask import Blueprint, request, render_template, redirect, url_for, flash, jsonify, session
-from app import (app, get_db, get_all_files, generate_verification_code,
-                send_verification_email, save_verification_code, verify_code,
-                log_message, log_login_attempt, api_response)
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import uuid
 import json
 
 auth_bp = Blueprint('auth', __name__)
+
+
+class _LazyAppImports:
+    """懒加载代理，避免循环导入"""
+    def __getattr__(self, name):
+        if name == 'app':
+            from app import app as _app
+            return _app
+        from app import (
+            get_db, get_all_files, generate_verification_code,
+            send_verification_email, save_verification_code, verify_code,
+            log_message, log_login_attempt, api_response,
+            get_access_logs, get_file_by_id, page_error_response,
+            get_like_count, get_favorite_count, is_liked, is_favorited,
+            assign_category_to_file, get_favorite_files
+        )
+        locals_dict = locals()
+        if name in locals_dict:
+            return locals_dict[name]
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+
+_app = _LazyAppImports()
 
 
 @auth_bp.route('/auth', methods=['GET', 'POST'], endpoint='auth')
@@ -24,11 +44,11 @@ def auth():
                 flash('请填写所有必填项')
                 return redirect(url_for('auth'))
 
-            if not verify_code(email, code, 'register'):
+            if not _app.verify_code(email, code, 'register'):
                 flash('验证码无效或已过期')
                 return redirect(url_for('auth'))
 
-            conn = get_db()
+            conn = _app.get_db()
             try:
                 existing = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
                 if existing:
@@ -44,8 +64,9 @@ def auth():
                 session['user_id'] = user_id
                 session['username'] = username
                 session['email'] = email
+                session['role'] = 'user'
 
-                log_message(
+                _app.log_message(
                     log_type='operation',
                     log_level='INFO',
                     message='用户注册成功',
@@ -63,35 +84,115 @@ def auth():
             finally:
                 conn.close()
 
+        elif action == 'send_code':
+            if not email:
+                return jsonify(success=False, message='请输入邮箱地址')
+
+            conn = _app.get_db()
+            try:
+                mode = request.args.get('mode', 'login')
+                purpose = 'register' if mode == 'register' else 'login'
+
+                login_method = request.form.get('login_method', '')
+                existing = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+
+                if login_method != 'password' and mode == 'register' and existing:
+                    return jsonify(success=False, message='该邮箱已被使用')
+
+                code = _app.generate_verification_code()
+                _app.save_verification_code(email, code, purpose)
+
+                try:
+                    _app.send_verification_email(email, code, purpose)
+                    return jsonify(success=True, message='验证码已发送，请查收邮件')
+                except Exception as email_error:
+                    error_msg = str(email_error)
+                    if 'SMTP配置不完整' in error_msg:
+                        return jsonify(success=False, message='邮件服务未配置，请联系管理员配置SMTP邮箱服务')
+                    else:
+                        return jsonify(success=False, message=f'验证码发送失败: {error_msg}')
+            except Exception as e:
+                return jsonify(success=False, message=f'发送验证码失败: {str(e)}')
+            finally:
+                conn.close()
+
+        elif action == 'login_with_code':
+            mode = request.form.get('mode', 'login')
+            login_method = request.form.get('login_method', 'code')
+            verify_url = url_for('auth', mode=mode, login_method=login_method, step='verify', email=email)
+
+            if not all([email, code]):
+                flash('请填写邮箱和验证码')
+                return redirect(verify_url)
+
+            terms = request.form.get('terms')
+            if not terms:
+                flash('请同意隐私政策和服务条款')
+                return redirect(verify_url)
+
+            if not _app.verify_code(email, code, 'login'):
+                flash('验证码无效或已过期')
+                return redirect(verify_url)
+
+            conn = _app.get_db()
+            try:
+                user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+
+                if not user:
+                    _app.log_login_attempt(email, 0, request)
+                    flash('该邮箱尚未注册')
+                    return redirect(verify_url)
+
+                _app.log_login_attempt(email, 1, request)
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['email'] = user['email']
+                session['role'] = user['role'] if user['role'] else 'user'
+
+                _app.log_message(
+                    log_type='operation',
+                    log_level='INFO',
+                    message='用户验证码登录成功',
+                    user_id=user['id'],
+                    action='login_with_code',
+                    request=request
+                )
+
+                flash('登录成功')
+                return redirect(url_for('index'))
+            except Exception as e:
+                flash(f'登录失败: {str(e)}')
+                return redirect(verify_url)
+            finally:
+                conn.close()
+
         elif action == 'login':
             if not all([email, password]):
                 flash('请填写邮箱和密码')
                 return redirect(url_for('auth'))
 
-            conn = get_db()
+            conn = _app.get_db()
             try:
                 user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
 
                 if not user:
-                    log_login_attempt(email, 0, request)
+                    _app.log_login_attempt(email, 0, request)
                     flash('邮箱或密码错误')
                     return redirect(url_for('auth'))
 
                 if not check_password_hash(user['password'], password):
-                    log_login_attempt(email, 0, request)
+                    _app.log_login_attempt(email, 0, request)
                     flash('邮箱或密码错误')
                     return redirect(url_for('auth'))
 
-                log_login_attempt(email, 1, request)
+                _app.log_login_attempt(email, 1, request)
 
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 session['email'] = user['email']
+                session['role'] = user['role'] if user['role'] else 'user'
 
-                if user.get('role'):
-                    session['role'] = user['role']
-
-                log_message(
+                _app.log_message(
                     log_type='operation',
                     log_level='INFO',
                     message=f'用户登录: {user["username"]}',
@@ -109,7 +210,15 @@ def auth():
             finally:
                 conn.close()
 
-    return render_template('auth.html')
+    mode = request.args.get('mode', 'login')
+    login_method = request.args.get('login_method', 'password')
+    page_title = '注册账号' if mode == 'register' else '登录账号'
+
+    return render_template('auth.html',
+                           username=session.get('username'),
+                           mode=mode,
+                           login_method=login_method,
+                           page_title=page_title)
 
 
 @auth_bp.route('/user-center', endpoint='user_center')
@@ -117,20 +226,34 @@ def user_center():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
 
-        files = get_all_files(user_id=session['user_id'])
+        if not user:
+            session.clear()
+            flash('用户不存在，请重新登录')
+            return redirect(url_for('auth'))
+
+        files = _app.get_all_files(user_id=session['user_id'])
 
         total_size = sum(f.get('size', 0) for f in files)
 
         like_count = sum(f.get('like_count', 0) for f in files)
         favorite_count = sum(f.get('favorite_count', 0) for f in files)
 
-        access_logs = get_access_logs(session['user_id'])
+        favorite_files = _app.get_favorite_files(session['user_id'])
 
-        recent_logs = sorted(access_logs, key=lambda x: x.get('access_time', ''), reverse=True)[:10]
+        access_logs = _app.get_access_logs(session['user_id'])
+
+        operation_logs = conn.execute(
+            "SELECT * FROM operation_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+            (session['user_id'],)).fetchall()
+        operation_logs = [dict(log) for log in operation_logs]
+
+        folder_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM folders WHERE user_id = ?",
+            (session['user_id'],)).fetchone()['cnt']
 
         return render_template(
             'user_center.html',
@@ -141,8 +264,10 @@ def user_center():
             total_size=total_size,
             like_count=like_count,
             favorite_count=favorite_count,
-            access_log_count=len(access_logs),
-            recent_logs=recent_logs
+            favorite_files=favorite_files,
+            access_logs=access_logs,
+            operation_logs=operation_logs,
+            folder_count=folder_count
         )
     finally:
         conn.close()
@@ -162,7 +287,7 @@ def update_profile():
     if len(username) < 2 or len(username) > 20:
         return jsonify({'success': False, 'message': '用户名长度需在2-20个字符之间'})
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         existing = conn.execute(
             "SELECT id FROM users WHERE username = ? AND id != ?",
@@ -177,7 +302,7 @@ def update_profile():
             header, encoded = avatar_data.split(',', 1)
             ext = 'png' if 'png' in header else 'jpg'
             avatar_filename = f"avatar_{session['user_id']}.{ext}"
-            avatar_dir = Path(app.static_folder) / 'avatars'
+            avatar_dir = Path(_app.app.static_folder) / 'avatars'
             avatar_dir.mkdir(parents=True, exist_ok=True)
             avatar_path = str(avatar_dir / avatar_filename)
             with open(avatar_path, 'wb') as f:
@@ -194,7 +319,7 @@ def update_profile():
 
         session['username'] = username
 
-        log_message(
+        _app.log_message(
             log_type='operation',
             log_level='INFO',
             message='用户更新个人资料',
@@ -219,7 +344,7 @@ def logout():
     username = session.pop('username', None)
 
     if user_id:
-        log_message(
+        _app.log_message(
             log_type='operation',
             log_level='INFO',
             message=f'用户退出登录: {username or "未知"}',
@@ -236,7 +361,7 @@ def logout():
 def my_feedback():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
-    conn = get_db()
+    conn = _app.get_db()
     try:
         feedbacks = conn.execute(
             "SELECT * FROM operation_logs WHERE user_id = ? AND action LIKE '%feedback%' ORDER BY created_at DESC",
@@ -261,7 +386,7 @@ def new_feedback():
             flash('反馈内容不能为空')
             return redirect(url_for('new_feedback'))
 
-        conn = get_db()
+        conn = _app.get_db()
         try:
             conn.execute("""
                 INSERT INTO operation_logs (user_id, action, target_type, message, details, created_at)
@@ -282,7 +407,7 @@ def new_feedback():
 def delete_feedback(feedback_id):
     if 'user_id' not in session:
         return jsonify(success=False, message="未登录", code=401)
-    conn = get_db()
+    conn = _app.get_db()
     try:
         feedback = conn.execute("SELECT * FROM operation_logs WHERE id = ?", (feedback_id,)).fetchone()
         if not feedback or feedback['user_id'] != session['user_id']:
@@ -299,7 +424,7 @@ def feedback_simple():
     return render_template('feedback_simple.html', username=session.get('username'))
 
 
-@auth_bp.route('/upload', methods=['GET', 'POST'], endpoint='upload')
+@auth_bp.route('/upload', methods=['GET', 'POST'], endpoint='upload_page')
 def upload():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
@@ -313,9 +438,16 @@ def upload():
 
         if not files or files[0].filename == '':
             flash('请选择文件')
-            return redirect(url_for('upload'))
+            return redirect(url_for('upload_page'))
 
-        conn = get_db()
+        html_exts = ('.html', '.htm')
+        non_html_files = [f for f in files if f.filename and os.path.splitext(f.filename)[1].lower() not in html_exts]
+        if non_html_files:
+            non_html_names = ', '.join(f.filename for f in non_html_files)
+            flash('非 HTML 文件（{}）只能上传到项目文件夹中，请先创建项目文件夹再上传'.format(non_html_names))
+            return redirect(url_for('upload_page'))
+
+        conn = _app.get_db()
         try:
             current_user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
             is_admin = current_user and current_user['role'] == 'admin'
@@ -332,7 +464,7 @@ def upload():
                 ext = os.path.splitext(file.filename)[1]
                 stored_name = f"{file_id}{ext}"
 
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], stored_name)
+                file_path = os.path.join(_app.app.config['UPLOAD_FOLDER'], stored_name)
                 file.save(file_path)
 
                 file_size = os.path.getsize(file_path)
@@ -341,7 +473,9 @@ def upload():
                 try:
                     from app import upload_to_dkfile
                     dkfile_info = upload_to_dkfile(file, stored_name, file_path)
-                except:
+                except (ImportError, AttributeError):
+                    pass
+                except Exception:
                     pass
 
                 conn.execute('''INSERT INTO files (id, user_id, filename, stored_name, path, size, dkfile, project_name, project_desc, folder_id, created_at)
@@ -350,11 +484,11 @@ def upload():
                             dkfile_info, project_name, project_desc))
 
                 if file_category:
-                    assign_category_to_file(conn, file_id, file_category, target_user_id)
+                    _app.assign_category_to_file(conn, file_id, file_category, target_user_id)
 
             conn.commit()
 
-            log_message(log_type='operation', log_level='INFO',
+            _app.log_message(log_type='operation', log_level='INFO',
                        message='文件上传完成', user_id=session['user_id'],
                        action='upload', request=request)
 
@@ -363,29 +497,30 @@ def upload():
         except Exception as e:
             conn.rollback()
             flash(f'上传失败: {str(e)}')
-            return redirect(url_for('upload'))
+            return redirect(url_for('upload_page'))
         finally:
             conn.close()
 
     return render_template('upload_page.html', username=session.get('username'))
 
 
-@auth_bp.route('/detail/<file_id>', endpoint='detail')
+@auth_bp.route('/detail/<file_id>', endpoint='file_detail')
 def detail(file_id):
-    conn = get_db()
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
+
+    conn = _app.get_db()
     try:
-        file = get_file_by_id(file_id)
+        file = _app.get_file_by_id(file_id)
         if not file:
-            return page_error_response('index', '文件不存在', 404)
+            return _app.page_error_response('index', '文件不存在', 404)
 
         is_owner = file['user_id'] == session.get('user_id') or session.get('role') == 'admin'
-        if not is_owner:
-            return page_error_response('index', '无权访问此文件', 403)
 
-        file['like_count'] = get_like_count(file_id)
-        file['favorite_count'] = get_favorite_count(file_id)
-        file['is_liked'] = is_liked(file_id, session.get('user_id'))
-        file['is_favorited'] = is_favorited(file_id, session.get('user_id'))
+        file['like_count'] = _app.get_like_count(file_id)
+        file['favorite_count'] = _app.get_favorite_count(file_id)
+        file['is_liked'] = _app.is_liked(file_id, session.get('user_id'))
+        file['is_favorited'] = _app.is_favorited(file_id, session.get('user_id'))
 
         categories = []
         cat_rows = conn.execute('''SELECT c.* FROM categories c
@@ -404,14 +539,18 @@ def detail(file_id):
         all_tags = [dict(t) for t in conn.execute("SELECT * FROM tags").fetchall()]
         all_categories = [dict(c) for c in conn.execute("SELECT * FROM categories").fetchall()]
 
+        file['categories'] = categories
+        file['tags'] = tags
+
         return render_template(
             'detail.html',
             username=session.get('username'),
-            file=file,
+            item=file,
             categories=categories,
             tags=tags,
             all_tags=all_tags,
-            all_categories=all_categories
+            all_categories=all_categories,
+            is_owner=is_owner
         )
     finally:
         conn.close()
@@ -421,9 +560,13 @@ def detail(file_id):
 def account_settings():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+        if not user:
+            session.clear()
+            flash('用户不存在，请重新登录')
+            return redirect(url_for('auth'))
         return render_template('account_settings.html', username=session.get('username'), user=dict(user))
     finally:
         conn.close()
@@ -444,7 +587,7 @@ def change_password():
     if len(new_password) < 6:
         return jsonify(success=False, message='新密码至少需要6个字符')
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute('SELECT password FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         if not check_password_hash(user['password'], old_password):
@@ -454,7 +597,7 @@ def change_password():
         conn.execute('UPDATE users SET password = ? WHERE id = ?', (new_hash, session['user_id']))
         conn.commit()
 
-        log_message(log_type='security', log_level='INFO',
+        _app.log_message(log_type='security', log_level='INFO',
                    message='用户修改了密码', user_id=session['user_id'],
                    action='change_password', request=request)
 
@@ -478,7 +621,7 @@ def change_email():
     if '@' not in new_email or '.' not in new_email:
         return jsonify(success=False, message='邮箱格式不正确')
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute('SELECT password, email FROM users WHERE id = ?', (session['user_id'],)).fetchone()
         if not check_password_hash(user['password'], password):
@@ -495,7 +638,7 @@ def change_email():
         conn.commit()
         session['email'] = new_email
 
-        log_message(log_type='security', log_level='INFO',
+        _app.log_message(log_type='security', log_level='INFO',
                    message=f'用户修改邮箱: {user["email"]} -> {new_email}',
                    user_id=session['user_id'], action='change_email', request=request)
 
@@ -515,7 +658,7 @@ def send_email_code():
     if '@' not in email:
         return jsonify(success=False, message='邮箱格式不正确')
 
-    conn = get_db()
+    conn = _app.get_db()
     try:
         user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
         if purpose == 'register' and user:
@@ -523,9 +666,9 @@ def send_email_code():
         if purpose in ('reset_email', 'change_email') and not user:
             return jsonify(success=False, message='该邮箱未注册')
 
-        code = generate_verification_code(email, purpose)
-        send_verification_email(email, code, purpose)
-        save_verification_code(email, code, purpose)
+        code = _app.generate_verification_code()
+        _app.send_verification_email(email, code, purpose)
+        _app.save_verification_code(email, code, purpose)
 
         return jsonify(success=True, message='验证码已发送，请查收邮件')
     finally:

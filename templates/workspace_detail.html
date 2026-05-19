@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}{{ workspace.name }} - 工作空间{% endblock %}
+
+{% block content %}
+<div class="ws-detail-container">
+    <div class="ws-detail-header">
+        <a href="/workspaces" class="back-link">← 返回空间列表</a>
+        <div class="ws-info">
+            <span class="ws-icon">{{ workspace.icon or '📁' }}</span>
+            <div>
+                <h1>{{ workspace.name }}</h1>
+                <p>{{ workspace.description or '' }}</p>
+            </div>
+        </div>
+        <div class="ws-actions">
+            {% if role in ['owner', 'admin'] %}
+            <button class="btn-secondary" onclick="showInviteModal()">邀请成员</button>
+            {% endif %}
+            {% if role == 'owner' %}
+            <button class="btn-secondary" onclick="showSettingsModal()">空间设置</button>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="ws-detail-tabs">
+        <button class="tab-btn active" data-tab="files-tab" onclick="switchTab('files-tab')">文件</button>
+        <button class="tab-btn" data-tab="members-tab" onclick="switchTab('members-tab')">成员</button>
+        <button class="tab-btn" data-tab="activity-tab" onclick="switchTab('activity-tab')">动态</button>
+    </div>
+
+    <div id="files-tab" class="tab-content active">
+        {% if role in ['owner', 'admin', 'editor'] %}
+        <div class="add-file-section">
+            <button class="btn-primary" onclick="showAddFileModal()">添加文件</button>
+        </div>
+        {% endif %}
+        <div id="ws-files-list" class="ws-files-grid"></div>
+    </div>
+
+    <div id="members-tab" class="tab-content">
+        <div id="ws-members-list" class="ws-members-list"></div>
+    </div>
+
+    <div id="activity-tab" class="tab-content">
+        <div id="ws-activity-list" class="ws-activity-list">
+            <div class="empty-state">暂无动态</div>
+        </div>
+    </div>
+</div>
+
+<div id="add-file-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>添加文件到空间</h2>
+            <button class="modal-close" onclick="hideAddFileModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>选择文件</label>
+                <select id="file-select" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
+                    <option value="">加载中...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <input type="text" id="file-desc" placeholder="文件描述（可选）">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="hideAddFileModal()">取消</button>
+            <button class="btn-primary" onclick="addFileToWorkspace()">添加</button>
+        </div>
+    </div>
+</div>
+
+<div id="invite-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>邀请成员</h2>
+            <button class="modal-close" onclick="hideInviteModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>邮箱地址</label>
+                <input type="email" id="invite-email" placeholder="输入成员邮箱">
+            </div>
+            <div class="form-group">
+                <label>角色</label>
+                <select id="invite-role">
+                    <option value="viewer">查看者</option>
+                    <option value="editor">编辑者</option>
+                    <option value="admin">管理员</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="hideInviteModal()">取消</button>
+            <button class="btn-primary" onclick="inviteMember()">邀请</button>
+        </div>
+    </div>
+</div>
+
+<div id="settings-modal" class="modal-overlay" style="display:none">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>空间设置</h2>
+            <button class="modal-close" onclick="hideSettingsModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>空间名称</label>
+                <input type="text" id="settings-name" value="{{ workspace.name }}">
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="settings-desc" rows="3">{{ workspace.description or '' }}</textarea>
+            </div>
+            <div class="form-group">
+                <label>图标</label>
+                <input type="text" id="settings-icon" value="{{ workspace.icon or '📁' }}" maxlength="4">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-secondary" onclick="hideSettingsModal()">取消</button>
+            <button class="btn-primary" onclick="saveSettings()">保存</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.ws-detail-container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.ws-detail-header { margin-bottom: 24px; }
+.back-link { color: var(--color-primary); text-decoration: none; font-size: 14px; display: inline-block; margin-bottom: 12px; }
+.back-link:hover { text-decoration: underline; }
+.ws-info { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.ws-icon { font-size: 40px; }
+.ws-info h1 { margin: 0; font-size: 24px; }
+.ws-info p { margin: 4px 0 0; color: var(--color-gray-500); font-size: 14px; }
+.ws-actions { display: flex; gap: 8px; }
+.ws-detail-tabs { display: flex; gap: 8px; border-bottom: 2px solid var(--color-gray-200); margin-bottom: 20px; }
+.tab-btn { padding: 8px 16px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--color-gray-500); border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: var(--color-primary); border-bottom-color: var(--color-primary); font-weight: 600; }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+.add-file-section { margin-bottom: 16px; }
+.ws-files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.ws-file-card { background: white; border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); padding: 16px; transition: box-shadow 0.2s; }
+.ws-file-card:hover { box-shadow: var(--shadow-sm); }
+.ws-file-name { font-weight: 600; margin-bottom: 4px; }
+.ws-file-meta { font-size: 12px; color: var(--color-gray-500); }
+.ws-members-list { display: flex; flex-direction: column; gap: 8px; }
+.ws-member-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: white; border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); }
+.ws-member-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--color-primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; }
+.ws-member-info { flex: 1; }
+.ws-member-name { font-weight: 600; font-size: 14px; }
+.ws-member-role { font-size: 12px; color: var(--color-gray-500); }
+.btn-primary { background: var(--color-primary); color: white; border: none; padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-secondary { background: var(--color-gray-100); color: var(--color-gray-700); border: none; padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; }
+.btn-danger-sm { background: none; border: 1px solid var(--color-danger); color: var(--color-danger); padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; }
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; border-radius: var(--radius-lg); width: 90%; max-width: 480px; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--color-gray-200); }
+.modal-header h2 { margin: 0; font-size: 18px; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--color-gray-500); }
+.modal-body { padding: 20px; }
+.modal-footer { padding: 16px 20px; border-top: 1px solid var(--color-gray-200); display: flex; justify-content: flex-end; gap: 8px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--color-gray-300); border-radius: var(--radius-sm); font-size: 14px; box-sizing: border-box; }
+.empty-state { text-align: center; padding: 48px 24px; color: var(--color-gray-500); }
+</style>
+
+<script>
+const wsId = '{{ workspace.id }}';
+const userRole = '{{ role }}';
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+    document.getElementById(tabId).classList.add('active');
+}
+
+function showAddFileModal() { loadMyFiles(); document.getElementById('add-file-modal').style.display = 'flex'; }
+function hideAddFileModal() { document.getElementById('add-file-modal').style.display = 'none'; }
+function showInviteModal() { document.getElementById('invite-modal').style.display = 'flex'; }
+function hideInviteModal() { document.getElementById('invite-modal').style.display = 'none'; }
+function showSettingsModal() { document.getElementById('settings-modal').style.display = 'flex'; }
+function hideSettingsModal() { document.getElementById('settings-modal').style.display = 'none'; }
+
+async function loadWorkspaceFiles() {
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/files`);
+        const data = await resp.json();
+        if (!data.success) return;
+        const list = document.getElementById('ws-files-list');
+        const files = data.data.files || [];
+        list.innerHTML = files.length ? files.map(f => `
+            <div class="ws-file-card">
+                <div class="ws-file-name">${escapeHtml(f.filename)}</div>
+                <div class="ws-file-meta">${formatSize(f.size)} · ${escapeHtml(f.uploader_name || '')} · ${f.added_at || ''}</div>
+                ${userRole !== 'viewer' ? `<button class="btn-danger-sm" onclick="removeFile('${f.id}')">移除</button>` : ''}
+            </div>
+        `).join('') : '<div class="empty-state">暂无文件</div>';
+    } catch(e) { console.error(e); }
+}
+
+async function loadMembers() {
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/members`);
+        const data = await resp.json();
+        if (!data.success) return;
+        const list = document.getElementById('ws-members-list');
+        const members = data.data.members || [];
+        list.innerHTML = members.map(m => {
+            const initial = (m.username || '?')[0].toUpperCase();
+            const roleLabel = {owner:'拥有者',admin:'管理员',editor:'编辑者',viewer:'查看者'}[m.role] || m.role;
+            return `<div class="ws-member-item">
+                <div class="ws-member-avatar">${initial}</div>
+                <div class="ws-member-info">
+                    <div class="ws-member-name">${escapeHtml(m.username || '')}</div>
+                    <div class="ws-member-role">${roleLabel}</div>
+                </div>
+                ${userRole === 'owner' && m.role !== 'owner' ? `<button class="btn-danger-sm" onclick="removeMember('${m.user_id}')">移除</button>` : ''}
+            </div>`;
+        }).join('');
+    } catch(e) { console.error(e); }
+}
+
+async function loadMyFiles() {
+    try {
+        const resp = await fetch('/api/my-files?per_page=100');
+        const data = await resp.json();
+        const sel = document.getElementById('file-select');
+        if (!data.success) { sel.innerHTML = '<option value="">加载失败</option>'; return; }
+        const files = data.data.files || [];
+        if (files.length === 0) {
+            sel.innerHTML = '<option value="">暂无可添加的文件</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">选择文件...</option>' + files.map(f =>
+            `<option value="${f.id}">${escapeHtml(f.filename)} (${formatSize(f.size)})</option>`
+        ).join('');
+    } catch(e) {
+        console.error(e);
+        document.getElementById('file-select').innerHTML = '<option value="">加载失败</option>';
+    }
+}
+
+async function addFileToWorkspace() {
+    const fileId = document.getElementById('file-select').value;
+    const desc = document.getElementById('file-desc').value.trim();
+    if (!fileId) { alert('请选择文件'); return; }
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/files`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({file_id: fileId, description: desc})
+        });
+        const data = await resp.json();
+        if (data.success) { hideAddFileModal(); loadWorkspaceFiles(); }
+        else { alert(data.message || '添加失败'); }
+    } catch(e) { alert('添加失败'); }
+}
+
+async function removeFile(fileId) {
+    if (!confirm('确定移除此文件？')) return;
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/files/${fileId}`, {method: 'DELETE'});
+        const data = await resp.json();
+        if (data.success) loadWorkspaceFiles();
+        else alert(data.message);
+    } catch(e) { alert('移除失败'); }
+}
+
+async function inviteMember() {
+    const email = document.getElementById('invite-email').value.trim();
+    const role = document.getElementById('invite-role').value;
+    if (!email) { alert('请输入邮箱'); return; }
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/members`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({email, role})
+        });
+        const data = await resp.json();
+        if (data.success) { hideInviteModal(); loadMembers(); }
+        else { alert(data.message || '邀请失败'); }
+    } catch(e) { alert('邀请失败'); }
+}
+
+async function removeMember(userId) {
+    if (!confirm('确定移除此成员？')) return;
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}/members/${userId}`, {method: 'DELETE'});
+        const data = await resp.json();
+        if (data.success) loadMembers();
+        else alert(data.message);
+    } catch(e) { alert('移除失败'); }
+}
+
+function formatSize(bytes) {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+    return bytes.toFixed(1) + ' ' + units[i];
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+async function saveSettings() {
+    const name = document.getElementById('settings-name').value.trim();
+    const description = document.getElementById('settings-desc').value.trim();
+    const icon = document.getElementById('settings-icon').value.trim();
+    if (!name) { alert('空间名称不能为空'); return; }
+    try {
+        const resp = await fetch(`/api/workspaces/${wsId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name, description, icon})
+        });
+        const data = await resp.json();
+        if (data.success) { hideSettingsModal(); location.reload(); }
+        else { alert(data.message || '保存失败'); }
+    } catch(e) { alert('保存失败: ' + e.message); }
+}
+
+loadWorkspaceFiles();
+loadMembers();
+</script>
+{% endblock %}

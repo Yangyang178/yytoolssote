@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='blog.css') }}">
+<div class="detail-container">
+  <section class="file-detail-panel">
+    <div class="detail-header">
+      <a href="{{ url_for('file_detail', file_id=file.id) }}" class="btn btn-secondary back-btn">← 返回详情</a>
+      <h1>分享文件: {{ file.filename }}</h1>
+    </div>
+
+    <div class="detail-section">
+      <h2>文件信息</h2>
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="detail-label">文件名</span>
+          <strong class="detail-value">{{ file.filename }}</strong>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">文件大小</span>
+          <strong class="detail-value">{{ (file.size or 0) | int }} B</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-section">
+      <h2>创建分享链接</h2>
+      <form action="{{ url_for('share_file') }}" method="post" class="feedback-form">
+        <input type="hidden" name="file_id" value="{{ file.id }}">
+        <div class="form-group">
+          <label for="expires_at">过期时间 (可选)</label>
+          <input type="datetime-local" id="expires_at" name="expires_at" class="form-input">
+        </div>
+        <div class="form-group">
+          <label for="share_password">访问密码 (可选)</label>
+          <input type="text" id="share_password" name="share_password" class="form-input" placeholder="留空则无需密码">
+        </div>
+        <div class="form-group">
+          <label for="download_limit">下载次数限制 (可选)</label>
+          <input type="number" id="download_limit" name="download_limit" class="form-input" placeholder="留空则不限制" min="1">
+        </div>
+        <button type="submit" class="btn btn-primary">生成分享链接</button>
+      </form>
+    </div>
+
+    {% if shares %}
+    <div class="detail-section">
+      <h2>已有分享链接</h2>
+      <div class="detail-grid">
+        {% for share in shares %}
+        <div class="detail-item full-width" style="border: 1px solid #e5e7eb; padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong>链接:</strong>
+              <a href="{{ share.share_url }}" target="_blank">{{ share.share_url }}</a>
+              <br>
+              <small>创建于: {{ share.created_at }} | 下载次数: {{ share.download_count or 0 }}</small>
+              {% if share.expires_at %}<small> | 过期时间: {{ share.expires_at }}</small>{% endif %}
+              {% if share.password %}<small> | 有密码保护</small>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <div class="detail-section">
+      <div class="empty">暂无分享链接</div>
+    </div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

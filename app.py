@@ -18,6 +18,7 @@ import requests
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 import data_security
+from flask_socketio import SocketIO
 
 # ==================== 缓存系统实现 ====================
 
@@ -2349,6 +2350,8 @@ data_security.get_encryption().ensure_key()
 print(f"[安全] 数据加密: {'已启用' if data_security.get_encryption().available else '未配置密钥'}")
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', manage_session=False)
+
 # 静态文件缓存配置
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=30)  # 静态文件默认缓存30天
 
@@ -2356,11 +2359,21 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=30)  # 静态文件默�
 @app.context_processor
 def inject_cdn_helpers():
     """向模板注入CDN辅助函数"""
+    current_user = None
+    if 'user_id' in session:
+        try:
+            conn = get_db()
+            user_row = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+            if user_row:
+                current_user = dict(user_row)
+        except Exception:
+            pass
     return {
         'url_for_static': url_for_static,
         'cdn_enabled': app.config.get('USE_CDN', False),
         'cdn_url': app.config.get('CDN_URL', ''),
         'static_version': app.config.get('STATIC_VERSION', 'v1'),
+        'current_user': current_user,
     }
 
 # 添加缓存控制头的中间件
@@ -3043,13 +3056,41 @@ def init_db():
                         id TEXT PRIMARY KEY,
                         file_id TEXT NOT NULL,
                         user_id TEXT NOT NULL,
-                        share_code TEXT NOT NULL UNIQUE,
+                        token TEXT,
+                        share_url TEXT,
+                        password TEXT,
+                        download_count INTEGER DEFAULT 0,
+                        download_limit INTEGER,
                         expires_at TIMESTAMP,
+                        created_by TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        access_count INTEGER DEFAULT 0,
                         FOREIGN KEY (file_id) REFERENCES files (id),
                         FOREIGN KEY (user_id) REFERENCES users (id)
                     )''')
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN token TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN share_url TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN password TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN download_count INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN download_limit INTEGER')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE file_shares ADD COLUMN created_by TEXT')
+        except sqlite3.OperationalError:
+            pass
         
         # 为files表添加is_deleted字段
         try:
@@ -3083,15 +3124,23 @@ def init_db():
 
         # 创建2FA密钥存储表
         conn.execute('''CREATE TABLE IF NOT EXISTS user_2fa (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        id TEXT PRIMARY KEY,
                         user_id TEXT NOT NULL UNIQUE,
-                        secret_hash TEXT NOT NULL,
-                        is_enabled INTEGER DEFAULT 0,
+                        secret TEXT NOT NULL,
+                        verified INTEGER DEFAULT 0,
                         backup_codes_hash TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         last_used_at TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id)
                     )''')
+        try:
+            conn.execute('ALTER TABLE user_2fa ADD COLUMN secret TEXT')
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute('ALTER TABLE user_2fa ADD COLUMN verified INTEGER DEFAULT 0')
+        except sqlite3.OperationalError:
+            pass
 
         # 创建登录设备管理表
         conn.execute('''CREATE TABLE IF NOT EXISTS login_devices (
@@ -3125,6 +3174,152 @@ def init_db():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(id)
                     )''')
+
+        # 创建通知表
+        conn.execute('''CREATE TABLE IF NOT EXISTS notifications (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        type TEXT NOT NULL,
+                        category TEXT,
+                        title TEXT NOT NULL,
+                        content TEXT,
+                        icon TEXT,
+                        action_url TEXT,
+                        action_text TEXT,
+                        source_type TEXT,
+                        source_id TEXT,
+                        is_read INTEGER DEFAULT 0,
+                        read_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        # 创建通知设置表
+        conn.execute('''CREATE TABLE IF NOT EXISTS notification_settings (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL UNIQUE,
+                        settings_json TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        # 创建分片上传表
+        conn.execute('''CREATE TABLE IF NOT EXISTS chunk_uploads (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        filename TEXT NOT NULL,
+                        total_size INTEGER NOT NULL,
+                        chunk_size INTEGER NOT NULL,
+                        file_hash TEXT,
+                        status TEXT DEFAULT 'uploading',
+                        uploaded_chunks TEXT DEFAULT '',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_activity TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        # 创建统一日志表
+        conn.execute('''CREATE TABLE IF NOT EXISTS logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        log_type TEXT NOT NULL,
+                        log_level TEXT NOT NULL,
+                        message TEXT NOT NULL,
+                        user_id TEXT,
+                        ip_address TEXT,
+                        user_agent TEXT,
+                        action TEXT,
+                        extra_data TEXT,
+                        target_id TEXT,
+                        target_type TEXT,
+                        details TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS api_keys (
+                        id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL,
+                        name TEXT NOT NULL,
+                        key_hash TEXT NOT NULL,
+                        key_prefix TEXT NOT NULL,
+                        permissions TEXT DEFAULT 'read',
+                        last_used_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        expires_at TIMESTAMP,
+                        is_active INTEGER DEFAULT 1,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS workspaces (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        description TEXT,
+                        icon TEXT,
+                        owner_id TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        settings_json TEXT,
+                        FOREIGN KEY (owner_id) REFERENCES users(id)
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS workspace_members (
+                        id TEXT PRIMARY KEY,
+                        workspace_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        role TEXT DEFAULT 'viewer',
+                        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        permissions_json TEXT,
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS workspace_files (
+                        id TEXT PRIMARY KEY,
+                        workspace_id TEXT NOT NULL,
+                        file_id TEXT NOT NULL,
+                        uploaded_by TEXT NOT NULL,
+                        visibility TEXT DEFAULT 'workspace',
+                        tags TEXT,
+                        description TEXT,
+                        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
+                        FOREIGN KEY (file_id) REFERENCES files(id),
+                        FOREIGN KEY (uploaded_by) REFERENCES users(id)
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS file_comments (
+                        id TEXT PRIMARY KEY,
+                        file_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        content TEXT NOT NULL,
+                        parent_id TEXT,
+                        is_resolved INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP,
+                        FOREIGN KEY (file_id) REFERENCES files(id),
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        conn.execute('''CREATE TABLE IF NOT EXISTS comment_reactions (
+                        id TEXT PRIMARY KEY,
+                        comment_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        emoji TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (comment_id) REFERENCES file_comments(id),
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )''')
+
+        try:
+            conn.execute('ALTER TABLE file_versions ADD COLUMN change_summary TEXT')
+        except sqlite3.OperationalError:
+            pass
+
+        try:
+            conn.execute('ALTER TABLE file_versions ADD COLUMN diff_data TEXT')
+        except sqlite3.OperationalError:
+            pass
 
         # 为users表添加2FA相关字段
         try:
@@ -3438,9 +3633,13 @@ def log_login_attempt(email, success, request):
 
 # 页面错误响应
 def page_error_response(redirect_url, message, code=404):
-    # 简化的页面错误响应
     flash(message)
-    return redirect(url_for(redirect_url))
+    if redirect_url == 'index':
+        return render_template('index.html', error=message, files=[], username=session.get('username'), role=session.get('role')), code
+    try:
+        return redirect(url_for(redirect_url))
+    except Exception:
+        return render_template('index.html', error=message, files=[], username=session.get('username'), role=session.get('role')), code
 
 
 # API响应格式化
@@ -3723,21 +3922,24 @@ def delete_file(file_id, user_id):
 def get_user_storage_usage(user_id):
     """获取用户存储空间使用情况"""
     conn = get_db()
-    result = conn.execute('''
-        SELECT COALESCE(SUM(size), 0) as total_size
-        FROM files
-        WHERE user_id = ?
-    ''', (user_id,)).fetchone()
+    try:
+        result = conn.execute('''
+            SELECT COALESCE(SUM(size), 0) as total_size
+            FROM files
+            WHERE user_id = ? AND COALESCE(is_deleted, 0) = 0
+        ''', (user_id,)).fetchone()
 
-    total_size = result['total_size'] if result else 0
-    MAX_STORAGE = 1 * 1024 * 1024 * 1024
+        total_size = result['total_size'] if result else 0
+        MAX_STORAGE = 1 * 1024 * 1024 * 1024
 
-    return {
-        'total_size': total_size,
-        'max_storage': MAX_STORAGE,
-        'used_percentage': (total_size / MAX_STORAGE * 100) if MAX_STORAGE > 0 else 0,
-        'is_over_limit': total_size >= MAX_STORAGE
-    }
+        return {
+            'total_size': total_size,
+            'max_storage': MAX_STORAGE,
+            'used_percentage': (total_size / MAX_STORAGE * 100) if MAX_STORAGE > 0 else 0,
+            'is_over_limit': total_size >= MAX_STORAGE
+        }
+    finally:
+        conn.close()
 
 
 def log_access(file_id, action, request):
@@ -4279,6 +4481,205 @@ def deepseek_chat(messages, model="deepseek-chat", temperature=0.5):
 
 from blueprints import register_blueprints
 register_blueprints(app)
+
+import helpers as _helpers
+_helpers.set_db_path(str(DB_FILE))
+
+_online_users = {}
+
+@socketio.on('connect')
+def handle_connect():
+    if 'user_id' in session:
+        _online_users[session['user_id']] = {
+            'sid': request.sid,
+            'username': session.get('username', ''),
+            'connected_at': datetime.now().isoformat()
+        }
+        socketio.emit('user_online', {
+            'user_id': session['user_id'],
+            'username': session.get('username', '')
+        })
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    if 'user_id' in session:
+        user_id = session['user_id']
+        if user_id in _online_users:
+            del _online_users[user_id]
+        socketio.emit('user_offline', {
+            'user_id': user_id,
+            'username': session.get('username', '')
+        })
+
+@socketio.on('join_workspace')
+def handle_join_workspace(data):
+    from flask_socketio import join_room
+    workspace_id = data.get('workspace_id')
+    if workspace_id:
+        join_room(f'workspace_{workspace_id}')
+
+@socketio.on('leave_workspace')
+def handle_leave_workspace(data):
+    from flask_socketio import leave_room
+    workspace_id = data.get('workspace_id')
+    if workspace_id:
+        leave_room(f'workspace_{workspace_id}')
+
+@socketio.on('join_file')
+def handle_join_file(data):
+    from flask_socketio import join_room
+    file_id = data.get('file_id')
+    if file_id and 'user_id' in session:
+        join_room(f'file_{file_id}')
+        socketio.emit('user_viewing_file', {
+            'user_id': session['user_id'],
+            'username': session.get('username', ''),
+            'file_id': file_id
+        }, room=f'file_{file_id}')
+
+@socketio.on('leave_file')
+def handle_leave_file(data):
+    from flask_socketio import leave_room
+    file_id = data.get('file_id')
+    if file_id and 'user_id' in session:
+        leave_room(f'file_{file_id}')
+        socketio.emit('user_left_file', {
+            'user_id': session['user_id'],
+            'username': session.get('username', ''),
+            'file_id': file_id
+        }, room=f'file_{file_id}')
+
+@socketio.on('typing')
+def handle_typing(data):
+    file_id = data.get('file_id')
+    if file_id and 'user_id' in session:
+        socketio.emit('user_typing', {
+            'user_id': session['user_id'],
+            'username': session.get('username', ''),
+            'file_id': file_id
+        }, room=f'file_{file_id}', include_self=False)
+
+@app.route('/api/online-users', methods=['GET'], endpoint='api_online_users')
+def api_online_users():
+    users = []
+    for uid, info in _online_users.items():
+        users.append({
+            'user_id': uid,
+            'username': info.get('username', ''),
+            'connected_at': info.get('connected_at', '')
+        })
+    return jsonify({'success': True, 'data': {'users': users, 'count': len(users)}})
+
+@app.route('/api/files/<file_id>/versions', methods=['GET'], endpoint='api_file_versions')
+def api_file_versions(file_id):
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    conn = get_db()
+    try:
+        versions = conn.execute(
+            '''SELECT fv.*, u.username as created_by_name
+               FROM file_versions fv
+               LEFT JOIN users u ON fv.created_by = u.id
+               WHERE fv.file_id = ?
+               ORDER BY fv.version_number DESC''',
+            (file_id,)
+        ).fetchall()
+        result = []
+        for v in versions:
+            vd = dict(v)
+            result.append(vd)
+        return jsonify({'success': True, 'data': {'versions': result}})
+    finally:
+        conn.close()
+
+@app.route('/api/files/<file_id>/versions/<version_id>/rollback', methods=['POST'], endpoint='api_version_rollback')
+def api_version_rollback(file_id, version_id):
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    conn = get_db()
+    try:
+        version = conn.execute(
+            'SELECT * FROM file_versions WHERE id = ? AND file_id = ?',
+            (version_id, file_id)
+        ).fetchone()
+        if not version:
+            return jsonify({'success': False, 'message': '版本不存在'}), 404
+        current_file = conn.execute('SELECT * FROM files WHERE id = ?', (file_id,)).fetchone()
+        if not current_file:
+            return jsonify({'success': False, 'message': '文件不存在'}), 404
+        new_version_num = conn.execute(
+            'SELECT COALESCE(MAX(version_number), 0) + 1 FROM file_versions WHERE file_id = ?',
+            (file_id,)
+        ).fetchone()[0]
+        conn.execute(
+            '''INSERT INTO file_versions (id, file_id, version_name, version_number, filename, stored_name, path, size, created_by, comment, change_summary)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (uuid.uuid4().hex, file_id, f'回滚至 v{version["version_number"]}',
+             new_version_num, current_file['filename'], version['stored_name'],
+             version['path'], version['size'], session['user_id'],
+             f'从 v{version["version_number"]} 回滚', f'rollback_from_v{version["version_number"]}')
+        )
+        conn.execute(
+            '''UPDATE files SET stored_name = ?, path = ?, size = ? WHERE id = ?''',
+            (version['stored_name'], version['path'], version['size'], file_id)
+        )
+        conn.commit()
+        socketio.emit('file_updated', {
+            'file_id': file_id,
+            'action': 'version_rollback',
+            'by': session.get('username', '')
+        }, room=f'file_{file_id}')
+        return jsonify({'success': True, 'message': '已回滚到指定版本'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/files/<file_id>/versions/<version_id>/download', methods=['GET'], endpoint='api_version_download')
+def api_version_download(file_id, version_id):
+    if 'user_id' not in session:
+        return jsonify({'success': False, 'message': '未登录'}), 401
+    conn = get_db()
+    try:
+        version = conn.execute(
+            'SELECT * FROM file_versions WHERE id = ? AND file_id = ?',
+            (version_id, file_id)
+        ).fetchone()
+        if not version:
+            return jsonify({'success': False, 'message': '版本不存在'}), 404
+        directory = os.path.dirname(os.path.join(str(UPLOAD_DIR), version['path']))
+        filename = version['stored_name']
+        return send_from_directory(directory, filename, as_attachment=True,
+                                   download_name=version['filename'])
+    finally:
+        conn.close()
+
+def emit_notification(user_id, notification_data):
+    socketio.emit('new_notification', notification_data, room=user_id)
+
+def emit_workspace_update(workspace_id, event_type, data):
+    socketio.emit('workspace_update', {
+        'type': event_type,
+        'data': data
+    }, room=f'workspace_{workspace_id}')
+
+
+def main():
+    init_db()
+
+    print("=" * 60)
+    print("访问地址: http://localhost:9876")
+    print("按 Ctrl+C 停止服务")
+    print("=" * 60)
+    socketio.run(
+        app,
+        debug=True,
+        host='0.0.0.0',
+        port=9876,
+        allow_unsafe_werkzeug=True
+    )
+
 
 if __name__ == "__main__":
     main()

@@ -6,7 +6,7 @@
             <div class="share-header">
                 <div class="share-icon">📄</div>
                 <h1 class="share-title">文件分享</h1>
-                <p class="share-subtitle">来自 {{ share.username }} 的分享</p>
+                <p class="share-subtitle">来自 {{ share.username or '未知用户' }} 的分享</p>
             </div>
             
             <div class="file-info-section">
@@ -42,12 +42,12 @@
                 {% endif %}
                 <div class="info-item">
                     <span class="info-label">访问次数：</span>
-                    <span class="info-value">{{ file.access_count }} 次</span>
+                    <span class="info-value">{{ file.download_count or file.access_count or 0 }} 次</span>
                 </div>
             </div>
             
             <div class="share-actions">
-                <a href="{{ url_for('download_shared_file', share_code=share.share_code) }}" class="btn btn-download">
+                <a href="{{ url_for('download_shared_file', token=token) }}" class="btn btn-download">
                     <i class="download-icon">⬇️</i> 下载文件
                 </a>
                 <a href="{{ url_for('index') }}" class="btn btn-secondary">

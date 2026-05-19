@@ -1,5 +1,5 @@
 // 缓存名称和版本 - 优化版本管理
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `yytoolssite-cache-${CACHE_VERSION}`;
 const STATIC_CACHE_NAME = `yytoolssite-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE_NAME = `yytoolssite-dynamic-${CACHE_VERSION}`;
@@ -38,22 +38,19 @@ const STATIC_RESOURCES = [
 // 安装事件 - 预缓存核心资源
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    Promise.all([
-      // 预缓存核心静态资源
-      caches.open(STATIC_CACHE_NAME)
-        .then((cache) => {
-          console.log('预缓存核心静态资源');
-          return cache.addAll(CORE_ASSETS);
-        }),
-      // 预缓存其他静态资源
-      caches.open(STATIC_CACHE_NAME)
-        .then((cache) => {
-          console.log('预缓存其他静态资源');
-          return cache.addAll(STATIC_RESOURCES);
-        })
-    ])
+    caches.open(STATIC_CACHE_NAME)
+      .then((cache) => {
+        console.log('预缓存静态资源');
+        const allResources = [...CORE_ASSETS, ...STATIC_RESOURCES];
+        return Promise.allSettled(
+          allResources.map(url =>
+            cache.add(url).catch(err => {
+              console.warn('缓存资源失败，跳过:', url, err.message);
+            })
+          )
+        );
+      })
   );
-  // 跳过等待，立即激活新的service worker
   self.skipWaiting();
 });
 
@@ -272,7 +269,13 @@ async function updateStaticCache() {
   console.log('定期更新静态缓存');
   try {
     const cache = await caches.open(STATIC_CACHE_NAME);
-    await cache.addAll(STATIC_RESOURCES);
+    await Promise.allSettled(
+      STATIC_RESOURCES.map(url =>
+        cache.add(url).catch(err => {
+          console.warn('更新缓存失败，跳过:', url, err.message);
+        })
+      )
+    );
     console.log('静态缓存更新完成');
   } catch (error) {
     console.error('静态缓存更新失败:', error);

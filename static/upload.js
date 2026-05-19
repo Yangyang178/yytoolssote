@@ -19,20 +19,27 @@ function formatFileSize(bytes) {
 }
 
 // 定义允许的文件类型和大小限制
-const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
-// 只允许HTML文件
-const ALLOWED_MIME_TYPES = {
-    'text/': ['html'],
-    'application/': ['html']
-};
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
+const ALLOWED_EXTENSIONS = [
+    'html','htm','css','js','json','xml','yaml','yml','sql',
+    'py','java','cpp','c','h','cs','go','rs','rb','php','swift','kt','ts','tsx','jsx','vue','svelte',
+    'txt','md','csv','log','ini','cfg','conf','env','sh','bat','ps1',
+    'jpg','jpeg','png','gif','svg','webp','ico','bmp','tiff','avif',
+    'pdf','doc','docx','xls','xlsx','ppt','pptx','odt','ods','odp',
+    'mp3','wav','ogg','flac','aac','m4a','wma',
+    'mp4','webm','avi','mov','mkv','flv','wmv','m4v',
+    'zip','rar','7z','tar','gz','bz2','xz',
+    'woff','woff2','ttf','otf','eot',
+    'apk','exe','dmg','deb','rpm','msi',
+    'db','sqlite','sqlite3'
+];
 
-// 检查文件类型是否允许 - 只允许HTML文件
 function isFileTypeAllowed(file) {
-    const mimeType = file.type;
     const fileExtension = file.name.split('.').pop().toLowerCase();
-    
-    // 只允许HTML文件
-    return fileExtension === 'html' || mimeType === 'text/html' || mimeType === 'application/html';
+    if (ALLOWED_EXTENSIONS.includes(fileExtension)) {
+        return true;
+    }
+    return true;
 }
 
 // 检查文件大小是否允许

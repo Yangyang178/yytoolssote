@@ -166,7 +166,7 @@ async function handleLike(fileId, btn) {
     if (data.success) {
       // 更新点赞按钮状态和数量
       const countElement = btn.querySelector('.count');
-      countElement.textContent = data.data.count;
+      countElement.textContent = data.data.like_count;
       
       // 更新按钮样式
       const iconElement = btn.querySelector('.icon-like');
@@ -213,7 +213,7 @@ async function handleFavorite(fileId, btn) {
     if (data.success) {
       // 更新收藏按钮状态和数量
       const countElement = btn.querySelector('.count');
-      countElement.textContent = data.data.count;
+      countElement.textContent = data.data.favorite_count;
       
       // 更新按钮样式
       const iconElement = btn.querySelector('.icon-favorite');
@@ -475,10 +475,13 @@ function initCategoryFilter() {
     updateCategoryCounts();
   });
   
-  observer.observe(document.querySelector('.files-grid'), {
-    childList: true,
-    subtree: true
-  });
+  const filesGrid = document.querySelector('.files-grid');
+  if (filesGrid) {
+    observer.observe(filesGrid, {
+      childList: true,
+      subtree: true
+    });
+  }
   
   categoryBtns.forEach(btn => {
     btn.addEventListener('click', () => {

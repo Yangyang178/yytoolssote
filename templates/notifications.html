@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}通知中心{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notification.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-bell me-2"></i>通知中心</h2>
+        <div class="d-flex gap-2">
+            {% if is_admin %}
+            <button class="btn btn-outline-warning btn-sm" onclick="showAdminPanel()">
+                <i class="bi bi-shield-lock"></i> 管理员面板
+            </button>
+            {% endif %}
+            <button class="btn btn-outline-danger btn-sm" id="clearAllBtn" onclick="clearAllNotifications()">
+                <i class="bi bi-trash3"></i> 清空全部
+            </button>
+            <a href="/notifications/settings" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-gear"></i> 设置
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card mb-3">
+                <div class="card-body p-2">
+                    <div class="list-group list-group-flush notification-type-filter">
+                        <a href="/notifications?type=all"
+                           class="list-group-item list-group-item-action {{ 'active' if not current_type or current_type == 'all' else '' }}">
+                            <span class="badge bg-primary float-end">{{ type_counts.get('system', {}).get('unread', 0) + type_counts.get('file_share', {}).get('unread', 0) + type_counts.get('security', {}).get('unread', 0) + type_counts.get('ai', {}).get('unread', 0) + type_counts.get('backup', {}).get('unread', 0) }}</span>
+                            全部通知
+                        </a>
+                        <a href="/notifications?type=system"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'system' else '' }}">
+                            <span class="badge bg-info text-dark float-end">{{ type_counts.get('system', {}).get('unread', 0) }}</span>
+                            <span class="notif-type-dot system"></span> 系统通知
+                        </a>
+                        <a href="/notifications?type=file_share"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'file_share' else '' }}">
+                            <span class="badge bg-success float-end">{{ type_counts.get('file_share', {}).get('unread', 0) }}</span>
+                            <span class="notif-type-dot file_share"></span> 文件分享
+                        </a>
+                        <a href="/notifications?type=security"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'security' else '' }}">
+                            <span class="badge bg-danger float-end">{{ type_counts.get('security', {}).get('unread', 0) }}</span>
+                            <span class="notif-type-dot security"></span> 安全通知
+                        </a>
+                        <a href="/notifications?type=ai"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'ai' else '' }}">
+                            <span class="badge bg-purple float-end">{{ type_counts.get('ai', {}).get('unread', 0) }}</span>
+                            <span class="notif-type-dot ai"></span> AI 通知
+                        </a>
+                        <a href="/notifications?type=backup"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'backup' else '' }}">
+                            <span class="badge bg-warning text-dark float-end">{{ type_counts.get('backup', {}).get('unread', 0) }}</span>
+                            <span class="notif-type-dot backup"></span> 备份通知
+                        </a>
+                    </div>
+
+                    {% if is_admin %}
+                    <hr>
+                    <h6 class="text-muted px-2 pt-2"><i class="bi bi-shield-check"></i> 管理员专属</h6>
+                    <div class="list-group list-group-flush">
+                        <a href="/notifications?type=admin_all"
+                           class="list-group-item list-group-item-action {{ 'active' if current_type == 'admin_all' else '' }} text-warning">
+                            <i class="bi bi-people-fill"></i> 所有用户通知
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-9">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <div>
+                    <span class="text-muted">共 {{ pagination.total }} 条通知，
+                        <strong>{{ unread_count }}</strong> 条未读</span>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="markAllRead()">
+                    <i class="bi bi-check-all"></i> 全部标记已读
+                </button>
+            </div>
+
+            <div id="notificationList">
+                {% if notifications %}
+                {% for notif in notifications %}
+                <div class="notif-card {{ '' if notif.is_read else 'unread' }}"
+                     data-id="{{ notif.id }}" data-type="{{ notif.type }}">
+                    <div class="notif-card-icon" style="background:{{ notif.icon_data.get('bg', '#e5e7eb') }};
+                         color:{{ notif.icon_data.get('color', '#374151') }}">
+                        {{ notif.icon_data.get('icon', '📢') }}
+                    </div>
+                    <div class="notif-card-body">
+                        <div class="notif-card-title">
+                            {{ notif.title }}
+                            {% if not notif.is_read %}
+                            <span class="badge rounded-pill bg-primary ms-2">新</span>
+                            {% endif %}
+                            {% if notif.category == 'critical' %}
+                            <span class="badge rounded-pill bg-danger ms-2">紧急</span>
+                            {% elif notif.category == 'warning' %}
+                            <span class="badge rounded-pill bg-warning text-dark ms-2">警告</span
+                            {% elif notif.category == 'success' %}
+                            <span class="badge rounded-pill bg-success ms-2">成功</span>
+                            {% endif %}
+                        </div>
+                        <div class="notif-card-desc">{{ notif.content }}</div>
+                        <div class="notif-card-meta">
+                            <span class="notif-time">{{ notif.time_ago }}</span>
+                            <span class="notif-type-badge type-{{ notif.type }}">{{ notif.type }}</span>
+                        </div>
+                    </div>
+                    <div class="notif-card-actions">
+                        {% if notif.action_url %}
+                        <a href="{{ notif.action_url }}" class="btn btn-sm btn-outline-primary">
+                            {{ notif.action_text or '查看详情' }}
+                        </a>
+                        {% endif %}
+                        <button class="btn btn-sm btn-outline-secondary" onclick="deleteNotification('{{ notif.id }}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-bell-slash" style="font-size:3rem;"></i>
+                    <p class="mt-3">暂无通知</p>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if pagination.total_pages > 1 %}
+            <nav aria-label="分页" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    {% if pagination.page > 1 %}
+                    <li class="page-item">
+                        <a class="page-link" href="/notifications?page={{ pagination.page - 1 }}
+                           {% if current_type %}&type={{ current_type }}{% endif %}">&laquo;</a>
+                    </li>
+                    {% endif %}
+                    {% for p in range(1, pagination.total_pages + 1) %}
+                    {% if p == pagination.page or (p >= pagination.page - 2 and p <= pagination.page + 2) or p == 1 or p == pagination.total_pages %}
+                    <li class="page-item {{ 'active' if p == pagination.page else '' }}">
+                        <a class="page-link" href="/notifications?p={{ p }}
+                           {% if current_type %}&type={{ current_type }}{% endif %}">{{ p }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+                    {% if pagination.page < pagination.total_pages %}
+                    <li class="page-item">
+                        <a class="page-link" href="/notifications?page={{ pagination.page + 1 }}
+                           {% if current_type %}&type={{ current_type }}{% endif %}">&raquo;</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="adminModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title"><i class="bi bi-shield-lock"></i> 管理员通知面板</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">作为管理员，你可以查看和管理所有用户的通知。</p>
+                <div class="row g-2">
+                    <div class="col-md-6">
+                        <a href="/notifications?type=admin_all" class="btn btn-outline-dark w-100 py-3">
+                            <i class="bi bi-people d-block fs-2 mb-2"></i>
+                            查看所有用户通知
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-outline-danger w-100 py-3" onclick="adminClearAll()">
+                            <i class="bi bi-trash3 d-block fs-2 mb-2"></i>
+                            清空所有用户通知
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/notification.js') }}"></script>
+<script>
+const NOTIF_API_BASE = '/api/notifications';
+</script>
+{% endblock %}

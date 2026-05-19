@@ -159,10 +159,10 @@
                     <!-- 我的标签列表 -->
                     <div class="my-tags-sidebar">
                         <h3>我的标签</h3>
-                        <div class="create-tag-form">
-                            <input type="text" id="new-tag-name" placeholder="新建标签..." />
-                            <button id="create-tag-btn" onclick="createNewTag()">+ 创建</button>
-                        </div>
+                        <form class="create-tag-form" onsubmit="event.preventDefault(); event.stopImmediatePropagation(); createNewTag();">
+                            <input type="text" id="new-tag-name" placeholder="新建标签..." autocomplete="off" />
+                            <button type="submit" id="create-tag-btn">+ 创建</button>
+                        </form>
                         <div class="tags-list" id="myTagsList">
                             <p class="loading-placeholder">加载中...</p>
                         </div>
@@ -1142,10 +1142,6 @@
     padding: 24px;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     border: 1px solid #e2e8f0;
-    max-height: 700px;  /* 固定最大高度 */
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;  /* 防止内容溢出容器 */
 }
 
 .tag-header {
@@ -1357,20 +1353,18 @@
     display: flex;
     gap: 24px;
     margin-top: 20px;
-    flex: 1;  /* 占据剩余空间 */
-    min-height: 0;  /* 允许flex子元素收缩 */
-    overflow: hidden;  /* 防止溢出 */
+    height: 500px;
 }
 
 .my-tags-sidebar {
     background: #f8fafc;
     border-radius: 12px;
     padding: 20px;
-    width: 280px;  /* 固定宽度 */
-    flex-shrink: 0;  /* 不收缩 */
+    width: 280px;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;  /* 防止溢出 */
+    overflow: hidden;
 }
 
 .my-tags-sidebar h3 {
@@ -1384,14 +1378,27 @@
     display: flex;
     gap: 8px;
     margin-bottom: 16px;
+    position: relative;
+    z-index: 10;
 }
 
 .create-tag-form input {
     flex: 1;
+    min-width: 0;
     padding: 8px 12px;
     border: 2px solid #e2e8f0;
     border-radius: 6px;
     font-size: 0.875rem;
+    background: white;
+    color: #1e293b;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.create-tag-form input:focus {
+    border-color: #10B981;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
 }
 
 .create-tag-form button {
@@ -1410,9 +1417,26 @@
 }
 
 .tags-list {
-    flex: 1;  /* 占据剩余空间 */
-    overflow-y: auto;  /* 垂直滚动 */
-    min-height: 0;  /* 允许收缩 */
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+.tags-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.tags-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tags-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.tags-list::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .my-tag-item {
@@ -1447,11 +1471,12 @@
 }
 
 .files-with-tags-area {
-    flex: 1;  /* 占据剩余空间 */
+    flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;  /* 防止溢出 */
-    min-width: 0;  /* 允许收缩 */
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .files-with-tags-area h3 {
@@ -1468,11 +1493,30 @@
 }
 
 .files-table-container {
-    overflow: auto;  /* 同时支持水平和垂直滚动 */
+    overflow-y: auto;
+    overflow-x: auto;
     border-radius: 12px;
     border: 1px solid #e2e8f0;
-    flex: 1;  /* 占据剩余空间 */
-    min-height: 0;  /* 允许收缩 */
+    flex: 1;
+    min-height: 0;
+}
+
+.files-table-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.files-table-container::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.files-table-container::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.files-table-container::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .files-table {
@@ -1607,12 +1651,17 @@
 
 @media (max-width: 1024px) {
     .tag-main-content {
-        flex-direction: column;  /* 垂直排列 */
+        flex-direction: column;
+        height: auto;
     }
     
     .my-tags-sidebar {
-        width: 100%;  /* 全宽 */
-        max-height: 200px;  /* 限制高度 */
+        width: 100%;
+        max-height: 200px;
+    }
+    
+    .files-with-tags-area {
+        height: 400px;
     }
     
     .stats-grid {
@@ -1657,7 +1706,7 @@ function formatSize(bytes) {
 // 加载存储统计数据
 async function loadStorageStats() {
     try {
-        const response = await fetch('/api/storage-stats');
+        const response = await fetch('/api/storage-stats', {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
@@ -1822,7 +1871,7 @@ function renderLargeFilesList(largeFiles) {
                     <div class="file-rank ${rankClass}">${index + 1}</div>
                     <div class="file-details">
                         <div class="file-name" title="${file.filename}">${file.filename}</div>
-                        <div class="file-meta">${file.folder_name} · ${file.created_at || ''}</div>
+                        <div class="file-meta">${file.folder_name || '未分类'} · ${file.created_at || ''}</div>
                     </div>
                 </div>
                 <div class="file-size">${formatSize(file.size)}</div>
@@ -1959,7 +2008,7 @@ function togglePanel(panelId, btn) {
 
 async function loadMyTags() {
     try {
-        const response = await fetch('/api/tags/stats');
+        const response = await fetch('/api/tags/stats', {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
@@ -2007,29 +2056,52 @@ async function createNewTag() {
     const name = input.value.trim();
     
     if (!name) {
-        alert('请输入标签名称');
+        input.focus();
         return;
     }
+    
+    const btn = document.getElementById('create-tag-btn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '...';
     
     try {
         const response = await fetch('/api/tags', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ name: name })
         });
         
         const result = await response.json();
         
         if (result.success) {
-            alert(result.message);
             input.value = '';
             loadMyTags();
+            if (typeof showToast === 'function') {
+                showToast(result.message || '标签创建成功', 'success', 2000);
+            } else {
+                alert(result.message || '标签创建成功');
+            }
         } else {
-            alert(result.message);
+            if (typeof showToast === 'function') {
+                showToast(result.message || '创建失败', 'error', 3000);
+            } else {
+                alert(result.message || '创建失败');
+            }
+            input.focus();
+            input.select();
         }
     } catch (error) {
         console.error('创建标签失败:', error);
-        alert('创建标签失败');
+        if (typeof showToast === 'function') {
+            showToast('创建标签失败', 'error', 3000);
+        } else {
+            alert('创建标签失败');
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
     }
 }
 
@@ -2045,12 +2117,13 @@ async function filterByTag(tagId) {
     }
     
     try {
-        const response = await fetch(`/api/files/by-tag/${tagId}`);
+        const response = await fetch(`/api/files/by-tag/${tagId}`, {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
             currentFiles = result.data.files;
-            label.textContent = `- 筛选: ${result.data.tag_info.name}`;
+            const tagName = result.data.tag_info ? result.data.tag_info.name : tagId;
+            label.textContent = `- 筛选: ${tagName}`;
             renderFilesTable(currentFiles);
             
             // 更新下拉选择
@@ -2063,7 +2136,7 @@ async function filterByTag(tagId) {
 
 async function loadFilesForTagManagement() {
     try {
-        const response = await fetch('/api/my-files');
+        const response = await fetch('/api/my-files', {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
@@ -2123,6 +2196,7 @@ async function addTagToFile(fileId, tagId) {
         const response = await fetch(`/api/files/${fileId}/tags`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ tag_id: parseInt(tagId) })
         });
         
@@ -2148,7 +2222,8 @@ async function removeFileTag(fileId, tagId) {
     
     try {
         const response = await fetch(`/api/files/${fileId}/tags/${tagId}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            credentials: 'same-origin'
         });
         
         const result = await response.json();
@@ -2189,6 +2264,7 @@ async function createAndAddTag(fileId, tagName) {
         const createResponse = await fetch('/api/tags', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({ name: tagName })
         });
         
@@ -2199,7 +2275,7 @@ async function createAndAddTag(fileId, tagName) {
             
             // 获取新创建的标签ID
             setTimeout(async () => {
-                const tagsResponse = await fetch('/api/tags/stats');
+                const tagsResponse = await fetch('/api/tags/stats', {credentials: 'same-origin'});
                 const tagsResult = await tagsResponse.json();
                 
                 if (tagsResult.success) {
@@ -2223,7 +2299,7 @@ async function getRecommendTags(fileId) {
     recommendList.innerHTML = '<p style="color: #92400e;">正在分析文件内容...</p>';
     
     try {
-        const response = await fetch(`/api/files/${fileId}/recommend-tags`);
+        const response = await fetch(`/api/files/${fileId}/recommend-tags`, {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success && result.data.recommendations.length > 0) {
@@ -2254,7 +2330,7 @@ async function searchTags() {
     }
     
     try {
-        const response = await fetch(`/api/tags/search?q=${encodeURIComponent(query)}`);
+        const response = await fetch(`/api/tags/search?q=${encodeURIComponent(query)}`, {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
@@ -2270,7 +2346,7 @@ async function loadTagCloud() {
     wrapper.innerHTML = '<p class="loading-placeholder">加载中...</p>';
     
     try {
-        const response = await fetch('/api/tags/cloud');
+        const response = await fetch('/api/tags/cloud', {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success && result.data.cloud.length > 0) {
@@ -2295,7 +2371,7 @@ async function loadTagCloud() {
 
 async function loadTagsOverview() {
     try {
-        const response = await fetch('/api/tags/overview');
+        const response = await fetch('/api/tags/overview', {credentials: 'same-origin'});
         const result = await response.json();
         
         if (result.success) {
@@ -2352,6 +2428,7 @@ async function batchAddTagToFiles(tagId) {
         const response = await fetch('/api/batch-add-tag', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({
                 tag_id: tagId,
                 file_ids: Array.from(selectedFiles)

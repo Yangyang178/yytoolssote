@@ -257,7 +257,7 @@ unfavoriteButtons.forEach(btn => {
                         // 更新收藏数显示
                         const favoriteCountEl = btn.closest('.file-card').querySelector('.favorite-count .value');
                         if (favoriteCountEl) {
-                            favoriteCountEl.textContent = result.data.count;
+                            favoriteCountEl.textContent = result.data.favorite_count;
                         }
                         
                         // 移除当前文件卡片

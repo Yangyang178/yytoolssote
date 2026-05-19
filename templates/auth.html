@@ -251,7 +251,6 @@ document.addEventListener('DOMContentLoaded', function() {
             
             const actionValue = actionInput.value;
             
-            // Only use AJAX for send_code action
             if (actionValue === 'send_code') {
                 e.preventDefault();
                 
@@ -264,10 +263,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 
                 const submitBtn = form.querySelector('button[type="submit"]');
+                if (submitBtn.disabled) return;
                 submitBtn.disabled = true;
                 submitBtn.textContent = '发送中...';
                 
-                // 使用当前页面的URL作为fetch目标，确保正确
                 const urlParams = new URLSearchParams(window.location.search);
                 const currentMode = urlParams.get('mode') || 'login';
                 const currentLoginMethod = urlParams.get('login_method') || 'code';
@@ -276,10 +275,17 @@ document.addEventListener('DOMContentLoaded', function() {
                     method: 'POST',
                     body: formData
                 })
-                .then(response => response.json())
+                .then(response => {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.indexOf('application/json') === -1) {
+                        window.location.href = formAction + '?mode=' + currentMode + '&login_method=' + currentLoginMethod + '&step=verify&email=' + encodeURIComponent(email);
+                        return;
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    if (!data) return;
                     if (data.success) {
-                        // Redirect to verification page with mode and login_method
                         window.location.href = '{{ url_for("auth") }}?mode=' + currentMode + '&login_method=' + currentLoginMethod + '&step=verify&email=' + encodeURIComponent(email);
                     } else {
                         alert(data.message || '发送验证码失败');
@@ -289,7 +295,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
                 .catch(error => {
                     console.error('发送验证码失败:', error);
-                    alert('发送验证码失败，请稍后重试');
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = '<span class="btn-text">发送验证码</span>';
                 });

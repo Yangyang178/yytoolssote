@@ -8,7 +8,7 @@
         </div>
         
         <div class="upload-form-card">
-            <form action="{{ url_for('upload') }}" method="post" enctype="multipart/form-data" class="upload-form" data-no-loading="true">
+            <form action="{{ url_for('upload_page') }}" method="post" enctype="multipart/form-data" class="upload-form" data-no-loading="true">
                 <div class="form-section">
                     <h2 class="section-title">文件信息</h2>
                     
@@ -24,7 +24,7 @@
                                 </div>
                             </label>
                         </div>
-                        <p class="form-hint">支持上传图片、文档、视频和音频文件，单个文件大小不超过200MB</p>
+                        <p class="form-hint">仅支持上传 HTML 文件，其他类型文件请上传到项目文件夹中</p>
                         
                         <!-- 文件预览区域 -->
                         <div class="file-preview-container" id="filePreviewContainer" style="display: none;">
