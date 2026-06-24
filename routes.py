@@ -15,6 +15,23 @@ from datetime import datetime
 
 
 # 登录/注册页面
+
+# 全局登录拦截：未登录时除白名单外的页面路由都跳转到登录页
+@app.before_request
+def require_login():
+    # 静态资源、API、auth 相关页面不需要拦截
+    if request.path.startswith('/static') or request.path.startswith('/auth') or request.path.startswith('/api/'):
+        return None
+    # 公开页面白名单
+    public_paths = ['/privacy', '/terms', '/favicon.ico', '/manifest.json', '/sw.js', '/uploads/', '/s/', '/download-shared/', '/open/', '/sandbox/']
+    for p in public_paths:
+        if request.path.startswith(p):
+            return None
+    # 只拦截页面路由（GET 请求，非 API）
+    if request.method == 'GET' and 'user_id' not in session:
+        return redirect(url_for('auth'))
+
+
 @app.route('/auth', methods=['GET', 'POST'])
 def auth():
     if request.method == 'POST':
@@ -2211,6 +2228,8 @@ def check_login_status():
 # 博客页面
 @app.route('/blog')
 def blog_page():
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
     # 示例技术文章数据
     posts = [
         {
@@ -3188,18 +3207,20 @@ def file_delete(file_id):
             folder = conn.execute('SELECT name FROM folders WHERE id = ?', (file['folder_id'],)).fetchone()
             folder_name = folder['name'] if folder else None
         
-        from datetime import datetime, timedelta
-        expire_at = datetime.now() + timedelta(days=30)
-        
+        from datetime import datetime, timedelta, timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = datetime.now(bj_tz) + timedelta(days=30)
+
         conn.execute('''
-            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, 
+            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path,
                              file_size, file_type, folder_id, original_folder_name, deleted_at, expire_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
               file['path'], file['size'], file['filename'].split('.')[-1] if '.' in file['filename'] else '',
-              file['folder_id'], folder_name, expire_at))
+              file['folder_id'], folder_name, bj_now, expire_at))
         
-        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (file_id,))
+        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = ? WHERE id = ?', (bj_now, file_id,))
         
         local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
@@ -3707,18 +3728,20 @@ def move_to_trash():
             folder = conn.execute('SELECT name FROM folders WHERE id = ?', (file['folder_id'],)).fetchone()
             folder_name = folder['name'] if folder else None
         
-        from datetime import datetime, timedelta
-        expire_at = datetime.now() + timedelta(days=30)
-        
+        from datetime import datetime, timedelta, timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = datetime.now(bj_tz) + timedelta(days=30)
+
         conn.execute('''
-            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, 
-                             file_size, file_type, folder_id, original_folder_name, expire_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path,
+                             file_size, file_type, folder_id, original_folder_name, deleted_at, expire_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
               file['path'], file['size'], file['filename'].split('.')[-1] if '.' in file['filename'] else '',
-              file['folder_id'], folder_name, expire_at))
+              file['folder_id'], folder_name, bj_now, expire_at))
         
-        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id = ?', (file_id,))
+        conn.execute('UPDATE files SET is_deleted = 1, deleted_at = ? WHERE id = ?', (bj_now, file_id,))
         
         conn.commit()
         

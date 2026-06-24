@@ -2,6 +2,7 @@ from flask import Blueprint, request, render_template, redirect, url_for, flash,
 import os
 import json
 import uuid
+from datetime import datetime, timezone, timedelta
 
 
 class _LazyAppImports:
@@ -37,6 +38,7 @@ def trash():
             "SELECT * FROM trash WHERE user_id = ? ORDER BY deleted_at DESC",
             (session['user_id'],)).fetchall()
 
+        bj_tz = timezone(timedelta(hours=8))
         for row in rows:
             item = dict(row)
             item['original_data'] = {
@@ -48,13 +50,25 @@ def trash():
             }
             item['display_name'] = row['filename'] or '未知'
 
+            # 将 deleted_at 转换为北京时间显示
+            if item.get('deleted_at'):
+                try:
+                    dt = datetime.fromisoformat(str(item['deleted_at']).replace('Z', '+00:00'))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    item['deleted_at'] = dt.astimezone(bj_tz).strftime('%Y-%m-%d %H:%M:%S')
+                except (ValueError, TypeError):
+                    pass
+
             if item.get('expire_at'):
                 try:
-                    from datetime import datetime
                     expire_dt = datetime.fromisoformat(row['expire_at'])
-                    remaining = expire_dt - datetime.now()
+                    if expire_dt.tzinfo is None:
+                        expire_dt = expire_dt.replace(tzinfo=timezone.utc)
+                    now_bj = datetime.now(bj_tz)
+                    remaining = expire_dt.astimezone(bj_tz) - now_bj
                     item['days_remaining'] = max(0, remaining.days)
-                    item['is_expired'] = datetime.now() > expire_dt
+                    item['is_expired'] = now_bj > expire_dt.astimezone(bj_tz)
                 except (ValueError, TypeError):
                     item['days_remaining'] = 30
                     item['is_expired'] = False

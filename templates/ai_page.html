@@ -436,6 +436,21 @@
         max-height: 200px;
     }
 }
+
+@media (max-width: 768px) {
+    .ai-main-layout { padding: 12px; }
+    .ai-sidebar { max-height: 150px; border-radius: 12px; }
+    .ai-chat-area { border-radius: 12px; }
+    .ai-input-area { padding: 12px; flex-direction: column; }
+    .ai-input-area textarea { min-height: 60px; }
+    .ai-input-area button { width: 100%; padding: 12px; }
+    .ai-message { padding: 12px; }
+    .ai-message.user { margin-left: 20px; }
+    .ai-message.assistant { margin-right: 20px; }
+    .conv-item { padding: 8px 12px; }
+    .ai-toolbar { flex-wrap: wrap; gap: 6px; }
+    .ai-toolbar button { font-size: 12px; padding: 6px 10px; }
+}
 </style>
 
 <script>
@@ -586,92 +601,56 @@ async function streamChat(prompt) {
             throw new Error(errorMsg);
         }
 
-        // 检查是否是SSE流
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('text/event-stream')) {
-            const text = await response.text();
-            try {
-                const data = JSON.parse(text);
-                throw new Error(data.message || data.error || '非流式响应');
-            } catch (e) {
-                if (e.message === '非流式响应') throw e;
-                throw new Error(text.substring(0, 200));
-            }
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.message || 'AI调用失败');
         }
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = '';
+        const fullResponse = result.data.response;
+        currentConversationId = result.data.content_id;
 
-        // 替换打字指示器为空内容
+        // 模拟逐字显示效果
         const responseBubble = document.getElementById('currentResponse');
         if (responseBubble) {
             responseBubble.innerHTML = '';
         }
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        // 逐段显示
+        const chars = fullResponse.split('');
+        let displayed = '';
+        const chunkSize = 3;
+        for (let i = 0; i < chars.length; i += chunkSize) {
+            displayed += chars.slice(i, i + chunkSize).join('');
+            if (responseBubble) {
+                responseBubble.innerHTML = marked.parse(displayed);
+                responseBubble.querySelectorAll('pre code').forEach(block => {
+                    hljs.highlightElement(block);
+                });
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            // 小延迟模拟打字效果
+            await new Promise(r => setTimeout(r, 10));
+        }
 
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split('\n');
-
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.slice(6));
-
-                        if (data.error) {
-                            const bubble = document.getElementById('currentResponse');
-                            if (bubble) {
-                                bubble.innerHTML = `<span style="color: red; padding: 10px; display: block;">❌ 错误: ${data.error}</span>`;
-                            }
-                            return; // 结束流式读取
-                        }
-
-                        if (data.content) {
-                            fullResponse += data.content;
-                            const bubble = document.getElementById('currentResponse');
-                            if (bubble) {
-                                bubble.innerHTML = marked.parse(fullResponse);
-
-                                // 实时代码高亮
-                                bubble.querySelectorAll('pre code').forEach(block => {
-                                    hljs.highlightElement(block);
-                                });
-                            }
-
-                            chatMessages.scrollTop = chatMessages.scrollHeight;
-                        }
-
-                        if (data.done) {
-                            currentConversationId = data.conversation_id;
-
-                            // 添加操作按钮
-                            const msgDiv = document.getElementById('currentMessage');
-                            if (msgDiv) {
-                                const msgActions = document.createElement('div');
-                                msgActions.className = 'message-actions';
-                                msgActions.innerHTML = `
-                                    <button class="msg-action-btn" onclick="copyCurrentResponse()">📋 复制</button>
-                                    <button class="msg-action-btn" onclick="saveCurrentConversation()">💾 保存</button>
-                                    <button class="msg-action-btn" onclick="exportCurrentResponse('markdown')">📥 MD</button>
-                                `;
-                                const bubble = msgDiv.querySelector('.message-bubble');
-                                if (bubble && !bubble.nextElementSibling?.classList.contains('message-actions')) {
-                                    bubble.after(msgActions);
-                                }
-                            }
-
-                            // 刷新对话列表
-                            loadConversations();
-                        }
-                    } catch (e) {
-                        console.warn('解析SSE数据失败:', e);
-                    }
-                }
+        // 添加操作按钮
+        const msgDiv = document.getElementById('currentMessage');
+        if (msgDiv) {
+            const msgActions = document.createElement('div');
+            msgActions.className = 'message-actions';
+            msgActions.innerHTML = `
+                <button class="msg-action-btn" onclick="copyCurrentResponse()">📋 复制</button>
+                <button class="msg-action-btn" onclick="saveCurrentConversation()">💾 保存</button>
+                <button class="msg-action-btn" onclick="exportCurrentResponse('markdown')">📥 MD</button>
+            `;
+            const bubble = msgDiv.querySelector('.message-bubble');
+            if (bubble && !bubble.nextElementSibling?.classList.contains('message-actions')) {
+                bubble.after(msgActions);
             }
         }
+
+        // 刷新对话列表
+        loadConversations();
 
     } catch (error) {
         console.error('流式请求失败:', error);
@@ -695,30 +674,39 @@ async function streamChat(prompt) {
 }
 
 async function normalChat(prompt) {
-    const aiForm = document.getElementById('aiForm');
-    
+    const model = document.getElementById('model').value;
+    const temperature = document.getElementById('temperature').value;
+
     try {
-        const formData = new FormData(aiForm);
-        const response = await fetch('/ai', {
+        const response = await fetch('/api/ai/chat', {
             method: 'POST',
-            body: formData
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: prompt,
+                model: model,
+                temperature: parseFloat(temperature)
+            })
         });
-        
-        const html = await response.text();
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        
-        const outputSection = doc.querySelector('.response-section .ai-output');
-        const errorSection = doc.querySelector('.error-message');
-        
-        if (outputSection) {
-            addMessageToChat('assistant', outputSection.textContent);
-        } else if (errorSection) {
-            addMessageToChat('assistant', errorSection.textContent);
-        } else {
-            addMessageToChat('assistant', '未收到有效回复');
+
+        if (!response.ok) {
+            let errorMsg = `HTTP错误: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                errorMsg = errorData.message || errorMsg;
+            } catch (e) {}
+            throw new Error(errorMsg);
         }
-        
+
+        const result = await response.json();
+
+        if (result.success) {
+            addMessageToChat('assistant', result.data.response);
+            currentConversationId = result.data.content_id;
+            loadConversations();
+        } else {
+            addMessageToChat('assistant', result.message || 'AI调用失败');
+        }
+
     } catch (error) {
         addMessageToChat('assistant', `请求失败: ${error.message}`);
     }
@@ -835,22 +823,28 @@ function copyCurrentResponse() {
 async function saveCurrentConversation() {
     const bubble = document.getElementById('currentResponse');
     if (!bubble) return;
-    
+
     const prompt = document.querySelectorAll('.message-user .message-bubble');
     const lastPrompt = prompt.length > 0 ? prompt[prompt.length - 1].innerText : '';
     const response = bubble.innerText;
     const aiFunction = document.getElementById('ai_function').value;
-    
+
     try {
-        const form = new FormData();
-        form.append('ai_function', aiFunction);
-        form.append('prompt', lastPrompt);
-        form.append('response', response);
-        
-        const res = await fetch('/save-ai-content', { method: 'POST', body: form });
-        const result = await res.json();
-        
-        alert(result.success ? '保存成功！' : result.message);
+        const res = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: lastPrompt,
+                model: document.getElementById('model').value
+            })
+        });
+
+        // 如果对话已经保存过（通过stream/normal chat），直接提示成功
+        if (typeof showToast === 'function') {
+            showToast('对话已保存', 'success');
+        } else {
+            alert('对话已保存！');
+        }
     } catch (error) {
         alert('保存失败: ' + error.message);
     }

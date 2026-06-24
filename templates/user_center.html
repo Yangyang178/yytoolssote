@@ -409,8 +409,8 @@
                                 <tbody>
                                     {% for log in access_logs %}
                                     <tr class="log-row">
-                                        <td>{{ log.filename }}</td>
-                                        <td>
+                                        <td data-label="文件名">{{ log.filename }}</td>
+                                        <td data-label="操作类型">
                                             {% if log.action == 'view' %}
                                                 <span class="action-tag action-view">查看</span>
                                             {% elif log.action == 'download' %}
@@ -419,8 +419,8 @@
                                                 <span class="action-tag action-other">{{ log.action }}</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ log.ip_address }}</td>
-                                        <td>{{ log.access_time }}</td>
+                                        <td data-label="IP地址">{{ log.ip_address }}</td>
+                                        <td data-label="访问时间">{{ log.access_time }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -461,7 +461,7 @@
                                 <tbody>
                                     {% for log in operation_logs %}
                                     <tr class="log-row">
-                                        <td>
+                                        <td data-label="操作类型">
                                             {% if log.action == 'upload' %}
                                                 <span class="action-tag action-upload">上传</span>
                                             {% elif log.action == 'delete' %}
@@ -472,10 +472,10 @@
                                                 <span class="action-tag action-other">{{ log.action }}</span>
                                             {% endif %}
                                         </td>
-                                        <td>{{ log.target_type or '未知' }}</td>
-                                        <td>{{ log.message }}</td>
-                                        <td>{{ log.details or '-' }}</td>
-                                        <td>{{ log.created_at }}</td>
+                                        <td data-label="目标类型">{{ log.target_type or '未知' }}</td>
+                                        <td data-label="操作消息">{{ log.message }}</td>
+                                        <td data-label="详细信息">{{ log.details or '-' }}</td>
+                                        <td data-label="操作时间">{{ log.created_at }}</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>

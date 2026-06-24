@@ -1,4 +1,4 @@
-from flask import Blueprint, request, render_template, redirect, url_for
+from flask import Blueprint, request, render_template, redirect, url_for, session
 
 
 class _LazyAppImports:
@@ -20,6 +20,8 @@ blog_feedback_bp = Blueprint('blog_feedback', __name__)
 
 @blog_feedback_bp.route('/blog', endpoint='blog_page')
 def blog():
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
     conn = _app.get_db()
     try:
         posts = conn.execute("SELECT * FROM operation_logs WHERE action LIKE '%blog_post%' ORDER BY created_at DESC").fetchall()
@@ -46,6 +48,8 @@ def blog():
 
 @blog_feedback_bp.route('/blog/<blog_id>', endpoint='blog_detail')
 def blog_detail(blog_id):
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
     conn = _app.get_db()
     try:
         post = conn.execute("SELECT * FROM operation_logs WHERE id = ?", (blog_id,)).fetchone()

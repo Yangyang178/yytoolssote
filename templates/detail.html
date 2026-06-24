@@ -52,14 +52,13 @@
         </div>
         
         <!-- 操作按钮 -->
-        <div class="detail-actions">
-          <a class="btn btn-primary" href="{{ url_for('sandbox', stored_name=item.stored_name) }}" target="_blank">在沙盒中运行</a>
-          <a class="btn btn-secondary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank">直接打开</a>
-          <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}">下载</a>
+        <div class="detail-actions" style="display:flex;gap:12px;margin-top:24px;padding-top:20px;border-top:1px solid #f1f5f9;flex-wrap:wrap;">
+          <a class="btn btn-primary" href="{{ url_for('sandbox', stored_name=item.stored_name) }}" target="_blank" style="flex:1;min-width:120px;text-align:center;">🚀 沙盒运行</a>
+          <a class="btn btn-secondary" href="{{ url_for('open_local', stored_name=item.stored_name) }}" target="_blank" style="flex:1;min-width:120px;text-align:center;">📂 直接打开</a>
+          <a class="btn btn-primary" href="{{ url_for('download_local', stored_name=item.stored_name) }}" style="flex:1;min-width:120px;text-align:center;">⬇️ 下载</a>
           {% if is_owner %}
-          <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post">
-
-            <button class="btn btn-danger" type="submit" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">删除</button>
+          <form class="inline" action="{{ url_for('file_delete', file_id=item.id) }}" method="post" style="flex:1;min-width:120px;">
+            <button class="btn btn-danger" type="submit" style="width:100%;" onclick="return confirm('确定要删除这个文件吗？此操作不可恢复。')">🗑️ 删除</button>
           </form>
           {% endif %}
         </div>

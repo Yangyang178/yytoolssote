@@ -477,11 +477,14 @@ def api_v1_delete_file(file_id):
 
         file_dict = dict(row)
         trash_id = uuid.uuid4().hex
-        expire_at = (datetime.now() + timedelta(days=30)).isoformat()
+        from datetime import timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
         conn.execute(
-            'INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (trash_id, file_id, user_id, file_dict['filename'], file_dict['stored_name'],
-             file_dict.get('path', ''), file_dict.get('size', 0), '', file_dict.get('folder_id'), expire_at)
+             file_dict.get('path', ''), file_dict.get('size', 0), '', file_dict.get('folder_id'), bj_now, expire_at)
         )
         conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, user_id))
         conn.commit()

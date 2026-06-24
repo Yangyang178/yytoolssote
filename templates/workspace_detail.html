@@ -49,82 +49,88 @@
     </div>
 </div>
 
-<div id="add-file-modal" class="modal-overlay" style="display:none">
+<div id="add-file-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)hideAddFileModal()">
     <div class="modal-content">
         <div class="modal-header">
             <h2>添加文件到空间</h2>
             <button class="modal-close" onclick="hideAddFileModal()">&times;</button>
         </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>选择文件</label>
-                <select id="file-select" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
-                    <option value="">加载中...</option>
-                </select>
+        <form data-no-loading onsubmit="event.preventDefault(); addFileToWorkspace();">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>选择文件</label>
+                    <select id="file-select" style="width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <input type="text" id="file-desc" placeholder="文件描述（可选）" autocomplete="off" />
+                </div>
             </div>
-            <div class="form-group">
-                <label>描述</label>
-                <input type="text" id="file-desc" placeholder="文件描述（可选）">
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="hideAddFileModal()">取消</button>
+                <button type="submit" class="btn-primary">添加</button>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="hideAddFileModal()">取消</button>
-            <button class="btn-primary" onclick="addFileToWorkspace()">添加</button>
-        </div>
+        </form>
     </div>
 </div>
 
-<div id="invite-modal" class="modal-overlay" style="display:none">
+<div id="invite-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)hideInviteModal()">
     <div class="modal-content">
         <div class="modal-header">
             <h2>邀请成员</h2>
             <button class="modal-close" onclick="hideInviteModal()">&times;</button>
         </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>邮箱地址</label>
-                <input type="email" id="invite-email" placeholder="输入成员邮箱">
+        <form data-no-loading onsubmit="event.preventDefault(); inviteMember();">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>邮箱地址</label>
+                    <input type="email" id="invite-email" placeholder="输入成员邮箱" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>角色</label>
+                    <select id="invite-role">
+                        <option value="viewer">查看者</option>
+                        <option value="editor">编辑者</option>
+                        <option value="admin">管理员</option>
+                    </select>
+                </div>
             </div>
-            <div class="form-group">
-                <label>角色</label>
-                <select id="invite-role">
-                    <option value="viewer">查看者</option>
-                    <option value="editor">编辑者</option>
-                    <option value="admin">管理员</option>
-                </select>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="hideInviteModal()">取消</button>
+                <button type="submit" class="btn-primary">邀请</button>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="hideInviteModal()">取消</button>
-            <button class="btn-primary" onclick="inviteMember()">邀请</button>
-        </div>
+        </form>
     </div>
 </div>
 
-<div id="settings-modal" class="modal-overlay" style="display:none">
+<div id="settings-modal" class="modal-overlay" style="display:none" onclick="if(event.target===this)hideSettingsModal()">
     <div class="modal-content">
         <div class="modal-header">
             <h2>空间设置</h2>
             <button class="modal-close" onclick="hideSettingsModal()">&times;</button>
         </div>
-        <div class="modal-body">
-            <div class="form-group">
-                <label>空间名称</label>
-                <input type="text" id="settings-name" value="{{ workspace.name }}">
+        <form data-no-loading onsubmit="event.preventDefault(); saveSettings();">
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>空间名称</label>
+                    <input type="text" id="settings-name" value="{{ workspace.name }}" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>描述</label>
+                    <textarea id="settings-desc" rows="3">{{ workspace.description or '' }}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <input type="text" id="settings-icon" value="{{ workspace.icon or '📁' }}" maxlength="4" autocomplete="off" />
+                </div>
             </div>
-            <div class="form-group">
-                <label>描述</label>
-                <textarea id="settings-desc" rows="3">{{ workspace.description or '' }}</textarea>
+            <div class="modal-footer">
+                <button type="button" class="btn-secondary" onclick="hideSettingsModal()">取消</button>
+                <button type="submit" class="btn-primary">保存</button>
             </div>
-            <div class="form-group">
-                <label>图标</label>
-                <input type="text" id="settings-icon" value="{{ workspace.icon or '📁' }}" maxlength="4">
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn-secondary" onclick="hideSettingsModal()">取消</button>
-            <button class="btn-primary" onclick="saveSettings()">保存</button>
-        </div>
+        </form>
     </div>
 </div>
 
@@ -170,6 +176,24 @@
 .form-group label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
 .form-group input, .form-group select { width: 100%; padding: 8px 12px; border: 1px solid var(--color-gray-300); border-radius: var(--radius-sm); font-size: 14px; box-sizing: border-box; }
 .empty-state { text-align: center; padding: 48px 24px; color: var(--color-gray-500); }
+
+@media (max-width: 768px) {
+    .ws-detail-container { padding: 16px; }
+    .ws-info { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .ws-icon { font-size: 32px; }
+    .ws-info h1 { font-size: 20px; }
+    .ws-actions { flex-direction: column; gap: 8px; width: 100%; }
+    .ws-actions button { width: 100%; padding: 12px; }
+    .ws-detail-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .tab-btn { white-space: nowrap; padding: 10px 14px; font-size: 13px; }
+    .ws-files-grid { grid-template-columns: 1fr; }
+    .ws-file-card { padding: 14px; }
+    .ws-member-item { padding: 10px; }
+    .modal-content { width: 95%; max-height: 90vh; }
+    .modal-footer { flex-direction: column; }
+    .modal-footer button { width: 100%; padding: 12px; }
+    .add-file-section .btn-primary { width: 100%; text-align: center; padding: 12px; }
+}
 </style>
 
 <script>
@@ -183,16 +207,16 @@ function switchTab(tabId) {
     document.getElementById(tabId).classList.add('active');
 }
 
-function showAddFileModal() { loadMyFiles(); document.getElementById('add-file-modal').style.display = 'flex'; }
-function hideAddFileModal() { document.getElementById('add-file-modal').style.display = 'none'; }
-function showInviteModal() { document.getElementById('invite-modal').style.display = 'flex'; }
-function hideInviteModal() { document.getElementById('invite-modal').style.display = 'none'; }
-function showSettingsModal() { document.getElementById('settings-modal').style.display = 'flex'; }
-function hideSettingsModal() { document.getElementById('settings-modal').style.display = 'none'; }
+function showAddFileModal() { loadMyFiles(); document.getElementById('add-file-modal').classList.add('active'); document.getElementById('add-file-modal').style.display = 'flex'; }
+function hideAddFileModal() { document.getElementById('add-file-modal').classList.remove('active'); document.getElementById('add-file-modal').style.display = 'none'; }
+function showInviteModal() { document.getElementById('invite-modal').classList.add('active'); document.getElementById('invite-modal').style.display = 'flex'; }
+function hideInviteModal() { document.getElementById('invite-modal').classList.remove('active'); document.getElementById('invite-modal').style.display = 'none'; }
+function showSettingsModal() { document.getElementById('settings-modal').classList.add('active'); document.getElementById('settings-modal').style.display = 'flex'; }
+function hideSettingsModal() { document.getElementById('settings-modal').classList.remove('active'); document.getElementById('settings-modal').style.display = 'none'; }
 
 async function loadWorkspaceFiles() {
     try {
-        const resp = await fetch(`/api/workspaces/${wsId}/files`);
+        const resp = await fetch(`/api/workspaces/${wsId}/files`, {credentials: 'same-origin'});
         const data = await resp.json();
         if (!data.success) return;
         const list = document.getElementById('ws-files-list');
@@ -209,7 +233,7 @@ async function loadWorkspaceFiles() {
 
 async function loadMembers() {
     try {
-        const resp = await fetch(`/api/workspaces/${wsId}/members`);
+        const resp = await fetch(`/api/workspaces/${wsId}/members`, {credentials: 'same-origin'});
         const data = await resp.json();
         if (!data.success) return;
         const list = document.getElementById('ws-members-list');
@@ -231,7 +255,7 @@ async function loadMembers() {
 
 async function loadMyFiles() {
     try {
-        const resp = await fetch('/api/my-files?per_page=100');
+        const resp = await fetch('/api/my-files?per_page=100', {credentials: 'same-origin'});
         const data = await resp.json();
         const sel = document.getElementById('file-select');
         if (!data.success) { sel.innerHTML = '<option value="">加载失败</option>'; return; }
@@ -253,22 +277,26 @@ async function addFileToWorkspace() {
     const fileId = document.getElementById('file-select').value;
     const desc = document.getElementById('file-desc').value.trim();
     if (!fileId) { alert('请选择文件'); return; }
+    if (typeof hideLoading === 'function') hideLoading();
     try {
         const resp = await fetch(`/api/workspaces/${wsId}/files`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
             body: JSON.stringify({file_id: fileId, description: desc})
         });
+        if (typeof hideLoading === 'function') hideLoading();
+        if (resp.status === 401) { alert('登录已过期，请重新登录'); window.location.href = '/auth'; return; }
         const data = await resp.json();
-        if (data.success) { hideAddFileModal(); loadWorkspaceFiles(); }
+        if (data.success) { if (typeof showToast === 'function') showToast('文件添加成功', 'success'); hideAddFileModal(); loadWorkspaceFiles(); }
         else { alert(data.message || '添加失败'); }
-    } catch(e) { alert('添加失败'); }
+    } catch(e) { if (typeof hideLoading === 'function') hideLoading(); alert('添加失败'); }
 }
 
 async function removeFile(fileId) {
     if (!confirm('确定移除此文件？')) return;
     try {
-        const resp = await fetch(`/api/workspaces/${wsId}/files/${fileId}`, {method: 'DELETE'});
+        const resp = await fetch(`/api/workspaces/${wsId}/files/${fileId}`, {method: 'DELETE', credentials: 'same-origin'});
         const data = await resp.json();
         if (data.success) loadWorkspaceFiles();
         else alert(data.message);
@@ -279,22 +307,26 @@ async function inviteMember() {
     const email = document.getElementById('invite-email').value.trim();
     const role = document.getElementById('invite-role').value;
     if (!email) { alert('请输入邮箱'); return; }
+    if (typeof hideLoading === 'function') hideLoading();
     try {
         const resp = await fetch(`/api/workspaces/${wsId}/members`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
             body: JSON.stringify({email, role})
         });
+        if (typeof hideLoading === 'function') hideLoading();
+        if (resp.status === 401) { alert('登录已过期，请重新登录'); window.location.href = '/auth'; return; }
         const data = await resp.json();
-        if (data.success) { hideInviteModal(); loadMembers(); }
+        if (data.success) { if (typeof showToast === 'function') showToast('邀请成功', 'success'); hideInviteModal(); loadMembers(); }
         else { alert(data.message || '邀请失败'); }
-    } catch(e) { alert('邀请失败'); }
+    } catch(e) { if (typeof hideLoading === 'function') hideLoading(); alert('邀请失败'); }
 }
 
 async function removeMember(userId) {
     if (!confirm('确定移除此成员？')) return;
     try {
-        const resp = await fetch(`/api/workspaces/${wsId}/members/${userId}`, {method: 'DELETE'});
+        const resp = await fetch(`/api/workspaces/${wsId}/members/${userId}`, {method: 'DELETE', credentials: 'same-origin'});
         const data = await resp.json();
         if (data.success) loadMembers();
         else alert(data.message);
@@ -320,16 +352,20 @@ async function saveSettings() {
     const description = document.getElementById('settings-desc').value.trim();
     const icon = document.getElementById('settings-icon').value.trim();
     if (!name) { alert('空间名称不能为空'); return; }
+    if (typeof hideLoading === 'function') hideLoading();
     try {
         const resp = await fetch(`/api/workspaces/${wsId}`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
             body: JSON.stringify({name, description, icon})
         });
+        if (typeof hideLoading === 'function') hideLoading();
+        if (resp.status === 401) { alert('登录已过期，请重新登录'); window.location.href = '/auth'; return; }
         const data = await resp.json();
-        if (data.success) { hideSettingsModal(); location.reload(); }
+        if (data.success) { if (typeof showToast === 'function') showToast('设置已保存', 'success'); hideSettingsModal(); location.reload(); }
         else { alert(data.message || '保存失败'); }
-    } catch(e) { alert('保存失败: ' + e.message); }
+    } catch(e) { if (typeof hideLoading === 'function') hideLoading(); alert('保存失败: ' + e.message); }
 }
 
 loadWorkspaceFiles();

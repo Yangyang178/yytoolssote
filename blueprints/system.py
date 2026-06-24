@@ -44,6 +44,8 @@ system_bp = Blueprint('system', __name__)
 
 @system_bp.route('/', endpoint='index')
 def index():
+    if 'user_id' not in session:
+        return redirect(url_for('auth'))
     try:
         files = _app.get_all_files()
         remote_table = []

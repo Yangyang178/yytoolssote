@@ -10,6 +10,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="yytoolssite">
+    <!-- CSRF Token -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192x192.png') }}">
     <!-- 设计令牌（必须在其他CSS之前加载） -->
     <link rel="stylesheet" href="{{ url_for('static', filename='design-tokens.css') }}?v={{ range(1000000, 9999999) | random }}">
@@ -500,13 +502,9 @@
         <span class="nav-icon">🤖</span>
         <span>AI</span>
       </a>
-      <a href="{{ url_for('upload_page') }}" class="bottom-nav-item" data-page="upload">
+      <a href="{{ url_for('upload_page') }}" class="bottom-nav-item fab-center" data-page="upload">
         <span class="nav-icon">📤</span>
         <span>上传</span>
-      </a>
-      <a href="{{ url_for('notification_center') }}" class="bottom-nav-item" data-page="notifications">
-        <span class="nav-icon">🔔</span>
-        <span>通知</span>
       </a>
       <a href="{{ url_for('workspaces_list') }}" class="bottom-nav-item" data-page="workspaces">
         <span class="nav-icon">👥</span>
@@ -518,9 +516,6 @@
       </a>
     </div>
   </nav>
-
-  <!-- 移动端浮动操作按钮 -->
-  <a href="{{ url_for('upload_page') }}" class="fab" title="上传文件">+</a>
 
   <!-- 文件预览器 -->
   <div class="file-preview-overlay" id="filePreviewOverlay">
@@ -805,6 +800,69 @@
       });
     });
     window._socket = socket;
+  })();
+  </script>
+  <!-- CSRF 全局拦截：自动为表单和 fetch 请求注入 Token -->
+  <script>
+  (function() {
+    function getCsrfToken() {
+      const meta = document.querySelector('meta[name="csrf-token"]');
+      return meta ? meta.getAttribute('content') : '';
+    }
+
+    // 自动为所有表单添加 CSRF 隐藏字段
+    function injectFormTokens() {
+      document.querySelectorAll('form').forEach(function(form) {
+        if (form.method && form.method.toLowerCase() !== 'get' && !form.querySelector('input[name="csrf_token"]')) {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = 'csrf_token';
+          input.value = getCsrfToken();
+          form.appendChild(input);
+        }
+      });
+    }
+
+    // MutationObserver 监听动态添加的表单
+    const observer = new MutationObserver(function(mutations) {
+      let hasNewForm = false;
+      mutations.forEach(function(m) {
+        m.addedNodes.forEach(function(node) {
+          if (node.nodeType === 1) {
+            if (node.tagName === 'FORM' || node.querySelector && node.querySelector('form')) {
+              hasNewForm = true;
+            }
+          }
+        });
+      });
+      if (hasNewForm) injectFormTokens();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    // 页面加载完成后注入
+    document.addEventListener('DOMContentLoaded', injectFormTokens);
+
+    // 拦截 fetch 请求，自动添加 X-CSRFToken 头
+    const originalFetch = window.fetch;
+    window.fetch = function(url, options) {
+      options = options || {};
+      const method = (options.method || 'GET').toUpperCase();
+      // 只对非 GET 请求添加 CSRF Token
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        options.headers = options.headers || {};
+        // 如果是 Headers 对象，转为普通对象
+        if (options.headers instanceof Headers) {
+          const plain = {};
+          options.headers.forEach(function(v, k) { plain[k] = v; });
+          options.headers = plain;
+        }
+        // 不覆盖已存在的 X-CSRFToken
+        if (!options.headers['X-CSRFToken'] && !options.headers['x-csrftoken']) {
+          options.headers['X-CSRFToken'] = getCsrfToken();
+        }
+      }
+      return originalFetch.call(this, url, options);
+    };
   })();
   </script>
 </body>

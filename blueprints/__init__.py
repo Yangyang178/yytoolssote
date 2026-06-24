@@ -15,6 +15,7 @@ def register_blueprints(app):
     from .openapi import openapi_bp
     from .workspace import workspace_bp
     from .comments import comments_bp
+    from .miniapp import miniapp_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(files_bp)
@@ -29,6 +30,7 @@ def register_blueprints(app):
     app.register_blueprint(openapi_bp)
     app.register_blueprint(workspace_bp)
     app.register_blueprint(comments_bp)
+    app.register_blueprint(miniapp_bp)
 
     endpoint_map = {}
     for rule in list(app.url_map.iter_rules()):

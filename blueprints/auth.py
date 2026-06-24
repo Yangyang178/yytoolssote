@@ -251,6 +251,13 @@ def user_center():
             (session['user_id'],)).fetchall()
         operation_logs = [dict(log) for log in operation_logs]
 
+        # 清理时间格式：去掉时区后缀（+08:00），统一显示为 YYYY-MM-DD HH:MM:SS
+        for log in operation_logs:
+            if log.get('created_at'):
+                ca = str(log['created_at'])
+                if '+' in ca:
+                    log['created_at'] = ca.split('+')[0]
+
         folder_count = conn.execute(
             "SELECT COUNT(*) as cnt FROM folders WHERE user_id = ?",
             (session['user_id'],)).fetchone()['cnt']

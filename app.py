@@ -2350,6 +2350,53 @@ data_security.get_encryption().ensure_key()
 print(f"[安全] 数据加密: {'已启用' if data_security.get_encryption().available else '未配置密钥'}")
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
 
+# ==================== CSRF 防护 ====================
+import hmac
+import hashlib
+
+def generate_csrf_token():
+    """生成 CSRF Token，存入 session"""
+    if '_csrf_token' not in session:
+        session['_csrf_token'] = secrets.token_hex(32)
+    return session['_csrf_token']
+
+def validate_csrf_token(token):
+    """验证 CSRF Token"""
+    stored = session.get('_csrf_token')
+    if not stored or not token:
+        return False
+    return hmac.compare_digest(stored, token)
+
+# CSRF 白名单路径（不需要验证的路由）
+CSRF_EXEMPT_PREFIXES = (
+    '/static/', '/api/v1/', '/open/', '/socket.io/',
+    '/miniapp/', '/sandbox/', '/download/', '/preview/',
+    '/shared_file/', '/s/', '/uploads/',
+)
+CSRF_EXEMPT_EXACT = ('/privacy', '/terms', '/favicon.ico', '/manifest.json', '/sw.js', '/auth')
+
+@app.before_request
+def csrf_protect():
+    """CSRF 验证：对 POST/PUT/DELETE/PATCH 请求验证 Token"""
+    if request.method in ('GET', 'HEAD', 'OPTIONS'):
+        return None
+    # 白名单路径跳过验证
+    for prefix in CSRF_EXEMPT_PREFIXES:
+        if request.path.startswith(prefix):
+            return None
+    if request.path in CSRF_EXEMPT_EXACT:
+        return None
+    # 获取 Token：优先从请求头获取，其次从表单字段获取
+    token = request.headers.get('X-CSRFToken') or request.form.get('csrf_token')
+    if not validate_csrf_token(token):
+        # 记录日志但不阻断请求（兼容期），后续可改为严格模式
+        print(f"[CSRF] 验证失败: path={request.path}, token={token[:8] if token else 'None'}...")
+        # 返回 403 错误
+        if request.path.startswith('/api/'):
+            return jsonify({'success': False, 'message': 'CSRF 验证失败，请刷新页面重试'}), 403
+        flash('安全验证失败，请重新提交', 'error')
+        return redirect(request.referrer or url_for('index'))
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet', manage_session=False)
 
 # 静态文件缓存配置
@@ -2374,6 +2421,7 @@ def inject_cdn_helpers():
         'cdn_url': app.config.get('CDN_URL', ''),
         'static_version': app.config.get('STATIC_VERSION', 'v1'),
         'current_user': current_user,
+        'csrf_token': generate_csrf_token,
     }
 
 # 添加缓存控制头的中间件
@@ -2383,9 +2431,15 @@ def add_cache_headers(response):
     if request.path.startswith('/static/'):
         # 对于CSS、JS、图片等静态资源，设置较长的缓存时间
         if any(ext in request.path for ext in ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.json', '.woff', '.woff2', '.ttf', '.eot']):
-            response.cache_control.max_age = 31536000  # 1年
-            response.cache_control.public = True
-            response.cache_control.immutable = True
+            # 带查询参数(缓存破坏)的请求可以长缓存，否则短缓存
+            if request.query_string:
+                response.cache_control.max_age = 31536000  # 1年
+                response.cache_control.public = True
+                response.cache_control.immutable = True
+            else:
+                response.cache_control.max_age = 3600  # 1小时
+                response.cache_control.public = True
+                response.cache_control.must_revalidate = True
         # 对于manifest.json和service-worker.js，设置较短的缓存时间
         elif '/static/manifest.json' in request.path or '/static/service-worker.js' in request.path:
             response.cache_control.max_age = 86400  # 1天
@@ -2398,9 +2452,13 @@ def add_cache_headers(response):
         response.cache_control.must_revalidate = True
     # 对于API响应，设置适当的缓存头
     elif request.path.startswith('/api/'):
-        response.cache_control.max_age = 3600  # 1小时
-        response.cache_control.public = True
-        response.cache_control.must_revalidate = True
+        if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
+            response.cache_control.no_cache = True
+            response.cache_control.no_store = True
+        else:
+            response.cache_control.max_age = 60
+            response.cache_control.private = True
+            response.cache_control.must_revalidate = True
     return response
 
 DKFILE_BASE = os.getenv("DKFILE_API_BASE", "http://dkfile.net/dkfile_api")
@@ -3609,7 +3667,9 @@ def log_message(log_type='operation', log_level='INFO', message='', user_id=None
     if log_type == 'operation':
         conn = get_db()
         try:
-            local_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            from datetime import timezone, timedelta as _td
+            bj_tz = timezone(_td(hours=8))
+            local_time = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
             cursor = conn.execute('''INSERT INTO operation_logs (user_id, action, target_id, target_type, message, details, created_at)
                                    VALUES (?, ?, ?, ?, ?, ?, ?)''',
                                (user_id or 'unknown', action, target_id, target_type, message, details, local_time))
@@ -3947,9 +4007,12 @@ def log_access(file_id, action, request):
     user_id = session.get('user_id')
     ip_address = request.remote_addr
     user_agent = request.user_agent.string
-    conn.execute('''INSERT INTO access_logs (file_id, user_id, action, ip_address, user_agent)
-                    VALUES (?, ?, ?, ?, ?)''',
-                (file_id, user_id, action, ip_address, user_agent))
+    from datetime import timezone, timedelta as _td
+    bj_tz = timezone(_td(hours=8))
+    access_time = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+    conn.execute('''INSERT INTO access_logs (file_id, user_id, action, ip_address, user_agent, access_time)
+                    VALUES (?, ?, ?, ?, ?, ?)''',
+                (file_id, user_id, action, ip_address, user_agent, access_time))
     conn.commit()
 
 
@@ -4272,15 +4335,31 @@ def get_access_logs(user_id):
                            WHERE f.user_id = ?
                            ORDER BY al.access_time DESC''',
                           (user_id,)).fetchall()
-    return [{
-        "id": row["id"],
-        "file_id": row["file_id"],
-        "filename": row["filename"],
-        "action": row["action"],
-        "ip_address": row["ip_address"],
-        "user_agent": row["user_agent"],
-        "access_time": row["access_time"]
-    } for row in rows]
+    from datetime import timezone, timedelta as _td
+    bj_tz = timezone(_td(hours=8))
+    result = []
+    for row in rows:
+        access_time = row["access_time"]
+        # 将 UTC 时间转换为北京时间显示
+        if access_time:
+            try:
+                dt = datetime.fromisoformat(str(access_time).replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    # 无时区信息，视为 UTC
+                    dt = dt.replace(tzinfo=timezone.utc)
+                access_time = dt.astimezone(bj_tz).strftime('%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError):
+                pass
+        result.append({
+            "id": row["id"],
+            "file_id": row["file_id"],
+            "filename": row["filename"],
+            "action": row["action"],
+            "ip_address": row["ip_address"],
+            "user_agent": row["user_agent"],
+            "access_time": access_time
+        })
+    return result
 
 
 # 点赞相关函数
@@ -4481,6 +4560,23 @@ def deepseek_chat(messages, model="deepseek-chat", temperature=0.5):
 
 from blueprints import register_blueprints
 register_blueprints(app)
+
+# 全局登录拦截：未登录时所有页面路由重定向到登录页
+@app.before_request
+def require_login():
+    # 静态资源、API、auth 相关页面不需要拦截
+    if request.path.startswith('/static') or request.path.startswith('/auth') or request.path.startswith('/api/'):
+        return None
+    # 公开页面白名单
+    public_paths = ['/privacy', '/terms', '/favicon.ico', '/manifest.json', '/sw.js',
+                    '/uploads/', '/s/', '/download-shared/', '/open/', '/sandbox/',
+                    '/miniapp/', '/download/', '/preview/', '/shared_file/', '/socket.io/']
+    for p in public_paths:
+        if request.path.startswith(p):
+            return None
+    # 只拦截页面路由（GET 请求，非 API）
+    if request.method == 'GET' and 'user_id' not in session:
+        return redirect(url_for('auth'))
 
 import helpers as _helpers
 _helpers.set_db_path(str(DB_FILE))

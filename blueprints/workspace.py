@@ -1,7 +1,9 @@
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, session, send_from_directory
-import os, json, sqlite3, shutil, base64, uuid
+import os, json, sqlite3, shutil, base64, uuid, logging
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class _LazyAppImports:
     def __getattr__(self, name):
@@ -53,6 +55,8 @@ def _check_permission(workspace_id, user_id, required_roles):
 def workspaces_list():
     if 'user_id' not in session:
         return redirect(url_for('auth'))
+
+    logger.info(f"[Workspace] GET /workspaces - user_id={session.get('user_id')}")
 
     user_id = session['user_id']
     conn = _app.get_db()
@@ -159,7 +163,9 @@ def api_list_workspaces():
 
 @workspace_bp.route('/api/workspaces', methods=['POST'], endpoint='api_create_workspace')
 def api_create_workspace():
+    logger.info(f"[Workspace] POST /api/workspaces - session: {dict(session)}")
     if 'user_id' not in session:
+        logger.warning("[Workspace] 创建工作空间失败: 未登录 (session中无user_id)")
         return _app.api_response(success=False, message='未登录', code=401)
 
     data = request.get_json(silent=True) or {}
@@ -190,6 +196,8 @@ def api_create_workspace():
 
         conn.commit()
 
+        logger.info(f"[Workspace] 工作空间创建成功: {name} (id={ws_id}, owner={user_id})")
+
         _app.log_message(log_type='operation', log_level='INFO',
                         message=f'创建工作空间: {name}',
                         user_id=user_id, action='create_workspace',
@@ -199,6 +207,7 @@ def api_create_workspace():
                                data={'id': ws_id, 'name': name})
     except Exception as e:
         conn.rollback()
+        logger.error(f"[Workspace] 创建工作空间异常: {str(e)}", exc_info=True)
         return _app.api_response(success=False, message=f'创建失败: {str(e)}')
     finally:
         conn.close()
@@ -578,3 +587,17 @@ def api_remove_workspace_file(workspace_id, file_record_id):
         return _app.api_response(success=False, message=f'移除文件失败: {str(e)}')
     finally:
         conn.close()
+
+
+@workspace_bp.route('/api/workspace/session-check', endpoint='api_session_check')
+def api_session_check():
+    has_session = 'user_id' in session
+    result = {
+        'logged_in': has_session,
+        'user_id': session.get('user_id'),
+        'username': session.get('username'),
+        'session_keys': list(session.keys()),
+        'has_cookie': bool(request.cookies.get('session'))
+    }
+    logger.info(f"[Workspace] Session check: {result}")
+    return jsonify(result)

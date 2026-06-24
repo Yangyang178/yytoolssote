@@ -2,8 +2,13 @@ from flask import Blueprint, request, render_template, redirect, url_for, flash,
 import os
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
+
+_bj_tz = timezone(timedelta(hours=8))
+
+def _bj_now():
+    return datetime.now(_bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
 
 class _LazyAppImports:
 
@@ -69,8 +74,8 @@ def ai():
                 content_id = str(uuid.uuid4())
                 conn.execute(
                     '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-                       VALUES (?, ?, 'chat', ?, ?, CURRENT_TIMESTAMP)''',
-                    (content_id, session['user_id'], message, response_text))
+                       VALUES (?, ?, 'chat', ?, ?, ?)''',
+                    (content_id, session['user_id'], message, response_text, _bj_now()))
                 conn.commit()
 
                 _app.log_message(log_type='operation', log_level='INFO',
@@ -124,8 +129,8 @@ def save_ai_content():
         content_id = str(uuid.uuid4())
         conn.execute(
             '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)''',
-            (content_id, session['user_id'], ai_function, prompt, response_text))
+               VALUES (?, ?, ?, ?, ?, ?)''',
+            (content_id, session['user_id'], ai_function, prompt, response_text, _bj_now()))
         conn.commit()
 
         _app.log_message(log_type='operation', log_level='INFO',
@@ -205,8 +210,8 @@ def api_ai_chat():
             content_id = str(uuid.uuid4())
             conn.execute(
                 '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-                   VALUES (?, ?, 'chat', ?, ?, CURRENT_TIMESTAMP)''',
-                (content_id, session['user_id'], message, response_text))
+                   VALUES (?, ?, 'chat', ?, ?, ?)''',
+                (content_id, session['user_id'], message, response_text, _bj_now()))
             conn.commit()
 
             _app.log_message(log_type='operation', log_level='INFO',
@@ -359,9 +364,9 @@ def api_ai_chat_multi_turn():
             conversation_json = json.dumps(messages[-3:], ensure_ascii=False)
             conn.execute(
                 '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-                   VALUES (?, ?, 'multi_turn', ?, ?, CURRENT_TIMESTAMP)''',
+                   VALUES (?, ?, 'multi_turn', ?, ?, ?)''',
                 (content_id, session['user_id'],
-                 conversation_json, response_text))
+                 conversation_json, response_text, _bj_now()))
             conn.commit()
         finally:
             conn.close()
@@ -430,8 +435,8 @@ def api_ai_analyze_file(file_id):
         content_id = str(uuid.uuid4())
         conn.execute(
             '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-               VALUES (?, ?, 'file_analysis', ?, ?, CURRENT_TIMESTAMP)''',
-            (content_id, session['user_id'], prompt, response_text))
+               VALUES (?, ?, 'file_analysis', ?, ?, ?)''',
+            (content_id, session['user_id'], prompt, response_text, _bj_now()))
         conn.commit()
 
         return _app.api_response(success=True, data={
@@ -464,8 +469,8 @@ def api_ai_chat_stream():
             content_id = str(uuid.uuid4())
             conn.execute(
                 '''INSERT INTO ai_contents (id, user_id, ai_function, prompt, response, created_at)
-                   VALUES (?, ?, 'chat', ?, ?, CURRENT_TIMESTAMP)''',
-                (content_id, session['user_id'], message, response_text))
+                   VALUES (?, ?, 'chat', ?, ?, ?)''',
+                (content_id, session['user_id'], message, response_text, _bj_now()))
             conn.commit()
         finally:
             conn.close()

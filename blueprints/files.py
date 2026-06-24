@@ -398,11 +398,14 @@ def delete_file(file_id):
         file = dict(file)
 
         trash_id = str(uuid.uuid4())
-        expire_at = (datetime.now() + timedelta(days=30)).isoformat()
-        conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        from datetime import timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
+        conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                     (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
-                     file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), expire_at))
+                     file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), bj_now, expire_at))
 
         conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (file_id, session['user_id']))
         conn.commit()
@@ -459,11 +462,14 @@ def file_delete(file_id):
         file = dict(file)
 
         trash_id = str(uuid.uuid4())
-        expire_at = (datetime.now() + timedelta(days=30)).isoformat()
-        conn.execute("""INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        from datetime import timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
+        conn.execute("""INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (trash_id, file_id, session['user_id'], file['filename'], file['stored_name'],
-                     file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), expire_at))
+                     file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), bj_now, expire_at))
         conn.execute("DELETE FROM files WHERE id = ? AND user_id = ?", (file_id, session['user_id']))
         conn.commit()
 
@@ -915,11 +921,14 @@ def batch_delete_files():
                 if file:
                     file = dict(file)
                     trash_id = str(uuid.uuid4())
-                    expire_at = (datetime.now() + timedelta(days=30)).isoformat()
-                    conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    from datetime import timezone, timedelta as _td
+                    bj_tz = timezone(_td(hours=8))
+                    bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+                    expire_at = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
+                    conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                                 (trash_id, fid, session['user_id'], file['filename'], file['stored_name'],
-                                 file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), expire_at))
+                                 file.get('path', ''), file.get('size', 0), '', file.get('folder_id'), bj_now, expire_at))
                     conn.execute('DELETE FROM files WHERE id = ? AND user_id = ?', (fid, session['user_id']))
                     deleted_count += 1
 
@@ -1014,6 +1023,10 @@ def delete_folder(folder_id):
         folder = dict(folder)
 
         def move_files_to_trash(parent_folder_id):
+            from datetime import timezone, timedelta as _td
+            bj_tz = timezone(_td(hours=8))
+            bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+            expire_at_val = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
             subfolders = conn.execute('SELECT id FROM folders WHERE parent_id = ? AND user_id = ?',
                                      (parent_folder_id, session['user_id'])).fetchall()
             for subfolder in subfolders:
@@ -1023,11 +1036,10 @@ def delete_folder(folder_id):
                 for f in sub_files:
                     f = dict(f)
                     trash_id = str(uuid.uuid4())
-                    expire_at = (datetime.now() + timedelta(days=30)).isoformat()
-                    conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at)
-                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                    conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                                 (trash_id, f['id'], session['user_id'], f['filename'], f['stored_name'],
-                                 f.get('path', ''), f.get('size', 0), '', f.get('folder_id'), expire_at))
+                                 f.get('path', ''), f.get('size', 0), '', f.get('folder_id'), bj_now, expire_at_val))
                 conn.execute('DELETE FROM files WHERE folder_id = ? AND user_id = ?',
                             (subfolder['id'], session['user_id']))
                 conn.execute('DELETE FROM folders WHERE id = ?', (subfolder['id'],))
@@ -1036,14 +1048,17 @@ def delete_folder(folder_id):
 
         files_in_folder = conn.execute('SELECT * FROM files WHERE folder_id = ? AND user_id = ?',
                                        (folder_id, session['user_id'])).fetchall()
+        from datetime import timezone, timedelta as _td
+        bj_tz = timezone(_td(hours=8))
+        bj_now = datetime.now(bj_tz).strftime('%Y-%m-%d %H:%M:%S') + '+08:00'
+        expire_at = (datetime.now(bj_tz) + timedelta(days=30)).isoformat()
         for f in files_in_folder:
             f = dict(f)
             trash_id = str(uuid.uuid4())
-            expire_at = (datetime.now() + timedelta(days=30)).isoformat()
-            conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, expire_at)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            conn.execute('''INSERT INTO trash (id, file_id, user_id, filename, stored_name, file_path, file_size, file_type, folder_id, deleted_at, expire_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                         (trash_id, f['id'], session['user_id'], f['filename'], f['stored_name'],
-                         f.get('path', ''), f.get('size', 0), '', f.get('folder_id'), expire_at))
+                         f.get('path', ''), f.get('size', 0), '', f.get('folder_id'), bj_now, expire_at))
 
         conn.execute('DELETE FROM files WHERE folder_id = ? AND user_id = ?',
                     (folder_id, session['user_id']))
